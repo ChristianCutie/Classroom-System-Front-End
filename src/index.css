@@ -1,0 +1,301 @@
+:root {
+  --gc-google-blue: #1a73e8;
+  --gc-google-blue-hover: #1557b0;
+  --gc-google-green: #1e8e3e;
+  --gc-google-yellow: #f9ab00;
+  --gc-google-red: #d93025;
+  --gc-bg-main: #f8f9fa;
+  --gc-text-primary: #3c4043;
+  --gc-text-secondary: #5f6368;
+  --gc-border-color: #dadce0;
+  --gc-hover-bg: #f1f3f4;
+  --gc-active-bg: #e8f0fe;
+  --gc-card-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+  --gc-card-hover-shadow: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15);
+}
+
+body {
+  background-color: var(--gc-bg-main);
+  color: var(--gc-text-primary);
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+.font-google {
+  font-family: 'Google Sans', 'Roboto', sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Google Classroom Card Banner styles */
+.gc-class-banner {
+  height: 100px;
+  position: relative;
+  border-radius: 8px 8px 0 0;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  color: white;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.gc-class-banner::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.15), rgba(0,0,0,0.4));
+  pointer-events: none;
+}
+
+.gc-class-banner > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Class card container */
+.gc-class-card {
+  border: 1px solid var(--gc-border-color);
+  border-radius: 8px;
+  background: white;
+  transition: box-shadow 0.2s ease-in-out, transform 0.15s ease;
+  overflow: hidden;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.gc-class-card:hover {
+  box-shadow: var(--gc-card-shadow);
+}
+
+/* Header detail banner */
+.gc-detail-banner {
+  height: 200px;
+  border-radius: 8px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  color: white;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3);
+  margin-bottom: 24px;
+}
+
+.gc-detail-banner::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 8px;
+  background: linear-gradient(0deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.1) 60%, rgba(0,0,0,0) 100%);
+}
+
+.gc-detail-banner > div {
+  position: relative;
+  z-index: 1;
+}
+
+/* Nav Tabs styling */
+.gc-nav-tabs .nav-link {
+  color: var(--gc-text-secondary);
+  font-weight: 500;
+  border: none;
+  border-bottom: 4px solid transparent;
+  padding: 14px 20px;
+  border-radius: 0;
+  transition: all 0.2s;
+  font-size: 0.95rem;
+}
+
+.gc-nav-tabs .nav-link:hover {
+  color: var(--gc-text-primary);
+  background-color: rgba(0,0,0,0.03);
+  border-bottom-color: rgba(0,0,0,0.1);
+}
+
+.gc-nav-tabs .nav-link.active {
+  color: var(--gc-google-blue);
+  border-bottom: 4px solid var(--gc-google-blue);
+  background-color: transparent;
+}
+
+/* Sidebar transition */
+.gc-sidebar {
+  width: 280px;
+  position: fixed;
+  top: 64px;
+  bottom: 0;
+  left: 0;
+  background-color: white;
+  border-right: 1px solid var(--gc-border-color);
+  z-index: 1040;
+  overflow-y: auto;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.gc-sidebar.closed {
+  transform: translateX(-100%);
+}
+
+.gc-sidebar-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 24px;
+  color: var(--gc-text-primary);
+  text-decoration: none;
+  border-radius: 0 24px 24px 0;
+  margin-right: 12px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: background-color 0.15s;
+  cursor: pointer;
+}
+
+.gc-sidebar-item:hover {
+  background-color: var(--gc-hover-bg);
+  color: var(--gc-text-primary);
+}
+
+.gc-sidebar-item.active {
+  background-color: var(--gc-active-bg);
+  color: var(--gc-google-blue);
+}
+
+.gc-sidebar-item i {
+  font-size: 1.2rem;
+  width: 32px;
+}
+
+/* Round button / icon button */
+.btn-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--gc-text-secondary);
+  transition: background-color 0.2s, color 0.2s;
+  cursor: pointer;
+}
+
+.btn-icon:hover {
+  background-color: rgba(95, 99, 104, 0.1);
+  color: var(--gc-text-primary);
+}
+
+.btn-icon-sm {
+  width: 32px;
+  height: 32px;
+  font-size: 0.85rem;
+}
+
+/* Main Content Area */
+.gc-main-content {
+  margin-top: 64px;
+  transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: calc(100vh - 64px);
+  padding: 24px;
+}
+
+@media (min-width: 992px) {
+  .gc-main-content.sidebar-open {
+    margin-left: 280px;
+  }
+}
+
+/* Material floating input / card styling */
+.gc-announcement-box {
+  border: 1px solid var(--gc-border-color);
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 1px 2px 0 rgba(60,64,67,0.1);
+}
+
+/* Classwork topic list */
+.topic-pill {
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--gc-border-color);
+  background: white;
+  transition: all 0.15s;
+}
+
+.topic-pill:hover {
+  background: var(--gc-hover-bg);
+}
+
+.topic-pill.active {
+  background: var(--gc-active-bg);
+  color: var(--gc-google-blue);
+  border-color: transparent;
+}
+
+/* Avatar circle */
+.avatar-circle {
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: white;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+/* Dropdown styling */
+.dropdown-menu {
+  box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 8px;
+}
+
+.dropdown-item {
+  padding: 8px 16px;
+  font-size: 0.9rem;
+}
+
+.dropdown-item:active {
+  background-color: var(--gc-active-bg);
+  color: var(--gc-google-blue);
+}
+
+.badge-google {
+  background-color: #e8f0fe;
+  color: #1a73e8;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
