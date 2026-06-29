@@ -50,6 +50,16 @@ const ProfileModal = ({ show, onClose, user, onToggleRole, onUpdateUser }) => {
         <button className="btn btn-outline-secondary btn-sm rounded-pill py-2">
           Manage your Google Account
         </button>
+        <button
+          className="btn btn-outline-danger btn-sm rounded-pill py-2 mt-1 d-flex align-items-center justify-content-center gap-2"
+          onClick={() => {
+            onClose();
+            if (window.onLogout) window.onLogout();
+          }}
+        >
+          <i className="bi bi-box-arrow-right"></i>
+          Sign out
+        </button>
       </div>
 
       <div className="border-top pt-3 d-flex justify-content-center gap-3 small text-muted">

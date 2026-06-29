@@ -5,6 +5,7 @@ import CreateClassModal from './components/Common/CreateClassModal.jsx';
 import JoinClassModal from './components/Common/JoinClassModal.jsx';
 
 // Pages
+import LoginPage from './pages/Auth/LoginPage.jsx';
 import ClassesPage from './pages/Classes/ClassesPage.jsx';
 import ClassDetailPage from './pages/ClassDetail/ClassDetailPage.jsx';
 import CalendarPage from './pages/Calendar/CalendarPage.jsx';
@@ -15,6 +16,7 @@ import SettingsPage from './pages/Settings/SettingsPage.jsx';
 import { initialUser, initialClasses } from './data/mockData.jsx';
 
 const App = () => {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState(initialUser);
   const [classes, setClasses] = useState(initialClasses);
   const [activePage, setActivePage] = useState('home');
@@ -22,6 +24,18 @@ const App = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
+
+  // Expose global logout handler for ProfileModal
+  useEffect(() => {
+    window.onLogout = () => {
+      setIsLoggedIn(false);
+      setActivePage('home');
+      setActiveClassId(null);
+    };
+    return () => {
+      delete window.onLogout;
+    };
+  }, []);
 
   // Auto-close sidebar on smaller screens
   useEffect(() => {
@@ -36,6 +50,18 @@ const App = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  if (!isLoggedIn) {
+    return (
+      <LoginPage
+        onLogin={(loggedUser) => {
+          setUser(loggedUser);
+          setIsLoggedIn(true);
+          setActivePage('home');
+        }}
+      />
+    );
+  }
 
   const activeClass = classes.find(c => c.id === activeClassId) || null;
 
