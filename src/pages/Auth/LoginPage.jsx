@@ -1,103 +1,99 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
+import logo from "@/images/Logo.png";
+import { useAuth } from "@/context/AuthContext";
 
-const LoginPage = ({ onLogin }) => {
-  const [email, setEmail] = useState('e.vance@university.edu');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('Dr. Eleanor Vance');
-  const [role, setRole] = useState('teacher');
-  const [step, setStep] = useState(1); // 1: Email/Account selection, 2: Password
-  const [error, setError] = useState('');
-
-  const quickAccounts = [
-    {
-      name: "Dr. Eleanor Vance",
-      email: "e.vance@university.edu",
-      role: "teacher",
-      avatar: "EV",
-      color: "#1a73e8",
-      description: "Computer Science Professor (Teacher View)"
-    },
-    {
-      name: "Alex Rivera",
-      email: "a.rivera@university.edu",
-      role: "student",
-      avatar: "AR",
-      color: "#00897b",
-      description: "CS101 & MATH202 Enrolled Student (Student View)"
-    },
-    {
-      name: "Prof. Alan Turing",
-      email: "a.turing@university.edu",
-      role: "teacher",
-      avatar: "AT",
-      color: "#1e8e3e",
-      description: "Mathematics Department Head"
-    }
-  ];
+const LoginPage = ({ onLogin, onSwitchToRegister }) => {
+  const { login } = useAuth();
+  const [email, setEmail] = useState("e.vance@university.edu");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("Dr. Eleanor Vance");
+  const [role, setRole] = useState("teacher");
+  const [step, setStep] = useState(1);
+  const [error, setError] = useState("");
 
   const handleSelectQuickAccount = (acc) => {
     setEmail(acc.email);
     setName(acc.name);
     setRole(acc.role);
+    // Optionally set a default password for demo (e.g., 'password')
+    setPassword("password"); // if your seeded users have a known password
     setStep(2);
   };
 
   const handleNextStep = (e) => {
     e.preventDefault();
-    if (!email.trim() || !email.includes('@')) {
-      setError('Please enter a valid email address');
+    if (!email.trim() || !email.includes("@")) {
+      setError("Please enter a valid email address");
       return;
     }
-    setError('');
+    setError("");
     // Extract a display name if custom email entered
-    if (!name || name === 'Dr. Eleanor Vance') {
-      const parts = email.split('@')[0].replace(/\./g, ' ').split(' ');
-      const formatted = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
-      setName(formatted || 'Classroom User');
+    if (!name || name === "Dr. Eleanor Vance") {
+      const parts = email.split("@")[0].replace(/\./g, " ").split(" ");
+      const formatted = parts
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+        .join(" ");
+      setName(formatted || "Classroom User");
     }
     setStep(2);
   };
 
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    if (step === 2 && password.length < 3 && password !== '') {
-      setError('Password must be at least 3 characters');
+    if (step === 2 && password.length < 3 && password !== "") {
+      setError("Password must be at least 3 characters");
       return;
     }
-    setError('');
-    onLogin({
-      id: `u_${Date.now()}`,
-      name: name.trim() || 'Classroom User',
-      email: email.trim(),
-      role: role,
-      avatar: (name.trim() || 'C').substring(0, 2).toUpperCase(),
-      color: role === 'teacher' ? '#1a73e8' : '#00897b'
-    });
+    setError("");
+
+    // Call real login
+    const result = await login(email, password);
+    if (result.success) {
+      // Redirect to dashboard (or let parent handle)
+      window.location.href = "/dashboard"; // or use navigate from react-router
+    } else {
+      setError(result.message);
+    }
   };
 
   return (
-    <div className="min-vh-100 d-flex flex-column align-items-center justify-content-center bg-light p-3" style={{ background: 'linear-gradient(135deg, #f8f9fa 0%, #e8f0fe 100%)' }}>
-      
+    <div
+      className="min-vh-100 d-flex flex-column align-items-center justify-content-center bg-light p-3"
+      style={{
+        background: "linear-gradient(135deg, #f8f9fa 0%, #e8f0fe 100%)",
+      }}
+    >
       {/* Google Classroom Header */}
       <div className="text-center mb-4">
-        <div className="d-inline-flex align-items-center justify-content-center bg-white p-3 rounded-circle shadow-sm mb-2">
-          <svg width="44" height="44" viewBox="0 0 48 48">
-            <path fill="#FBC02D" d="M6 8h36c2.2 0 4 1.8 4 4v24c0 2.2-1.8 4-4 4H6c-2.2 0-4-1.8-4-4V12c0-2.2 1.8-4 4-4z"/>
-            <path fill="#388E3C" d="M10 12h28v20H10z"/>
-            <path fill="#FFF" d="M24 18c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm0 2c-3.3 0-10 1.7-10 5v2h20v-2c0-3.3-6.7-5-10-5z"/>
-          </svg>
+        <div
+          className="d-inline-flex align-items-center justify-content-center p-3  mb-2"
+          style={{ width: 92, height: 92 }}
+        >
+          <img
+            src={logo}
+            alt="Classroom logo"
+            style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          />
         </div>
-        <h2 className="font-google fw-bold text-dark mb-1">Google Classroom</h2>
-        <p className="text-muted small">Where teaching and learning come together</p>
+        <h2 className="font-google fw-bold text-dark mb-1">SNL Classroom</h2>
+        <p className="text-muted small">
+          Where teaching and learning come together
+        </p>
       </div>
 
       {/* Login Card */}
-      <div className="card border-0 shadow-lg rounded-4 overflow-hidden w-100" style={{ maxWidth: '460px' }}>
+      <div
+        className="card border-0 shadow-lg rounded-4 overflow-hidden w-100"
+        style={{ maxWidth: "460px" }}
+      >
         <div className="card-body p-4 p-md-5 bg-white">
-          
           <div className="text-center mb-4">
-            <span className="font-google fw-medium fs-4 text-dark d-block">Sign in</span>
-            <span className="text-muted small">to continue to Google Classroom</span>
+            <span className="font-google fw-medium fs-4 text-dark d-block">
+              Sign in
+            </span>
+            <span className="text-muted small">
+              to continue to SNL Classroom
+            </span>
           </div>
 
           {error && (
@@ -110,7 +106,7 @@ const LoginPage = ({ onLogin }) => {
           {step === 1 ? (
             <div>
               {/* Quick Sign In accounts */}
-              <div className="mb-4">
+              {/* <div className="mb-4">
                 <label className="form-label text-muted text-xs fw-bold text-uppercase d-block mb-2" style={{ letterSpacing: '0.6px' }}>
                   Quick Sign-In Demo Accounts
                 </label>
@@ -147,7 +143,7 @@ const LoginPage = ({ onLogin }) => {
                 <hr className="flex-grow-1 text-muted" />
                 <span className="mx-3 text-muted text-xs fw-medium text-uppercase">Or enter manually</span>
                 <hr className="flex-grow-1 text-muted" />
-              </div>
+              </div> */}
 
               <form onSubmit={handleNextStep}>
                 <div className="form-floating mb-3">
@@ -177,7 +173,9 @@ const LoginPage = ({ onLogin }) => {
                 </div>
 
                 <div className="mb-4">
-                  <label className="form-label text-muted small fw-medium mb-2">Select Your Role</label>
+                  <label className="form-label text-muted small fw-medium mb-2">
+                    Select Your Role
+                  </label>
                   <div className="row g-2">
                     <div className="col-6">
                       <input
@@ -186,10 +184,13 @@ const LoginPage = ({ onLogin }) => {
                         name="roleOptions"
                         id="roleTeacher"
                         autoComplete="off"
-                        checked={role === 'teacher'}
-                        onChange={() => setRole('teacher')}
+                        checked={role === "teacher"}
+                        onChange={() => setRole("teacher")}
                       />
-                      <label className="btn btn-outline-primary w-100 p-2 rounded-3 d-flex flex-column align-items-center justify-content-center gap-1" htmlFor="roleTeacher">
+                      <label
+                        className="btn btn-outline-primary w-100 p-2 rounded-3 d-flex flex-column align-items-center justify-content-center gap-1"
+                        htmlFor="roleTeacher"
+                      >
                         <i className="bi bi-easel2-fill fs-5"></i>
                         <span className="small fw-semibold">Teacher</span>
                       </label>
@@ -202,10 +203,13 @@ const LoginPage = ({ onLogin }) => {
                         name="roleOptions"
                         id="roleStudent"
                         autoComplete="off"
-                        checked={role === 'student'}
-                        onChange={() => setRole('student')}
+                        checked={role === "student"}
+                        onChange={() => setRole("student")}
                       />
-                      <label className="btn btn-outline-success w-100 p-2 rounded-3 d-flex flex-column align-items-center justify-content-center gap-1" htmlFor="roleStudent">
+                      <label
+                        className="btn btn-outline-success w-100 p-2 rounded-3 d-flex flex-column align-items-center justify-content-center gap-1"
+                        htmlFor="roleStudent"
+                      >
                         <i className="bi bi-mortarboard-fill fs-5"></i>
                         <span className="small fw-semibold">Student</span>
                       </label>
@@ -214,10 +218,20 @@ const LoginPage = ({ onLogin }) => {
                 </div>
 
                 <div className="d-flex justify-content-between align-items-center mt-4 pt-2">
-                  <a href="#forgot" className="text-decoration-none small text-primary fw-medium" onClick={(e) => { e.preventDefault(); alert("Demo: Enter any valid email to proceed."); }}>
+                  <a
+                    href="#forgot"
+                    className="text-decoration-none small text-primary fw-medium"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      alert("Demo: Enter any valid email to proceed.");
+                    }}
+                  >
                     Forgot email?
                   </a>
-                  <button type="submit" className="btn btn-primary px-4 py-2 rounded-3 fw-medium shadow-sm">
+                  <button
+                    type="submit"
+                    className="btn btn-primary px-4 py-2 rounded-3 fw-medium shadow-sm"
+                  >
                     Next
                   </button>
                 </div>
@@ -230,19 +244,32 @@ const LoginPage = ({ onLogin }) => {
                 <div className="d-flex align-items-center gap-3 overflow-hidden">
                   <div
                     className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold small flex-shrink-0"
-                    style={{ width: '40px', height: '40px', backgroundColor: role === 'teacher' ? '#1a73e8' : '#00897b' }}
+                    style={{
+                      width: "40px",
+                      height: "40px",
+                      backgroundColor:
+                        role === "teacher" ? "#1a73e8" : "#00897b",
+                    }}
                   >
-                    {(name || 'U').substring(0, 2).toUpperCase()}
+                    {(name || "U").substring(0, 2).toUpperCase()}
                   </div>
                   <div className="overflow-hidden text-start">
-                    <div className="fw-semibold text-dark small text-truncate mb-0">{name}</div>
-                    <div className="text-muted text-xs text-truncate">{email}</div>
+                    <div className="fw-semibold text-dark small text-truncate mb-0">
+                      {name}
+                    </div>
+                    <div className="text-muted text-xs text-truncate">
+                      {email}
+                    </div>
                   </div>
                 </div>
                 <button
                   type="button"
                   className="btn btn-sm btn-outline-secondary rounded-pill px-3 text-xs"
-                  onClick={() => { setStep(1); setPassword(''); setError(''); }}
+                  onClick={() => {
+                    setStep(1);
+                    setPassword("");
+                    setError("");
+                  }}
                 >
                   Change
                 </button>
@@ -259,7 +286,9 @@ const LoginPage = ({ onLogin }) => {
                     onChange={(e) => setPassword(e.target.value)}
                     autoFocus
                   />
-                  <label htmlFor="loginPassword">Enter your password (optional for demo)</label>
+                  <label htmlFor="loginPassword">
+                    Enter your password (optional for demo)
+                  </label>
                 </div>
 
                 <div className="form-check mb-4 text-start ps-4">
@@ -268,11 +297,15 @@ const LoginPage = ({ onLogin }) => {
                     type="checkbox"
                     id="showPasswordCheck"
                     onChange={(e) => {
-                      const input = document.getElementById('loginPassword');
-                      if (input) input.type = e.target.checked ? 'text' : 'password';
+                      const input = document.getElementById("loginPassword");
+                      if (input)
+                        input.type = e.target.checked ? "text" : "password";
                     }}
                   />
-                  <label className="form-check-label text-muted small" htmlFor="showPasswordCheck">
+                  <label
+                    className="form-check-label text-muted small"
+                    htmlFor="showPasswordCheck"
+                  >
                     Show password
                   </label>
                 </div>
@@ -280,12 +313,15 @@ const LoginPage = ({ onLogin }) => {
                 <div className="p-3 bg-light rounded-3 mb-4 text-start border small">
                   <div className="fw-semibold text-dark mb-1">
                     <i className="bi bi-shield-check text-success me-1"></i>
-                    Signing in as <strong>{role === 'teacher' ? 'Teacher' : 'Student'}</strong>
+                    Signing in as{" "}
+                    <strong>
+                      {role === "teacher" ? "Teacher" : "Student"}
+                    </strong>
                   </div>
                   <span className="text-muted text-xs">
-                    {role === 'teacher'
-                      ? 'You will have full instructor access to create classes, assign coursework, and grade submissions.'
-                      : 'You will join enrolled courses, turn in assignments, and check your grades.'}
+                    {role === "teacher"
+                      ? "You will have full instructor access to create classes, assign coursework, and grade submissions."
+                      : "You will join enrolled courses, turn in assignments, and check your grades."}
                   </span>
                 </div>
 
@@ -307,13 +343,18 @@ const LoginPage = ({ onLogin }) => {
               </form>
             </div>
           )}
-
         </div>
-        
-        {/* Card bottom footer */}
+
+         {/* Card bottom footer */}
         <div className="card-footer bg-light border-top py-3 px-4 d-flex justify-content-between align-items-center text-xs text-muted">
-          <span>English (United States)</span>
-          <div className="d-flex gap-3">
+          <button
+            type="button"
+            className="btn btn-link btn-sm p-0 text-decoration-none text-primary fw-medium"
+            onClick={onSwitchToRegister}
+          >
+            Create account
+          </button>
+          <div className="d-flex gap-3 small">
             <a href="#help" className="text-decoration-none text-muted" onClick={(e) => e.preventDefault()}>Help</a>
             <a href="#privacy" className="text-decoration-none text-muted" onClick={(e) => e.preventDefault()}>Privacy</a>
             <a href="#terms" className="text-decoration-none text-muted" onClick={(e) => e.preventDefault()}>Terms</a>
@@ -325,7 +366,6 @@ const LoginPage = ({ onLogin }) => {
       <div className="mt-4 text-center text-muted small">
         <span>Protected by Google reCAPTCHA Enterprise</span>
       </div>
-
     </div>
   );
 };

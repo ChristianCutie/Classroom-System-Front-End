@@ -1,8 +1,15 @@
 import React from 'react';
 import Avatar from './Avatar.jsx';
 
-const ProfileModal = ({ show, onClose, user, onToggleRole, onUpdateUser }) => {
+const ProfileModal = ({ show, onClose, user, onToggleRole, onUpdateUser, onLogout }) => {
   if (!show) return null;
+
+  const handleSignOut = async () => {
+    onClose();
+    if (onLogout) {
+      await onLogout();
+    }
+  };
 
   return (
     <div
@@ -52,10 +59,7 @@ const ProfileModal = ({ show, onClose, user, onToggleRole, onUpdateUser }) => {
         </button>
         <button
           className="btn btn-outline-danger btn-sm rounded-pill py-2 mt-1 d-flex align-items-center justify-content-center gap-2"
-          onClick={() => {
-            onClose();
-            if (window.onLogout) window.onLogout();
-          }}
+          onClick={handleSignOut}
         >
           <i className="bi bi-box-arrow-right"></i>
           Sign out

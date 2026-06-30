@@ -11,9 +11,28 @@ const ClassCard = ({
 }) => {
   const [showMenu, setShowMenu] = useState(false);
 
-  const upcomingAssignments = cls.classwork
-    ? cls.classwork.filter(cw => cw.dueDate && (cw.type === 'assignment' || cw.type === 'quiz')).slice(0, 2)
-    : [];
+  const formatDueDate = (dateString) => {
+    if (!dateString) return '';
+
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return dateString;
+
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  const upcomingWork = [
+    ...(Array.isArray(cls.assignments) ? cls.assignments.map(item => ({ ...item, type: 'Assignment' })) : []),
+    ...(Array.isArray(cls.quizzes) ? cls.quizzes.map(item => ({ ...item, type: 'Quiz' })) : [])
+  ]
+    .filter(item => item.due_date)
+    .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
+    .slice(0, 2);
+
+  const teacherName = [cls.teacher?.first_name, cls.teacher?.last_name].filter(Boolean).join(' ') || 'Teacher';
 
   return (
     <div className="gc-class-card position-relative d-flex flex-column h-100 shadow-sm">
@@ -29,11 +48,16 @@ const ClassCard = ({
             style={{ cursor: 'pointer' }}
             onClick={() => onSelectClass(cls.id)}
           >
-            <h5 className="font-google fw-bold mb-1 text-truncate" style={{ fontSize: '1.25rem' }}>
-              {cls.name}
+            <h5 className="gc-class-title-marquee font-google fw-bold mb-1" style={{ fontSize: '1.25rem' }}>
+              {cls.subject}
             </h5>
             <div className="small text-white text-opacity-90 text-truncate fw-medium" style={{ fontSize: '0.85rem' }}>
-              {cls.section || cls.subject}
+              {cls.section}
+              {cls.class_code && (
+                <span className="d-block text-white text-opacity-75" style={{ fontSize: '0.75rem' }}>
+                 Class Code: {cls.class_code}
+                </span>
+              )}
             </div>
           </div>
 
@@ -60,7 +84,7 @@ const ClassCard = ({
                   onClick={() => {
                     setShowMenu(false);
                     navigator.clipboard?.writeText(`https://classroom.google.com/c/${cls.code}`);
-                    alert(`Invite link copied for ${cls.name}`);
+                    alert(`Invite link copied for ${cls.subject}`);
                   }}
                 >
                   <i className="bi bi-link-45deg text-secondary fs-5"></i>
@@ -73,7 +97,7 @@ const ClassCard = ({
                       className="dropdown-item d-flex align-items-center gap-2"
                       onClick={() => {
                         setShowMenu(false);
-                        alert(`Edit options for ${cls.name}`);
+                        alert(`Edit options for ${cls.subject}`);
                       }}
                     >
                       <i className="bi bi-pencil text-secondary"></i>
@@ -108,14 +132,14 @@ const ClassCard = ({
         </div>
 
         <div className="small text-white text-opacity-75 text-truncate" style={{ fontSize: '0.8rem' }}>
-          {cls.teacher?.name}
+          {teacherName}
         </div>
       </div>
 
       {/* Teacher Avatar overlapping banner */}
       <div className="position-absolute" style={{ top: '68px', right: '16px', zIndex: 2 }}>
         <Avatar
-          name={cls.teacher?.name || "Teacher"}
+          name={teacherName}
           size={64}
           color={cls.themeColor || "#1a73e8"}
           className="border border-white border-3 shadow"
@@ -129,14 +153,17 @@ const ClassCard = ({
         onClick={() => onSelectClass(cls.id)}
       >
         <div>
-          {upcomingAssignments.length > 0 ? (
-            upcomingAssignments.map(cw => (
-              <div key={cw.id} className="mb-2">
+          {upcomingWork.length > 0 ? (
+            upcomingWork.map(item => (
+              <div key={`${item.type}-${item.id}`} className="mb-2">
                 <div className="text-muted small fw-medium text-truncate" style={{ fontSize: '0.78rem' }}>
-                  Due {cw.dueDate}
+                  Due {formatDueDate(item.due_date)}
                 </div>
                 <div className="text-dark small text-truncate fw-semibold" style={{ fontSize: '0.87rem' }}>
-                  {cw.title}
+                  {item.title}
+                </div>
+                <div className="text-muted small text-truncate" style={{ fontSize: '0.72rem' }}>
+                  {item.type}
                 </div>
               </div>
             ))

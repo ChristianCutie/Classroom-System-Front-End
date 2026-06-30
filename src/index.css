@@ -65,7 +65,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.15), rgba(0,0,0,0.4));
+  background: linear-gradient(135deg, rgb(26, 115, 232) 0%, rgb(13, 71, 161) 100%);
   pointer-events: none;
 }
 
@@ -88,6 +88,33 @@ body {
 
 .gc-class-card:hover {
   box-shadow: var(--gc-card-shadow);
+}
+
+.gc-class-title-marquee {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  animation: gc-class-marquee 5s linear infinite;
+}
+
+.gc-class-title-marquee:hover {
+  animation-play-state: paused;
+}
+
+@keyframes gc-class-marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gc-class-title-marquee {
+    animation: none;
+  }
 }
 
 /* Header detail banner */

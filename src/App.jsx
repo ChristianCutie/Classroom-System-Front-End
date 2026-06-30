@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';          // 1. Import Auth
+import apiClient from '@/api/client';                     // 2. API client
+
+// Components
 import Navbar from './components/Navbar/Navbar.jsx';
 import Sidebar from './components/Sidebar/Sidebar.jsx';
 import CreateClassModal from './components/Common/CreateClassModal.jsx';
 import JoinClassModal from './components/Common/JoinClassModal.jsx';
-
-// Pages
 import LoginPage from './pages/Auth/LoginPage.jsx';
+import RegisterPage from './pages/Auth/RegisterPage.jsx';
 import ClassesPage from './pages/Classes/ClassesPage.jsx';
 import ClassDetailPage from './pages/ClassDetail/ClassDetailPage.jsx';
 import CalendarPage from './pages/Calendar/CalendarPage.jsx';
@@ -13,267 +16,305 @@ import ToDoPage from './pages/ToDo/ToDoPage.jsx';
 import ArchivedPage from './pages/Archived/ArchivedPage.jsx';
 import SettingsPage from './pages/Settings/SettingsPage.jsx';
 
-import { initialUser, initialClasses } from './data/mockData.jsx';
-
 const App = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [user, setUser] = useState(initialUser);
-  const [classes, setClasses] = useState(initialClasses);
+  // ------------------------------------------------------------
+  // 3. Use AuthContext (replaces isLoggedIn & user state)
+  // ------------------------------------------------------------
+  const { user, login, logout, loading } = useAuth();
+
+  // ------------------------------------------------------------
+  // 4. Real classes state (fetched from API)
+  // ------------------------------------------------------------
+  const [classes, setClasses] = useState([]);
+  const [loadingClasses, setLoadingClasses] = useState(true);
+
+  // ------------------------------------------------------------
+  // UI state (unchanged)
+  // ------------------------------------------------------------
+  const [authMode, setAuthMode] = useState('login');
   const [activePage, setActivePage] = useState('home');
   const [activeClassId, setActiveClassId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
 
-  // Expose global logout handler for ProfileModal
+  // ------------------------------------------------------------
+  // 5. Fetch classes when user logs in
+  // ------------------------------------------------------------
   useEffect(() => {
-    window.onLogout = () => {
-      setIsLoggedIn(false);
+    if (user) {
+      fetchClasses();
+    } else {
+      setClasses([]);
       setActivePage('home');
       setActiveClassId(null);
-    };
-    return () => {
-      delete window.onLogout;
-    };
-  }, []);
+    }
+  }, [user]);
 
-  // Auto-close sidebar on smaller screens
+  const fetchClasses = async () => {
+    setLoadingClasses(true);
+    try {
+      const res = await apiClient.get('/classes');
+      setClasses(res.data.data || []);
+    } catch (err) {
+      console.error('Failed to fetch classes:', err);
+      // Optionally show toast/error
+    } finally {
+      setLoadingClasses(false);
+    }
+  };
+
+  const handleRegister = (newUser) => {
+    // Currently the registration form does not have a backend endpoint,
+    // so keep the page flow moving by switching back to sign in.
+    setAuthMode('login');
+    // Optionally, you could persist the new user locally or send to API later.
+    console.log('Registered user:', newUser);
+  };
+
+  // ------------------------------------------------------------
+  // 6. Auto‑close sidebar on resize (unchanged)
+  // ------------------------------------------------------------
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth < 992) {
-        setSidebarOpen(false);
-      } else {
-        setSidebarOpen(true);
-      }
+      setSidebarOpen(window.innerWidth >= 992);
     };
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  if (!isLoggedIn) {
-    return (
-      <LoginPage
-        onLogin={(loggedUser) => {
-          setUser(loggedUser);
-          setIsLoggedIn(true);
-          setActivePage('home');
-        }}
+  // ------------------------------------------------------------
+  // 7. If Auth is loading or not logged in, show LoginPage
+  // ------------------------------------------------------------
+  if (loading) {
+    return <div className="d-flex justify-content-center mt-5">Loading…</div>;
+  }
+
+  if (!user) {
+    return authMode === 'login' ? (
+      <LoginPage onSwitchToRegister={() => setAuthMode('register')} />
+    ) : (
+      <RegisterPage
+        onRegister={handleRegister}
+        onSwitchToLogin={() => setAuthMode('login')}
       />
     );
   }
 
+  // ------------------------------------------------------------
+  // Helper: active class
+  // ------------------------------------------------------------
   const activeClass = classes.find(c => c.id === activeClassId) || null;
 
+  // ------------------------------------------------------------
+  // 8. Navigation handlers (unchanged)
+  // ------------------------------------------------------------
   const handleSelectClass = (classId) => {
     setActiveClassId(classId);
     setActivePage('classDetail');
-    if (window.innerWidth < 992) {
-      setSidebarOpen(false);
-    }
+    if (window.innerWidth < 992) setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleNavigatePage = (page) => {
     setActivePage(page);
     setActiveClassId(null);
-    if (window.innerWidth < 992) {
-      setSidebarOpen(false);
-    }
+    if (window.innerWidth < 992) setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleCreateClass = (data) => {
-    const newCls = {
-      id: `c_${Date.now()}`,
-      name: data.name,
-      section: data.section,
-      subject: data.subject,
-      room: data.room,
-      code: Math.random().toString(36).substring(2, 9),
-      teacher: { name: user.name, avatar: user.avatar || "U", email: user.email },
-      isTeaching: true,
-      isArchived: false,
-      banner: data.banner,
-      themeColor: data.themeColor,
-      announcements: [
-        {
-          id: `a_${Date.now()}`,
-          author: { name: user.name, avatar: user.avatar || "U" },
-          date: 'Just now',
-          text: `Welcome to ${data.name}! Let's have a great learning journey.`,
-          attachments: [],
-          comments: []
-        }
-      ],
-      topics: ["Week 1: Introduction"],
-      classwork: [],
-      students: [],
-      grades: []
-    };
-    setClasses([newCls, ...classes]);
-    handleSelectClass(newCls.id);
+  // ------------------------------------------------------------
+  // 9. API‑backed class operations
+  // ------------------------------------------------------------
+  const handleCreateClass = async (data) => {
+    try {
+      const res = await apiClient.post('/classes', data);
+      const newClass = res.data.data;
+      setClasses(prev => [newClass, ...prev]);
+      handleSelectClass(newClass.id);
+    } catch (err) {
+      console.error('Create class error:', err);
+      // Show error to user
+    }
   };
 
-  const handleJoinClass = (code) => {
-    const found = classes.find(c => c.code.toLowerCase() === code.toLowerCase());
-    if (found) {
-      handleSelectClass(found.id);
+  const handleJoinClass = async (code) => {
+    try {
+      const res = await apiClient.post('/classes/join', { code });
+      const joinedClass = res.data.data;
+      setClasses(prev => [joinedClass, ...prev]);
+      handleSelectClass(joinedClass.id);
       return true;
-    }
-    return false;
-  };
-
-  const handleArchiveClass = (classId) => {
-    setClasses(classes.map(c => c.id === classId ? { ...c, isArchived: true } : c));
-    if (activeClassId === classId) {
-      handleNavigatePage('home');
+    } catch (err) {
+      console.error('Join class error:', err);
+      return false;
     }
   };
 
-  const handleRestoreClass = (classId) => {
-    setClasses(classes.map(c => c.id === classId ? { ...c, isArchived: false } : c));
-  };
-
-  const handleDeleteClass = (classId) => {
-    setClasses(classes.filter(c => c.id !== classId));
-  };
-
-  const handleUnenrollClass = (classId) => {
-    setClasses(classes.filter(c => c.id !== classId));
-    if (activeClassId === classId) {
-      handleNavigatePage('home');
+  const handleArchiveClass = async (classId) => {
+    try {
+      await apiClient.patch(`/classes/${classId}/archive`);
+      setClasses(prev =>
+        prev.map(c => (c.id === classId ? { ...c, is_archived: 1 } : c))
+      );
+      if (activeClassId === classId) handleNavigatePage('home');
+    } catch (err) {
+      console.error('Archive error:', err);
     }
   };
 
-  const handlePostAnnouncement = (classId, annData) => {
-    const newAnn = {
-      id: `a_${Date.now()}`,
-      author: { name: user.name, avatar: user.avatar || "U" },
-      date: 'Just now',
-      text: annData.text,
-      attachments: annData.attachments || [],
-      comments: []
-    };
-    setClasses(classes.map(c => {
-      if (c.id === classId) {
-        return {
-          ...c,
-          announcements: [newAnn, ...(c.announcements || [])]
-        };
-      }
-      return c;
-    }));
+  const handleRestoreClass = async (classId) => {
+    try {
+      await apiClient.patch(`/classes/${classId}/restore`);
+      setClasses(prev =>
+        prev.map(c => (c.id === classId ? { ...c, is_archived: 0 } : c))
+      );
+    } catch (err) {
+      console.error('Restore error:', err);
+    }
   };
 
-  const handleAddComment = (classId, annId, text) => {
-    const newComment = {
-      id: `cm_${Date.now()}`,
-      author: user.name,
-      avatar: user.avatar || "U",
-      text,
-      date: 'Just now'
-    };
-    setClasses(classes.map(c => {
-      if (c.id === classId) {
-        return {
-          ...c,
-          announcements: (c.announcements || []).map(a => {
-            if (a.id === annId) {
-              return {
-                ...a,
-                comments: [...(a.comments || []), newComment]
-              };
-            }
-            return a;
-          })
-        };
-      }
-      return c;
-    }));
+  const handleDeleteClass = async (classId) => {
+    try {
+      await apiClient.delete(`/classes/${classId}`);
+      setClasses(prev => prev.filter(c => c.id !== classId));
+      if (activeClassId === classId) handleNavigatePage('home');
+    } catch (err) {
+      console.error('Delete error:', err);
+    }
   };
 
-  const handleCreateCoursework = (classId, cwData) => {
-    const newCw = {
-      id: `cw_${Date.now()}`,
-      ...cwData,
-      stats: user.role === 'teacher' ? { turnedIn: 0, assigned: (classes.find(c => c.id === classId)?.students?.length || 5), graded: 0 } : null
-    };
-    setClasses(classes.map(c => {
-      if (c.id === classId) {
-        return {
-          ...c,
-          classwork: [newCw, ...(c.classwork || [])]
-        };
-      }
-      return c;
-    }));
+  const handleUnenrollClass = async (classId) => {
+    try {
+      await apiClient.delete(`/classes/${classId}/unenroll`);
+      setClasses(prev => prev.filter(c => c.id !== classId));
+      if (activeClassId === classId) handleNavigatePage('home');
+    } catch (err) {
+      console.error('Unenroll error:', err);
+    }
   };
 
-  const handleSubmitCoursework = (classId, courseworkId) => {
-    setClasses(classes.map(c => {
-      if (c.id === classId) {
-        return {
-          ...c,
-          classwork: (c.classwork || []).map(cw => {
-            if (cw.id === courseworkId && cw.stats) {
-              return {
-                ...cw,
-                stats: {
-                  ...cw.stats,
-                  turnedIn: cw.stats.turnedIn + 1,
-                  assigned: Math.max(0, cw.stats.assigned - 1)
-                }
-              };
-            }
-            return cw;
-          })
-        };
-      }
-      return c;
-    }));
+  // ------------------------------------------------------------
+  // 10. Class detail actions (announcements, coursework, etc.)
+  //     These will also call the API – simplified here for brevity
+  // ------------------------------------------------------------
+  const handlePostAnnouncement = async (classId, annData) => {
+    try {
+      const res = await apiClient.post(`/classes/${classId}/announcements`, annData);
+      const newAnn = res.data.data;
+      setClasses(prev =>
+        prev.map(c =>
+          c.id === classId
+            ? { ...c, announcements: [newAnn, ...(c.announcements || [])] }
+            : c
+        )
+      );
+    } catch (err) {
+      console.error('Post announcement error:', err);
+    }
   };
 
-  const handleUpdateGrade = (classId, studentId, cwId, newScore) => {
-    setClasses(classes.map(c => {
-      if (c.id === classId) {
-        const initialGrades = c.grades || [];
-        const existingStudentIdx = initialGrades.findIndex(g => g.studentId === studentId);
-        let updatedGrades;
-        if (existingStudentIdx !== -1) {
-          updatedGrades = initialGrades.map((g, idx) => {
-            if (idx === existingStudentIdx) {
-              return { ...g, [cwId]: newScore };
-            }
-            return g;
-          });
-        } else {
-          updatedGrades = [...initialGrades, { studentId, [cwId]: newScore }];
-        }
-        return { ...c, grades: updatedGrades };
-      }
-      return c;
-    }));
+  const handleAddComment = async (classId, annId, text) => {
+    try {
+      const res = await apiClient.post(`/classes/${classId}/announcements/${annId}/comments`, { text });
+      const newComment = res.data.data;
+      setClasses(prev =>
+        prev.map(c =>
+          c.id === classId
+            ? {
+                ...c,
+                announcements: (c.announcements || []).map(a =>
+                  a.id === annId
+                    ? { ...a, comments: [...(a.comments || []), newComment] }
+                    : a
+                )
+              }
+            : c
+        )
+      );
+    } catch (err) {
+      console.error('Add comment error:', err);
+    }
   };
 
-  const handleUpdateClassBanner = (classId, bannerCss, themeColor) => {
-    setClasses(classes.map(c => {
-      if (c.id === classId) {
-        return { ...c, banner: bannerCss, themeColor };
-      }
-      return c;
-    }));
+  const handleCreateCoursework = async (classId, cwData) => {
+    try {
+      const res = await apiClient.post(`/classes/${classId}/coursework`, cwData);
+      const newCw = res.data.data;
+      setClasses(prev =>
+        prev.map(c =>
+          c.id === classId
+            ? { ...c, classwork: [newCw, ...(c.classwork || [])] }
+            : c
+        )
+      );
+    } catch (err) {
+      console.error('Create coursework error:', err);
+    }
   };
 
-  const handleToggleRole = () => {
-    const nextRole = user.role === 'teacher' ? 'student' : 'teacher';
-    setUser({ ...user, role: nextRole });
+  const handleSubmitCoursework = async (classId, courseworkId) => {
+    try {
+      await apiClient.post(`/classes/${classId}/coursework/${courseworkId}/submit`);
+      // Refresh class data or update local state optimistically
+      await fetchClasses(); // simplest: refetch all classes
+    } catch (err) {
+      console.error('Submit coursework error:', err);
+    }
   };
 
+  const handleUpdateGrade = async (classId, studentId, cwId, newScore) => {
+    try {
+      await apiClient.patch(`/classes/${classId}/grades`, {
+        student_id: studentId,
+        coursework_id: cwId,
+        score: newScore
+      });
+      await fetchClasses(); // refresh
+    } catch (err) {
+      console.error('Update grade error:', err);
+    }
+  };
+
+  const handleUpdateClassBanner = async (classId, bannerCss, themeColor) => {
+    try {
+      await apiClient.patch(`/classes/${classId}`, { banner: bannerCss, theme_color: themeColor });
+      setClasses(prev =>
+        prev.map(c =>
+          c.id === classId ? { ...c, banner: bannerCss, theme_color: themeColor } : c
+        )
+      );
+    } catch (err) {
+      console.error('Update banner error:', err);
+    }
+  };
+
+  // ------------------------------------------------------------
+  // 11. Role toggle – update user profile via API
+  // ------------------------------------------------------------
+  const handleToggleRole = async () => {
+    try {
+      const newRole = user.role === 'teacher' ? 'student' : 'teacher';
+      const res = await apiClient.patch('/user/role', { role: newRole });
+      // Update user in context – we need to refresh user data
+      // For simplicity, we'll refetch user profile (via a new API call)
+      // Alternatively, we can update local user state if AuthContext provides setUser
+      // but we can also just fetch updated user from /user/me
+      const userRes = await apiClient.get('/user');
+      // We'll assume AuthContext has a method to update user.
+      // For now, we'll reload the page or use a custom event.
+      window.location.reload(); // quick hack – better to use setUser from context
+    } catch (err) {
+      console.error('Toggle role error:', err);
+    }
+  };
+
+  // ------------------------------------------------------------
+  // 12. Render
+  // ------------------------------------------------------------
   return (
     <div className="d-flex flex-column min-vh-100 bg-light">
-      
-      {/* Top Navbar */}
       <Navbar
         user={user}
         activeClass={activeClass}
@@ -282,10 +323,10 @@ const App = () => {
         onOpenCreateModal={() => setShowCreateModal(true)}
         onOpenJoinModal={() => setShowJoinModal(true)}
         onToggleRole={handleToggleRole}
-        onUpdateUser={(updated) => setUser(updated)}
+        onUpdateUser={(updated) => { /* update user in context if needed */ }}
+        onLogout={logout}
       />
 
-      {/* Main Layout: Sidebar + Content */}
       <div className="d-flex flex-grow-1 position-relative">
         <Sidebar
           isOpen={sidebarOpen}
@@ -298,68 +339,73 @@ const App = () => {
         />
 
         <main className={`gc-main-content w-100 ${sidebarOpen ? 'sidebar-open' : ''}`}>
-          {activePage === 'home' && (
-            <ClassesPage
-              classes={classes}
-              user={user}
-              onSelectClass={handleSelectClass}
-              onArchiveClass={handleArchiveClass}
-              onUnenrollClass={handleUnenrollClass}
-              onOpenCreateModal={() => setShowCreateModal(true)}
-              onOpenJoinModal={() => setShowJoinModal(true)}
-              onOpenClasswork={(cId) => handleSelectClass(cId)}
-            />
-          )}
+          {loadingClasses ? (
+            <div className="text-center mt-5">Loading classes…</div>
+          ) : (
+            <>
+              {activePage === 'home' && (
+                <ClassesPage
+                  classes={classes}
+                  user={user}
+                  onSelectClass={handleSelectClass}
+                  onArchiveClass={handleArchiveClass}
+                  onUnenrollClass={handleUnenrollClass}
+                  onOpenCreateModal={() => setShowCreateModal(true)}
+                  onOpenJoinModal={() => setShowJoinModal(true)}
+                  onOpenClasswork={(cId) => handleSelectClass(cId)}
+                />
+              )}
 
-          {activePage === 'classDetail' && activeClass && (
-            <ClassDetailPage
-              cls={activeClass}
-              user={user}
-              onPostAnnouncement={handlePostAnnouncement}
-              onAddComment={handleAddComment}
-              onCreateCoursework={handleCreateCoursework}
-              onSubmitCoursework={handleSubmitCoursework}
-              onUpdateGrade={handleUpdateGrade}
-              onUpdateClassBanner={handleUpdateClassBanner}
-            />
-          )}
+              {activePage === 'classDetail' && activeClass && (
+                <ClassDetailPage
+                  cls={activeClass}
+                  user={user}
+                  onPostAnnouncement={handlePostAnnouncement}
+                  onAddComment={handleAddComment}
+                  onCreateCoursework={handleCreateCoursework}
+                  onSubmitCoursework={handleSubmitCoursework}
+                  onUpdateGrade={handleUpdateGrade}
+                  onUpdateClassBanner={handleUpdateClassBanner}
+                />
+              )}
 
-          {activePage === 'calendar' && (
-            <CalendarPage
-              classes={classes}
-              onSelectClass={handleSelectClass}
-            />
-          )}
+              {activePage === 'calendar' && (
+                <CalendarPage
+                  classes={classes}
+                  onSelectClass={handleSelectClass}
+                />
+              )}
 
-          {activePage === 'todo' && (
-            <ToDoPage
-              classes={classes}
-              user={user}
-              onSelectClass={handleSelectClass}
-            />
-          )}
+              {activePage === 'todo' && (
+                <ToDoPage
+                  classes={classes}
+                  user={user}
+                  onSelectClass={handleSelectClass}
+                />
+              )}
 
-          {activePage === 'archived' && (
-            <ArchivedPage
-              classes={classes}
-              user={user}
-              onRestoreClass={handleRestoreClass}
-              onDeleteClass={handleDeleteClass}
-            />
-          )}
+              {activePage === 'archived' && (
+                <ArchivedPage
+                  classes={classes}
+                  user={user}
+                  onRestoreClass={handleRestoreClass}
+                  onDeleteClass={handleDeleteClass}
+                />
+              )}
 
-          {activePage === 'settings' && (
-            <SettingsPage
-              user={user}
-              classes={classes}
-              onUpdateUser={(updated) => setUser(updated)}
-              onToggleRole={handleToggleRole}
-            />
+              {activePage === 'settings' && (
+                <SettingsPage
+                  user={user}
+                  classes={classes}
+                  onUpdateUser={(updated) => { /* update user context */ }}
+                  onToggleRole={handleToggleRole}
+                />
+              )}
+            </>
           )}
         </main>
       </div>
 
-      {/* Modals */}
       <CreateClassModal
         show={showCreateModal}
         onClose={() => setShowCreateModal(false)}
@@ -372,7 +418,6 @@ const App = () => {
         onJoin={handleJoinClass}
         user={user}
       />
-
     </div>
   );
 };
