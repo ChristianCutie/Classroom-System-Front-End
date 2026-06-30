@@ -26,7 +26,7 @@ const StreamTab = ({
     .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
     .slice(0, 2);
 
-  const teacherName =
+  const fullName =
     [cls.teacher?.first_name, cls.teacher?.last_name]
       .filter(Boolean)
       .join(" ") || "Teacher";
@@ -106,7 +106,10 @@ const StreamTab = ({
             {upcomingWork.length > 0 ? (
               <div className="mb-3">
                 {upcomingWork.slice(0, 3).map((item) => (
-                  <div key={item.id} className="mb-2 pb-2 border-bottom">
+                  <div
+                    key={`${item.type}-${item.id}`}
+                    className="mb-2 pb-2 border-bottom"
+                  >
                     <div
                       className="text-muted small"
                       style={{ fontSize: "0.78rem" }}
@@ -148,7 +151,7 @@ const StreamTab = ({
             onClick={() => setIsComposing(true)}
           >
             <Avatar
-              name={teacherName}
+              name={fullName}
               size={42}
               color={cls.themeColor || "#1a73e8"}
               className="border border-white border-3 shadow"

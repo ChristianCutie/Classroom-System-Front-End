@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 
 const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => {
   const [selectedTopic, setSelectedTopic] = useState('All topics');
@@ -9,13 +9,50 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
   // Create coursework form state
   const [cwTitle, setCwTitle] = useState('');
   const [cwInstructions, setCwInstructions] = useState('');
-  const [cwTopic, setCwTopic] = useState(cls.topics?.[0] || 'General');
+  const [cwTopic, setCwTopic] = useState('General');
   const [cwPoints, setCwPoints] = useState('100');
   const [cwDueDate, setCwDueDate] = useState('Next Friday, 11:59 PM');
 
-  const topics = ['All topics', ...(cls.topics || [])];
-  
-  const classworkList = cls.classwork || [];
+  // --- Merge assignments and quizzes into a unified classwork list ---
+  const classworkList = useMemo(() => {
+    const assignments = (cls.assignments || []).map(a => ({
+      id: a.id,
+      title: a.title,
+      dueDate: a.due_date,
+      points: a.max_points || 100,
+      type: 'assignment',
+      topic: a.topic || 'General', // if topic not present in API, default
+      instructions: a.instructions || 'No instructions provided.',
+      attachments: a.attachments || [],
+      postedDate: a.created_at ? new Date(a.created_at).toLocaleDateString() : 'recently',
+      stats: a.stats || null
+    }));
+
+    const quizzes = (cls.quizzes || []).map(q => ({
+      id: q.id,
+      title: q.title,
+      dueDate: q.due_date,
+      points: q.max_points || 100, // if quizzes don't have points, set default
+      type: 'quiz',
+      topic: q.topic || 'General',
+      instructions: q.instructions || 'No instructions provided.',
+      attachments: q.attachments || [],
+      postedDate: q.created_at ? new Date(q.created_at).toLocaleDateString() : 'recently',
+      stats: q.stats || null
+    }));
+
+    return [...assignments, ...quizzes];
+  }, [cls.assignments, cls.quizzes]);
+
+  // --- Derive topics from the classwork list ---
+  const topics = useMemo(() => {
+    const uniqueTopics = new Set(classworkList.map(cw => cw.topic || 'General'));
+    const topicArray = ['All topics', ...uniqueTopics];
+    return topicArray;
+  }, [classworkList]);
+
+  // When a new topic is created via the modal, we could add it to the list (not implemented here)
+
   const filteredWork = selectedTopic === 'All topics'
     ? classworkList
     : classworkList.filter(cw => cw.topic === selectedTopic);
@@ -58,7 +95,7 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
 
   return (
     <div>
-      {/* Top Action Bar */}
+      {/* Top Action Bar - same as before, but uses cls.themeColor or default */}
       <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 pb-3 border-bottom gap-3">
         <div className="d-flex align-items-center gap-2">
           {user.role === 'teacher' && (
@@ -296,7 +333,7 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
         </div>
       </div>
 
-      {/* Create Coursework Modal */}
+      {/* Create Coursework Modal – unchanged */}
       {showCreateModal && (
         <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }} tabIndex="-1">
           <div className="modal-dialog modal-dialog-centered modal-lg">
@@ -344,7 +381,8 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
                         value={cwTopic}
                         onChange={(e) => setCwTopic(e.target.value)}
                       >
-                        {cls.topics && cls.topics.map((t, i) => (
+                        {/* Use topics derived from classwork, or fallback to a default list */}
+                        {topics.filter(t => t !== 'All topics').map((t, i) => (
                           <option key={i} value={t}>{t}</option>
                         ))}
                       </select>

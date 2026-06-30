@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Avatar = ({ name = "User", size = 40, color = "#1a73e8", className = "" }) => {
+const Avatar = ({ name = "User", avatar, size = 40, color = "#1a73e8", className = "" }) => {
   const getInitials = (str) => {
     if (!str) return "U";
     const parts = str.trim().split(" ");
@@ -10,7 +10,11 @@ const Avatar = ({ name = "User", size = 40, color = "#1a73e8", className = "" })
     return str.substring(0, 2).toUpperCase();
   };
 
-  const initials = getInitials(name);
+  const displayValue = avatar || name;
+  const label = typeof displayValue === "string" && displayValue.trim()
+    ? displayValue.trim()
+    : "U";
+  const initials = avatar ? label.toUpperCase() : getInitials(name);
 
   return (
     <div
