@@ -19,10 +19,16 @@ const Navbar = ({
   const [showProfile, setShowProfile] = useState(false);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
 
-  const fullName =
-    [activeClass?.teacher?.first_name, activeClass?.teacher?.last_name]
+  const getDisplayName = (person) =>
+    [person?.first_name || person?.firstName, person?.last_name || person?.lastName]
       .filter(Boolean)
-      .join(" ") || "Teacher";
+      .join(" ")
+      .trim();
+
+  const fullName =
+    getDisplayName(user) ||
+    getDisplayName(activeClass?.teacher) ||
+    "Teacher";
 
   return (
     <nav

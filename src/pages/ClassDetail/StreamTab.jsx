@@ -26,10 +26,16 @@ const StreamTab = ({
     .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
     .slice(0, 2);
 
-  const fullName =
-    [cls.teacher?.first_name, cls.teacher?.last_name]
+  const getDisplayName = (person) => {
+    if (!person) return "User";
+    const fullName = [person.first_name || person.firstName, person.last_name || person.lastName]
       .filter(Boolean)
-      .join(" ") || "Teacher";
+      .join(" ")
+      .trim();
+    return fullName || person.fullName || person.name || "User";
+  };
+
+  const fullName = getDisplayName(cls.teacher) || "Teacher";
 
   const handleAddAttachment = (type) => {
     const names = {
@@ -151,7 +157,7 @@ const StreamTab = ({
             onClick={() => setIsComposing(true)}
           >
             <Avatar
-              name={fullName}
+              name={user}
               size={42}
               color={cls.themeColor || "#1a73e8"}
               className="border border-white border-3 shadow"
@@ -303,7 +309,7 @@ const StreamTab = ({
                 <div className="d-flex align-items-center justify-content-between mb-3">
                   <div className="d-flex align-items-center gap-3">
                     <Avatar
-                      name={ann.author.name}
+                      name={ann.author}
                       size={42}
                       color={cls.themeColor || "#1a73e8"}
                     />
@@ -419,7 +425,7 @@ const StreamTab = ({
                     onSubmit={(e) => handlePostComment(ann.id, e)}
                     className="d-flex align-items-center gap-2 mt-3"
                   >
-                    <Avatar name={user.name} size={32} color={user.color} />
+                    <Avatar name={user} size={32} color={user.color} />
                     <div className="input-group">
                       <input
                         type="text"

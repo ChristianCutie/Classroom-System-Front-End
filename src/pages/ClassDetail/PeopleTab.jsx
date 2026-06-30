@@ -13,7 +13,7 @@ const PeopleTab = ({ cls, user }) => {
   const getFullName = (person) => {
     if (!person) return "Unknown";
     return (
-      [person.first_name, person.last_name].filter(Boolean).join(" ").trim() ||
+      [person.first_name || person.firstName, person.last_name || person.lastName].filter(Boolean).join(" ").trim() ||
       person.fullName ||
       person.name ||
       "Unknown"
@@ -76,7 +76,7 @@ const PeopleTab = ({ cls, user }) => {
         <div className="d-flex align-items-center justify-content-between py-2 px-3 hover-bg-light rounded">
           <div className="d-flex align-items-center gap-3">
             <Avatar
-              name={teacherName}
+              name={cls.teacher}
               avatar={cls.teacher?.avatar}
               size={44}
               color={cls.themeColor || "#1a73e8"}
@@ -185,7 +185,7 @@ const PeopleTab = ({ cls, user }) => {
                     />
                   )}
                   <Avatar
-                    name={getFullName(st)}
+                    name={st}
                     avatar={st.avatar}
                     size={40}
                     color="#00897b"

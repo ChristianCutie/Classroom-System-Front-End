@@ -7,6 +7,17 @@ const JoinClassModal = ({ show, onClose, onJoin, user }) => {
 
   if (!show) return null;
 
+  const getDisplayName = (person) => {
+    if (!person) return "User";
+    const fullName = [person.first_name || person.firstName, person.last_name || person.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    return fullName || person.fullName || person.name || "User";
+  };
+
+  const displayName = getDisplayName(user);
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!classCode.trim() || classCode.trim().length < 5) {
@@ -35,9 +46,9 @@ const JoinClassModal = ({ show, onClose, onJoin, user }) => {
           <div className="modal-body p-4">
             <div className="border rounded p-3 mb-4 bg-light d-flex align-items-center justify-content-between">
               <div className="d-flex align-items-center gap-3">
-                <Avatar name={user.name} size={42} color={user.color} />
+                <Avatar name={user} size={42} color={user.color} />
                 <div>
-                  <div className="fw-semibold text-dark mb-0">{user.name}</div>
+                  <div className="fw-semibold text-dark mb-0">{displayName}</div>
                   <div className="text-muted small">{user.email}</div>
                 </div>
               </div>

@@ -17,6 +17,17 @@ const SettingsPage = ({ user, classes, onUpdateUser, onToggleRole }) => {
 
   const currentRole = typeof user?.role === 'string' ? user.role : user?.role?.role_name || 'student';
 
+  const getDisplayName = (person) => {
+    if (!person) return 'User';
+    const fullName = [person.first_name || person.firstName, person.last_name || person.lastName]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    return fullName || person.fullName || person.name || 'User';
+  };
+
+  const displayName = getDisplayName(user);
+
   const handleSaveProfile = (e) => {
     e.preventDefault();
     if (!name.trim()) return;
@@ -37,7 +48,7 @@ const SettingsPage = ({ user, classes, onUpdateUser, onToggleRole }) => {
         </div>
         <div className="card-body p-4">
           <div className="d-flex align-items-center gap-4 mb-4 flex-wrap">
-            <Avatar name={user.name} size={72} color={user.color} className="shadow" />
+            <Avatar name={user} size={72} color={user.color} className="shadow" />
             <div>
               <h6 className="fw-semibold text-dark mb-1">Avatar Accent Color</h6>
               <div className="d-flex gap-2 flex-wrap mt-2">

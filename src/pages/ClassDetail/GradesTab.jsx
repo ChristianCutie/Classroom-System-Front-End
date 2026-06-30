@@ -4,6 +4,15 @@ import Avatar from '../../components/Common/Avatar.jsx';
 const GradesTab = ({ cls, user, onUpdateGrade }) => {
   const students = cls.students || [];
   const assignments = cls.classwork ? cls.classwork.filter(cw => cw.points !== null && cw.points !== undefined) : [];
+
+  const getDisplayName = (person) => {
+    if (!person) return "User";
+    const fullName = [person.first_name || person.firstName, person.last_name || person.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    return fullName || person.fullName || person.name || "User";
+  };
   const initialGrades = cls.grades || [];
 
   const [gradeMatrix, setGradeMatrix] = useState(() => {
@@ -75,14 +84,14 @@ const GradesTab = ({ cls, user, onUpdateGrade }) => {
   // Student view of their own grades
   if (user.role !== 'teacher') {
     // Find current user or first student
-    const myId = students.find(s => s.name === user.name)?.id || students[0].id;
+    const myId = students.find(s => getDisplayName(s) === getDisplayName(user))?.id || students[0].id;
     return (
       <div className="max-w-4xl mx-auto py-2" style={{ maxWidth: '800px' }}>
         <div className="d-flex align-items-center justify-content-between p-4 bg-white border rounded-3 shadow-sm mb-4">
           <div className="d-flex align-items-center gap-3">
-            <Avatar name={user.name} size={52} color={user.color} />
+            <Avatar name={user} size={52} color={user.color} />
             <div>
-              <h5 className="fw-bold mb-0 text-dark">{user.name}</h5>
+              <h5 className="fw-bold mb-0 text-dark">{getDisplayName(user)}</h5>
               <span className="text-muted small">Course Overall Grade</span>
             </div>
           </div>
@@ -213,8 +222,8 @@ const GradesTab = ({ cls, user, onUpdateGrade }) => {
                   style={{ position: 'sticky', left: 0, zIndex: 5, boxShadow: '1px 0 0 0 #dadce0' }}
                 >
                   <div className="d-flex align-items-center gap-2">
-                    <Avatar name={st.name} size={32} color="#00897b" />
-                    <span className="fw-medium text-dark text-truncate small">{st.name}</span>
+                    <Avatar name={st} size={32} color="#00897b" />
+                    <span className="fw-medium text-dark text-truncate small">{getDisplayName(st)}</span>
                   </div>
                 </td>
 

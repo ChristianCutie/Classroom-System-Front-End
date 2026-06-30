@@ -18,16 +18,16 @@ const ProfileModal = ({
     }
   };
 
-  const getInitals = (name) => {
-    if (!name) return "U";
-    const parts = name.trim().split(" ");
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    }
-    return name.substring(0, 2).toUpperCase();
+  const getDisplayName = (person) => {
+    if (!person) return "User";
+    const fullName = [person.first_name || person.firstName, person.last_name || person.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    return fullName || person.fullName || person.name || "User";
   };
 
-  const fullName = getInitals(user.first_name + " " + user.last_name);
+  const displayName = getDisplayName(user);
 
   return (
     <div
@@ -45,14 +45,14 @@ const ProfileModal = ({
 
       <div className="mb-3 d-flex justify-content-center">
         <Avatar
-          name={fullName}   
+          name={user}
           size={84}
           color={user.color}
           className="shadow"
         />
       </div>
 
-      <h6 className="fw-bold mb-0 text-dark">{user.name}</h6>
+      <h6 className="fw-bold mb-0 text-dark">{displayName}</h6>
       <p className="text-muted small mb-3">{user.email}</p>
 
       <div className="p-3 bg-light rounded-3 mb-3 text-start border">

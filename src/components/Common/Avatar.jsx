@@ -1,6 +1,20 @@
 import React from 'react';
 
 const Avatar = ({ name = "User", avatar, size = 40, color = "#1a73e8", className = "" }) => {
+  const getDisplayName = (value) => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      const fullName = [value.first_name || value.firstName, value.last_name || value.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+
+      return fullName || value.fullName || value.name || "";
+    }
+    return String(value);
+  };
+
   const getInitials = (str) => {
     if (!str) return "U";
     const parts = str.trim().split(" ");
@@ -10,11 +24,12 @@ const Avatar = ({ name = "User", avatar, size = 40, color = "#1a73e8", className
     return str.substring(0, 2).toUpperCase();
   };
 
-  const displayValue = avatar || name;
+  const displayName = getDisplayName(name);
+  const displayValue = avatar || displayName;
   const label = typeof displayValue === "string" && displayValue.trim()
     ? displayValue.trim()
     : "U";
-  const initials = avatar ? label.toUpperCase() : getInitials(name);
+  const initials = avatar ? label.toUpperCase() : getInitials(displayName || label);
 
   return (
     <div
@@ -25,7 +40,7 @@ const Avatar = ({ name = "User", avatar, size = 40, color = "#1a73e8", className
         fontSize: `${Math.max(12, size * 0.42)}px`,
         backgroundColor: color
       }}
-      title={name}
+      title={displayName || label}
     >
       {initials}
     </div>

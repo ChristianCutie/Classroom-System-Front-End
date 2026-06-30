@@ -39,7 +39,16 @@ const ClassCard = ({
     .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
     .slice(0, 2);
 
-  const fullName = [cls.teacher?.first_name, cls.teacher?.last_name].filter(Boolean).join(' ') || 'Teacher';
+  const getDisplayName = (person) => {
+    if (!person) return 'Teacher';
+    const fullName = [person.first_name || person.firstName, person.last_name || person.lastName]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    return fullName || person.fullName || person.name || 'Teacher';
+  };
+
+  const fullName = getDisplayName(cls.teacher);
 
   return (
     <div className="gc-class-card position-relative d-flex flex-column h-100 shadow-sm">
@@ -146,7 +155,7 @@ const ClassCard = ({
       {/* Teacher Avatar overlapping banner */}
       <div className="position-absolute" style={{ top: '68px', right: '16px', zIndex: 2 }}>
         <Avatar
-          name={fullName}
+          name={cls.teacher}
           size={64}
           color={cls.themeColor || "#1a73e8"}
           className="border border-white border-3 shadow"
