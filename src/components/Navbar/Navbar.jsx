@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import Avatar from "../Common/Avatar.jsx";
 import AppsDropdown from "../Common/AppsDropdown.jsx";
 import ProfileModal from "../Common/ProfileModal.jsx";
 import logo from "@/images/Logo.png";
+import Avatar from "@/components/Common/Avatar.jsx";
 
 const Navbar = ({
   user,
@@ -18,6 +18,11 @@ const Navbar = ({
   const [showApps, setShowApps] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
+
+  const fullName =
+    [activeClass?.teacher?.first_name, activeClass?.teacher?.last_name]
+      .filter(Boolean)
+      .join(" ") || "Teacher";
 
   return (
     <nav
@@ -58,7 +63,7 @@ const Navbar = ({
                   className="fw-bold text-dark text-truncate mb-0"
                   style={{ fontSize: "0.95rem" }}
                 >
-                  {activeClass.name}
+                  {activeClass.fullName}
                 </span>
                 <span
                   className="text-muted small text-truncate"
@@ -148,7 +153,7 @@ const Navbar = ({
               setShowPlusMenu(false);
             }}
           >
-            <Avatar name={user.name} size={36} color={user.color} />
+            <Avatar name={fullName} size={36} color={user.color} />
           </div>
           <ProfileModal
             show={showProfile}

@@ -2,16 +2,20 @@ import React, { useState } from 'react';
 import Avatar from '../../components/Common/Avatar.jsx';
 
 const SettingsPage = ({ user, classes, onUpdateUser, onToggleRole }) => {
-  const [name, setName] = useState(user.name);
+  const [name, setName] = useState(user?.name || '');
   const [emailNotifs, setEmailNotifs] = useState(true);
   const [commentNotifs, setCommentNotifs] = useState(true);
   const [privateNotifs, setPrivateNotifs] = useState(true);
   const [lateNotifs, setLateNotifs] = useState(true);
   const [classNotifs, setClassNotifs] = useState(() => {
     const obj = {};
-    classes.forEach(c => obj[c.id] = true);
+    (classes || []).forEach(c => {
+      if (c && c.id != null) obj[c.id] = true;
+    });
     return obj;
   });
+
+  const currentRole = typeof user?.role === 'string' ? user.role : user?.role?.role_name || 'student';
 
   const handleSaveProfile = (e) => {
     e.preventDefault();
@@ -88,7 +92,7 @@ const SettingsPage = ({ user, classes, onUpdateUser, onToggleRole }) => {
                 className="btn btn-outline-primary btn-sm rounded-pill px-3"
                 onClick={onToggleRole}
               >
-                Switch Role (Currently: <strong>{user.role}</strong>)
+                Switch Role (Currently: <strong>{currentRole}</strong>)
               </button>
               <button type="submit" className="btn btn-primary px-4 fw-medium">
                 Save Profile
@@ -148,26 +152,29 @@ const SettingsPage = ({ user, classes, onUpdateUser, onToggleRole }) => {
         </div>
         <div className="card-body p-4">
           <p className="text-muted small mb-4">Turn mobile and email notifications on or off for individual classes.</p>
-          {classes.filter(c => !c.isArchived).map((cls) => (
-            <div key={cls.id} className="form-check form-switch d-flex justify-content-between align-items-center ps-0 mb-3 pb-2 border-bottom">
-              <div className="d-flex align-items-center gap-3">
-                <div
-                  className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold small"
-                  style={{ width: '28px', height: '28px', backgroundColor: cls.themeColor || '#1a73e8', fontSize: '12px' }}
-                >
-                  {cls.name[0]}
+          {(classes || []).filter(c => c && !c.isArchived).map((cls) => {
+            const className = cls.name || 'Class';
+            return (
+              <div key={cls.id} className="form-check form-switch d-flex justify-content-between align-items-center ps-0 mb-3 pb-2 border-bottom">
+                <div className="d-flex align-items-center gap-3">
+                  <div
+                    className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold small"
+                    style={{ width: '28px', height: '28px', backgroundColor: cls.themeColor || '#1a73e8', fontSize: '12px' }}
+                  >
+                    {className[0]}
+                  </div>
+                  <span className="fw-medium text-dark small">{className}</span>
                 </div>
-                <span className="fw-medium text-dark small">{cls.name}</span>
+                <input
+                  className="form-check-input ms-0 fs-5"
+                  type="checkbox"
+                  role="switch"
+                  checked={classNotifs[cls.id] ?? true}
+                  onChange={(e) => setClassNotifs({ ...classNotifs, [cls.id]: e.target.checked })}
+                />
               </div>
-              <input
-                className="form-check-input ms-0 fs-5"
-                type="checkbox"
-                role="switch"
-                checked={classNotifs[cls.id] ?? true}
-                onChange={(e) => setClassNotifs({ ...classNotifs, [cls.id]: e.target.checked })}
-              />
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

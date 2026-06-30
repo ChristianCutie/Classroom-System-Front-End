@@ -71,7 +71,7 @@ const ClassesPage = ({
     setLoading(true);
     setError(null);
     try {
-      await apiClient.post("/classes/join", { class_code: joinCode });
+      await apiClient.post("/join/classes", { class_code: joinCode });
       setShowJoinModal(false);
       setJoinCode("");
       if (onRefreshClasses) {
