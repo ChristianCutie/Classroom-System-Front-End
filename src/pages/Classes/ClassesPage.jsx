@@ -1,19 +1,29 @@
 import React, { useState, useEffect } from "react";
 import { bannerGradients } from '../../data/mockData.jsx';
-import { useNavigate } from "react-router-dom";
 import apiClient from "@/api/client.js";
 import ClassCard from "./ClassCard"; // your existing presentational card
+import Avatar from '../../components/Common/Avatar.jsx';
 
 // Custom hook to get the authenticated user – replace with your own
 import { useAuth } from "@/context/AuthContext"; // adjust path
 
-const ClassesPage = () => {
-  const navigate = useNavigate();
-  const { user } = useAuth(); // must provide user with { id, role: { role_name } }
+const ClassesPage = ({
+  classes: propClasses,
+  user: propUser,
+  onSelectClass,
+  onArchiveClass,
+  onUnenrollClass,
+  onOpenCreateModal,
+  onOpenJoinModal,
+  onOpenClasswork,
+  onRefreshClasses
+}) => {
+  const { user: contextUser } = useAuth(); // fallback user from context
+  const user = propUser || contextUser;
 
   // State
-  const [classes, setClasses] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const classes = propClasses || [];
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   // Modal states
@@ -30,41 +40,11 @@ const ClassesPage = () => {
   });
   const [joinCode, setJoinCode] = useState("");
 
-  // Fetch classes
-  const fetchClasses = async () => {
-    if (!user) return; // prevent fetch without user
-    setLoading(true);
-    try {
-      const res = await apiClient.get("/classes");
-      setClasses(res.data.data);  
-      setError(null);
-    } catch (err) {
-      if (err.response?.status === 403) {
-        setError("Authorization failed. Please log in again.");
-        // Optionally logout:
-        // logout();
-        navigate('/');
-      } else {
-        setError("Failed to load classes. Please try again.");
-      }
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-   useEffect(() => {
-    fetchClasses();
-  }, [user]); // re-fetch when user changes
-
-  // Compute active & teaching/enrolled
-  const activeClasses = classes.filter((c) => !c.is_archived);
-  const teachingClasses = activeClasses.filter((c) => c.teacher_id === user.id);
-  const enrolledClasses = activeClasses.filter((c) => c.teacher_id !== user.id);
-
   // Handlers
   const handleCreateClass = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setError(null);
     try {
       await apiClient.post("/create/classes", newClass);
       setShowCreateModal(false);
@@ -75,75 +55,46 @@ const ClassesPage = () => {
         room: "",
         description: "",
       });
-      fetchClasses();
+      if (onRefreshClasses) {
+        await onRefreshClasses();
+      }
     } catch (err) {
-      alert("Failed to create class. Check your input.");
+      setError(err.response?.data?.message || "Failed to create class. Check your input.");
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleJoinClass = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setError(null);
     try {
       await apiClient.post("/classes/join", { class_code: joinCode });
       setShowJoinModal(false);
       setJoinCode("");
-      fetchClasses();
+      if (onRefreshClasses) {
+        await onRefreshClasses();
+      }
     } catch (err) {
-      alert(
-        "Failed to join class. Check the code or you may already be enrolled.",
-      );
+      setError(err.response?.data?.message || "Failed to join class. Check the code or you may already be enrolled.");
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleArchiveClass = async (classId) => {
-    if (!window.confirm("Archive this class?")) return;
-    try {
-      await apiClient.patch(`/classes/${classId}/archive`);
-      fetchClasses();
-    } catch (err) {
-      alert("Failed to archive class.");
-      console.error(err);
-    }
-  };
-
-  const handleUnenrollClass = async (classId) => {
-    if (!window.confirm("Unenroll from this class?")) return;
-    try {
-      await apiClient.delete(`/classes/${classId}/unenroll`);
-      fetchClasses();
-    } catch (err) {
-      alert("Failed to unenroll.");
-      console.error(err);
-    }
-  };
-  const handleOpenClasswork = (classId) => {
-    navigate(`/classwork/${classId}`);
-  };
-
-  const handleSelectClass = (classId) => {
-    navigate(`/class/${classId}`);
-  };
+  // Compute active & teaching/enrolled
+  const activeClasses = classes.filter((c) => !c.is_archived);
+  const teachingClasses = activeClasses.filter((c) => c.teacher_id === user?.id);
+  const enrolledClasses = activeClasses.filter((c) => c.teacher_id !== user?.id);
 
   // Loading / error
-  if (loading) {
-    return (
-      <div className="d-flex justify-content-center py-5">
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Loading...</span>
-        </div>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div className="alert alert-danger text-center m-4" role="alert">
         {error}
-        <button className="btn btn-outline-danger ms-3" onClick={fetchClasses}>
-          Retry
-        </button>
       </div>
     );
   }
@@ -179,7 +130,7 @@ const ClassesPage = () => {
             >
               Join a class
             </button>
-            {user.role.role_name === "teacher" && (
+            {user?.role?.role_name === "teacher" && (
               <button
                 className="btn text-white px-4 py-2 fw-medium rounded-pill shadow-sm"
                 style={{ backgroundColor: "#1a73e8" }}
@@ -191,7 +142,7 @@ const ClassesPage = () => {
           </div>
         </div>
 
-        {/* Modals – see below */}
+        {/* Modals */}
         <CreateModal
           show={showCreateModal}
           onClose={() => setShowCreateModal(false)}
@@ -234,10 +185,10 @@ const ClassesPage = () => {
                 <ClassCard
                   cls={cls}
                   user={user}
-                  onSelectClass={handleSelectClass}
-                  onArchiveClass={handleArchiveClass}
-                  onUnenrollClass={handleUnenrollClass}
-                  onOpenClasswork={handleOpenClasswork}
+                  onSelectClass={onSelectClass}
+                  onArchiveClass={onArchiveClass}
+                  onUnenrollClass={onUnenrollClass}
+                  onOpenClasswork={onOpenClasswork}
                 />
               </div>
             ))}
@@ -266,10 +217,10 @@ const ClassesPage = () => {
                 <ClassCard
                   cls={cls}
                   user={user}
-                  onSelectClass={handleSelectClass}
-                  onArchiveClass={handleArchiveClass}
-                  onUnenrollClass={handleUnenrollClass}
-                  onOpenClasswork={handleOpenClasswork}
+                  onSelectClass={onSelectClass}
+                  onArchiveClass={onArchiveClass}
+                  onUnenrollClass={onUnenrollClass}
+                  onOpenClasswork={onOpenClasswork}
                 />
               </div>
             ))}
@@ -284,6 +235,8 @@ const ClassesPage = () => {
         newClass={newClass}
         setNewClass={setNewClass}
         onSubmit={handleCreateClass}
+        loading={loading}
+        error={error}
       />
       <JoinModal
         show={showJoinModal}
@@ -291,6 +244,8 @@ const ClassesPage = () => {
         joinCode={joinCode}
         setJoinCode={setJoinCode}
         onSubmit={handleJoinClass}
+        loading={loading}
+        error={error}
       />
     </div>
   );
@@ -299,10 +254,9 @@ const ClassesPage = () => {
 // ----------------------
 // Modal Components (Bootstrap)
 // ----------------------
-const CreateModal = ({ show, onClose, newClass, setNewClass, onSubmit }) => {
+const CreateModal = ({ show, onClose, newClass, setNewClass, onSubmit, loading, error }) => {
   // Local UI state for banner theme (does not affect submission)
   const [bannerId, setBannerId] = useState('blue');
-  const [error, setError] = useState(''); // kept for design, never used
 
   if (!show) return null;
 
@@ -321,12 +275,16 @@ const CreateModal = ({ show, onClose, newClass, setNewClass, onSubmit }) => {
               className="btn-close"
               onClick={onClose}
               aria-label="Close"
+              disabled={loading}
             ></button>
           </div>
           <form onSubmit={onSubmit}>
             <div className="modal-body p-4">
-              {error && <div className="alert alert-danger py-2 text-sm">{error}</div>}
-
+              {error && (
+                <div className="alert alert-danger py-2 mb-3" role="alert">
+                  {error}
+                </div>
+              )}
               <div className="form-floating mb-3">
                 <input
                   type="text"
@@ -339,6 +297,7 @@ const CreateModal = ({ show, onClose, newClass, setNewClass, onSubmit }) => {
                     setNewClass({ ...newClass, class_name: e.target.value })
                   }
                   autoFocus
+                  disabled={loading}
                 />
                 <label htmlFor="classNameInput">Class name (required)</label>
               </div>
@@ -353,6 +312,7 @@ const CreateModal = ({ show, onClose, newClass, setNewClass, onSubmit }) => {
                   onChange={(e) =>
                     setNewClass({ ...newClass, section: e.target.value })
                   }
+                  disabled={loading}
                 />
                 <label htmlFor="sectionInput">Section</label>
               </div>
@@ -367,6 +327,7 @@ const CreateModal = ({ show, onClose, newClass, setNewClass, onSubmit }) => {
                   onChange={(e) =>
                     setNewClass({ ...newClass, subject: e.target.value })
                   }
+                  disabled={loading}
                 />
                 <label htmlFor="subjectInput">Subject</label>
               </div>
@@ -381,6 +342,7 @@ const CreateModal = ({ show, onClose, newClass, setNewClass, onSubmit }) => {
                   onChange={(e) =>
                     setNewClass({ ...newClass, room: e.target.value })
                   }
+                  disabled={loading}
                 />
                 <label htmlFor="roomInput">Room</label>
               </div>
@@ -406,6 +368,7 @@ const CreateModal = ({ show, onClose, newClass, setNewClass, onSubmit }) => {
                       }}
                       onClick={() => setBannerId(b.id)}
                       title={b.name}
+                      disabled={loading}
                     >
                       {bannerId === b.id && (
                         <i className="bi bi-check text-white small fw-bold"></i>
@@ -426,6 +389,7 @@ const CreateModal = ({ show, onClose, newClass, setNewClass, onSubmit }) => {
                   onChange={(e) =>
                     setNewClass({ ...newClass, description: e.target.value })
                   }
+                  disabled={loading}
                 />
                 <label htmlFor="descriptionInput">Description</label>
               </div>
@@ -436,6 +400,7 @@ const CreateModal = ({ show, onClose, newClass, setNewClass, onSubmit }) => {
                 type="button"
                 className="btn btn-light px-4 fw-medium text-secondary"
                 onClick={onClose}
+                disabled={loading}
               >
                 Cancel
               </button>
@@ -443,9 +408,16 @@ const CreateModal = ({ show, onClose, newClass, setNewClass, onSubmit }) => {
                 type="submit"
                 className="btn text-white px-4 fw-medium"
                 style={{ backgroundColor: '#1a73e8' }}
-                disabled={!newClass.class_name?.trim()}
+                disabled={!newClass.class_name?.trim() || loading}
               >
-                Create
+                {loading ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Creating...
+                  </>
+                ) : (
+                  'Create'
+                )}
               </button>
             </div>
           </form>
@@ -455,7 +427,7 @@ const CreateModal = ({ show, onClose, newClass, setNewClass, onSubmit }) => {
   );
 };
 
-const JoinModal = ({ show, onClose, joinCode, setJoinCode, onSubmit }) => {
+const JoinModal = ({ show, onClose, joinCode, setJoinCode, onSubmit, loading, error }) => {
   if (!show) return null;
   return (
     <div
@@ -471,10 +443,16 @@ const JoinModal = ({ show, onClose, joinCode, setJoinCode, onSubmit }) => {
               type="button"
               className="btn-close"
               onClick={onClose}
+              disabled={loading}
             ></button>
           </div>
           <form onSubmit={onSubmit}>
             <div className="modal-body">
+              {error && (
+                <div className="alert alert-danger py-2 mb-3" role="alert">
+                  {error}
+                </div>
+              )}
               <div className="mb-3">
                 <label className="form-label">Class code *</label>
                 <input
@@ -484,6 +462,7 @@ const JoinModal = ({ show, onClose, joinCode, setJoinCode, onSubmit }) => {
                   required
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -492,11 +471,23 @@ const JoinModal = ({ show, onClose, joinCode, setJoinCode, onSubmit }) => {
                 type="button"
                 className="btn btn-secondary"
                 onClick={onClose}
+                disabled={loading}
               >
                 Cancel
               </button>
-              <button type="submit" className="btn btn-success">
-                Join
+              <button 
+                type="submit" 
+                className="btn btn-success"
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Joining...
+                  </>
+                ) : (
+                  'Join'
+                )}
               </button>
             </div>
           </form>

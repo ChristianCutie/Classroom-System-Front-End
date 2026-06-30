@@ -1,14 +1,16 @@
 import React from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const Sidebar = ({
   isOpen,
-  activePage,
-  activeClassId,
   classes = [],
   user,
   onNavigatePage,
   onSelectClass
 }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   // Filter active (non-archived) classes
   const activeClasses = classes.filter(c => !c.is_archived);
   // Teaching classes: user is the teacher
@@ -19,20 +21,30 @@ const Sidebar = ({
   // Determine if user is a teacher (using the nested role object)
   const isTeacher = user?.role?.role_name === 'teacher';
 
+  // Helper to check if a route is active
+  const isActive = (path) => {
+    if (path === 'home') return location.pathname === '/';
+    return location.pathname === `/${path}`;
+  };
+
+  const isClassActive = (classId) => {
+    return location.pathname === `/class/${classId}`;
+  };
+
   return (
     <div className={`gc-sidebar pt-2 ${!isOpen ? 'closed' : ''}`}>
       {/* Top navigation */}
       <div className="d-flex flex-column mb-4 pb-3 border-bottom">
         <div
-          className={`gc-sidebar-item ${activePage === 'home' && !activeClassId ? 'active' : ''}`}
-          onClick={() => onNavigatePage('home')}
+          className={`gc-sidebar-item ${isActive('home') ? 'active' : ''}`}
+          onClick={() => navigate('/')}
         >
           <i className="bi bi-house-door-fill"></i>
           <span>Classes</span>
         </div>
         <div
-          className={`gc-sidebar-item ${activePage === 'calendar' ? 'active' : ''}`}
-          onClick={() => onNavigatePage('calendar')}
+          className={`gc-sidebar-item ${isActive('calendar') ? 'active' : ''}`}
+          onClick={() => navigate('/calendar')}
         >
           <i className="bi bi-calendar-date"></i>
           <span>Calendar</span>
@@ -46,8 +58,8 @@ const Sidebar = ({
             Teaching
           </div>
           <div
-            className={`gc-sidebar-item ${activePage === 'todo' ? 'active' : ''}`}
-            onClick={() => onNavigatePage('todo')}
+            className={`gc-sidebar-item ${isActive('todo') ? 'active' : ''}`}
+            onClick={() => navigate('/todo')}
           >
             <i className="bi bi-clipboard-check"></i>
             <span>To review</span>
@@ -56,7 +68,7 @@ const Sidebar = ({
           {teachingClasses.map((cls) => (
             <div
               key={cls.id}
-              className={`gc-sidebar-item ${activeClassId === cls.id ? 'active' : ''}`}
+              className={`gc-sidebar-item ${isClassActive(cls.id) ? 'active' : ''}`}
               onClick={() => onSelectClass(cls.id)}
             >
               <div
@@ -82,8 +94,8 @@ const Sidebar = ({
           Enrolled
         </div>
         <div
-          className={`gc-sidebar-item ${activePage === 'todo' ? 'active' : ''}`}
-          onClick={() => onNavigatePage('todo')}
+          className={`gc-sidebar-item ${isActive('todo') ? 'active' : ''}`}
+          onClick={() => navigate('/todo')}
         >
           <i className="bi bi-list-check"></i>
           <span>To-do</span>
@@ -92,7 +104,7 @@ const Sidebar = ({
         {enrolledClasses.map((cls) => (
           <div
             key={cls.id}
-            className={`gc-sidebar-item ${activeClassId === cls.id ? 'active' : ''}`}
+            className={`gc-sidebar-item ${isClassActive(cls.id) ? 'active' : ''}`}
             onClick={() => onSelectClass(cls.id)}
           >
             <div
@@ -117,15 +129,15 @@ const Sidebar = ({
       {/* Footer links */}
       <div className="mb-4">
         <div
-          className={`gc-sidebar-item ${activePage === 'archived' ? 'active' : ''}`}
-          onClick={() => onNavigatePage('archived')}
+          className={`gc-sidebar-item ${isActive('archived') ? 'active' : ''}`}
+          onClick={() => navigate('/archived')}
         >
           <i className="bi bi-archive"></i>
           <span>Archived classes</span>
         </div>
         <div
-          className={`gc-sidebar-item ${activePage === 'settings' ? 'active' : ''}`}
-          onClick={() => onNavigatePage('settings')}
+          className={`gc-sidebar-item ${isActive('settings') ? 'active' : ''}`}
+          onClick={() => navigate('/settings')}
         >
           <i className="bi bi-gear"></i>
           <span>Settings</span>

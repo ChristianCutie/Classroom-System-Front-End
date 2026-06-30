@@ -45,7 +45,7 @@ body {
 
 /* Google Classroom Card Banner styles */
 .gc-class-banner {
-  height: 100px;
+  height: 118px;
   position: relative;
   border-radius: 8px 8px 0 0;
   overflow: hidden;
@@ -141,7 +141,7 @@ body {
   right: 0;
   bottom: 0;
   border-radius: 8px;
-  background: linear-gradient(0deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.1) 60%, rgba(0,0,0,0) 100%);
+ background: linear-gradient(135deg, rgb(26, 115, 232) 0%, rgb(13, 71, 161) 100%);
 }
 
 .gc-detail-banner > div {

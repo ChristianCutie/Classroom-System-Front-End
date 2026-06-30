@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';          // 1. Import Auth
 import apiClient from '@/api/client';                     // 2. API client
+import { Routes, Route, useNavigate } from 'react-router-dom';
 
 // Components
 import Navbar from './components/Navbar/Navbar.jsx';
@@ -21,6 +22,7 @@ const App = () => {
   // 3. Use AuthContext (replaces isLoggedIn & user state)
   // ------------------------------------------------------------
   const { user, login, logout, loading } = useAuth();
+  const navigate = useNavigate();
 
   // ------------------------------------------------------------
   // 4. Real classes state (fetched from API)
@@ -32,8 +34,8 @@ const App = () => {
   // UI state (unchanged)
   // ------------------------------------------------------------
   const [authMode, setAuthMode] = useState('login');
-  const [activePage, setActivePage] = useState('home');
-  const [activeClassId, setActiveClassId] = useState(null);
+  const [selectedClass, setSelectedClass] = useState(null);
+  const [activeClassLoading, setActiveClassLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
@@ -46,10 +48,9 @@ const App = () => {
       fetchClasses();
     } else {
       setClasses([]);
-      setActivePage('home');
-      setActiveClassId(null);
+      navigate('/');
     }
-  }, [user]);
+  }, [user, navigate]);
 
   const fetchClasses = async () => {
     setLoadingClasses(true);
@@ -103,25 +104,38 @@ const App = () => {
   }
 
   // ------------------------------------------------------------
-  // Helper: active class
+  // Helper: selected class details
   // ------------------------------------------------------------
-  const activeClass = classes.find(c => c.id === activeClassId) || null;
+  // `selectedClass` is loaded from the API when a class card is clicked.
 
   // ------------------------------------------------------------
-  // 8. Navigation handlers (unchanged)
+  // 8. Navigation handlers (updated for React Router)
   // ------------------------------------------------------------
-  const handleSelectClass = (classId) => {
-    setActiveClassId(classId);
-    setActivePage('classDetail');
+  const handleSelectClass = async (classId) => {
+    if (!classId) return;
+
+    setActiveClassLoading(true);
     if (window.innerWidth < 992) setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    try {
+      const res = await apiClient.get(`/classes/${classId}`);
+      setSelectedClass(res.data?.data || null);
+      navigate(`/class/${classId}`);
+    } catch (err) {
+      console.error('Failed to load class detail:', err);
+      setSelectedClass(null);
+      navigate('/');
+    } finally {
+      setActiveClassLoading(false);
+    }
   };
 
   const handleNavigatePage = (page) => {
-    setActivePage(page);
-    setActiveClassId(null);
+    setSelectedClass(null);
     if (window.innerWidth < 992) setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    navigate(`/${page === 'home' ? '' : page}`);
   };
 
   // ------------------------------------------------------------
@@ -158,7 +172,7 @@ const App = () => {
       setClasses(prev =>
         prev.map(c => (c.id === classId ? { ...c, is_archived: 1 } : c))
       );
-      if (activeClassId === classId) handleNavigatePage('home');
+      navigate('/');
     } catch (err) {
       console.error('Archive error:', err);
     }
@@ -179,7 +193,7 @@ const App = () => {
     try {
       await apiClient.delete(`/classes/${classId}`);
       setClasses(prev => prev.filter(c => c.id !== classId));
-      if (activeClassId === classId) handleNavigatePage('home');
+      navigate('/');
     } catch (err) {
       console.error('Delete error:', err);
     }
@@ -189,7 +203,7 @@ const App = () => {
     try {
       await apiClient.delete(`/classes/${classId}/unenroll`);
       setClasses(prev => prev.filter(c => c.id !== classId));
-      if (activeClassId === classId) handleNavigatePage('home');
+      navigate('/');
     } catch (err) {
       console.error('Unenroll error:', err);
     }
@@ -311,14 +325,14 @@ const App = () => {
   };
 
   // ------------------------------------------------------------
-  // 12. Render
+  // 12. Render with React Router
   // ------------------------------------------------------------
   return (
     <div className="d-flex flex-column min-vh-100 bg-light">
       <Navbar
         user={user}
-        activeClass={activeClass}
-        onNavigateHome={() => handleNavigatePage('home')}
+        activeClass={selectedClass}
+        onNavigateHome={() => navigate('/')}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         onOpenCreateModal={() => setShowCreateModal(true)}
         onOpenJoinModal={() => setShowJoinModal(true)}
@@ -330,8 +344,6 @@ const App = () => {
       <div className="d-flex flex-grow-1 position-relative">
         <Sidebar
           isOpen={sidebarOpen}
-          activePage={activePage}
-          activeClassId={activeClassId}
           classes={classes}
           user={user}
           onNavigatePage={handleNavigatePage}
@@ -342,66 +354,91 @@ const App = () => {
           {loadingClasses ? (
             <div className="text-center mt-5">Loading classes…</div>
           ) : (
-            <>
-              {activePage === 'home' && (
-                <ClassesPage
-                  classes={classes}
-                  user={user}
-                  onSelectClass={handleSelectClass}
-                  onArchiveClass={handleArchiveClass}
-                  onUnenrollClass={handleUnenrollClass}
-                  onOpenCreateModal={() => setShowCreateModal(true)}
-                  onOpenJoinModal={() => setShowJoinModal(true)}
-                  onOpenClasswork={(cId) => handleSelectClass(cId)}
-                />
-              )}
+            <Routes>
+              <Route 
+                path="/" 
+                element={
+                  <ClassesPage
+                    classes={classes}
+                    user={user}
+                    onSelectClass={handleSelectClass}
+                    onArchiveClass={handleArchiveClass}
+                    onUnenrollClass={handleUnenrollClass}
+                    onOpenCreateModal={() => setShowCreateModal(true)}
+                    onOpenJoinModal={() => setShowJoinModal(true)}
+                    onOpenClasswork={(cId) => handleSelectClass(cId)}
+                    onRefreshClasses={fetchClasses}
+                  />
+                }
+              />
+              
+              <Route 
+                path="/class/:classId" 
+                element={
+                  activeClassLoading ? (
+                    <div className="text-center mt-5">Loading class details…</div>
+                  ) : selectedClass ? (
+                    <ClassDetailPage
+                      cls={selectedClass}
+                      user={user}
+                      onPostAnnouncement={handlePostAnnouncement}
+                      onAddComment={handleAddComment}
+                      onCreateCoursework={handleCreateCoursework}
+                      onSubmitCoursework={handleSubmitCoursework}
+                      onUpdateGrade={handleUpdateGrade}
+                      onUpdateClassBanner={handleUpdateClassBanner}
+                    />
+                  ) : (
+                    <div className="text-center mt-5">Class not found.</div>
+                  )
+                }
+              />
 
-              {activePage === 'classDetail' && activeClass && (
-                <ClassDetailPage
-                  cls={activeClass}
-                  user={user}
-                  onPostAnnouncement={handlePostAnnouncement}
-                  onAddComment={handleAddComment}
-                  onCreateCoursework={handleCreateCoursework}
-                  onSubmitCoursework={handleSubmitCoursework}
-                  onUpdateGrade={handleUpdateGrade}
-                  onUpdateClassBanner={handleUpdateClassBanner}
-                />
-              )}
+              <Route 
+                path="/calendar" 
+                element={
+                  <CalendarPage
+                    classes={classes}
+                    onSelectClass={handleSelectClass}
+                  />
+                }
+              />
 
-              {activePage === 'calendar' && (
-                <CalendarPage
-                  classes={classes}
-                  onSelectClass={handleSelectClass}
-                />
-              )}
+              <Route 
+                path="/todo" 
+                element={
+                  <ToDoPage
+                    classes={classes}
+                    user={user}
+                    onSelectClass={handleSelectClass}
+                  />
+                }
+              />
 
-              {activePage === 'todo' && (
-                <ToDoPage
-                  classes={classes}
-                  user={user}
-                  onSelectClass={handleSelectClass}
-                />
-              )}
+              <Route 
+                path="/archived" 
+                element={
+                  <ArchivedPage
+                    classes={classes}
+                    user={user}
+                    onRestoreClass={handleRestoreClass}
+                    onDeleteClass={handleDeleteClass}
+                  />
+                }
+              />
 
-              {activePage === 'archived' && (
-                <ArchivedPage
-                  classes={classes}
-                  user={user}
-                  onRestoreClass={handleRestoreClass}
-                  onDeleteClass={handleDeleteClass}
-                />
-              )}
-
-              {activePage === 'settings' && (
-                <SettingsPage
-                  user={user}
-                  classes={classes}
-                  onUpdateUser={(updated) => { /* update user context */ }}
-                  onToggleRole={handleToggleRole}
-                />
-              )}
-            </>
+              <Route 
+                path="/settings" 
+                element={
+                  <SettingsPage
+                    user={user}
+                    classes={classes}
+                    onUpdateUser={(updated) => { /* update user context */ }}
+                    onToggleRole={handleToggleRole}
+                  />
+                }
+              />
+            </Routes>
           )}
         </main>
       </div>

@@ -79,7 +79,7 @@ const ClassDetailPage = ({
         <div className="d-flex justify-content-between align-items-end w-100">
           <div>
             <h1 className="font-google fw-bold mb-1 text-white" style={{ fontSize: '2.2rem', textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>
-              {cls.name}
+              {cls.subject}
             </h1>
             <p className="mb-0 text-white text-opacity-90 fs-5">
               {cls.section || cls.subject}
@@ -87,7 +87,7 @@ const ClassDetailPage = ({
           </div>
           <div className="d-none d-md-block text-end">
             <span className="badge bg-white text-dark py-2 px-3 fw-medium font-monospace shadow-sm">
-              Class Code: {cls.code}
+              Class Code: {cls.class_code}
             </span>
           </div>
         </div>

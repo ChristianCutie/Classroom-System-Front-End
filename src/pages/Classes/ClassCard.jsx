@@ -11,6 +11,13 @@ const ClassCard = ({
 }) => {
   const [showMenu, setShowMenu] = useState(false);
 
+  const truncateText = (text, maxLength = 25) => {
+    if (text.length > maxLength) {
+      return text.substring(0, maxLength) + '...';
+    }
+    return text;
+  };
+
   const formatDueDate = (dateString) => {
     if (!dateString) return '';
 
@@ -48,8 +55,8 @@ const ClassCard = ({
             style={{ cursor: 'pointer' }}
             onClick={() => onSelectClass(cls.id)}
           >
-            <h5 className="gc-class-title-marquee font-google fw-bold mb-1" style={{ fontSize: '1.25rem' }}>
-              {cls.subject}
+            <h5 className="font-google fw-bold mb-1" style={{ fontSize: '1.25rem' }}>
+              {truncateText(cls.subject, 25)}
             </h5>
             <div className="small text-white text-opacity-90 text-truncate fw-medium" style={{ fontSize: '0.85rem' }}>
               {cls.section}
@@ -83,7 +90,7 @@ const ClassCard = ({
                   className="dropdown-item d-flex align-items-center gap-2"
                   onClick={() => {
                     setShowMenu(false);
-                    navigator.clipboard?.writeText(`https://classroom.google.com/c/${cls.code}`);
+                    navigator.clipboard?.writeText(`https://classroom.google.com/c/${cls.class_code}`);
                     alert(`Invite link copied for ${cls.subject}`);
                   }}
                 >
