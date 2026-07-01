@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Avatar from "../../components/Common/Avatar.jsx";
 import { discussionAPI } from "../../api/client.js";
+import apiClient from "../../api/client.js";
 
 const StreamTab = ({
   cls,
@@ -22,6 +23,7 @@ const StreamTab = ({
   const [showStudentSelector, setShowStudentSelector] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const [commentInputs, setCommentInputs] = useState({});
+  const [discussionCommentInputs, setDiscussionCommentInputs] = useState({});
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkInput, setLinkInput] = useState("");
@@ -161,6 +163,33 @@ const StreamTab = ({
     if (!text || !text.trim()) return;
     onAddComment(cls.id, announcementId, text.trim());
     setCommentInputs({ ...commentInputs, [announcementId]: "" });
+  };
+
+  const handlePostDiscussionComment = async (discussionId, e) => {
+    e.preventDefault();
+    const text = discussionCommentInputs[discussionId];
+    if (!text || !text.trim()) return;
+
+    try {
+      // Call API to post comment on discussion
+      await apiClient.post(`/classes/${cls.id}/discussions/${discussionId}/comments`, {
+        text: text.trim(),
+      });
+
+      // Clear input
+      setDiscussionCommentInputs({
+        ...discussionCommentInputs,
+        [discussionId]: "",
+      });
+
+      // Refresh class data to show new comment
+      if (onDiscussionCreated) {
+        onDiscussionCreated(cls.id);
+      }
+    } catch (error) {
+      console.error("Failed to post discussion comment:", error);
+      alert("Failed to post comment. Please try again.");
+    }
   };
 
   return (
@@ -780,12 +809,69 @@ const StreamTab = ({
                       </div>
                     )}
 
-                    {/* Discussion Actions */}
+                    {/* Comments Section */}
                     <div className="border-top pt-3 mt-3">
-                      <div className="text-muted small mb-2 fw-medium d-flex align-items-center gap-2">
+                      <div className="text-muted small mb-3 fw-medium d-flex align-items-center gap-2">
                         <i className="bi bi-chat-dots"></i>
-                        Discussion
+                        {discussion.comments ? discussion.comments.length : 0} comment
+                        {discussion.comments?.length !== 1 ? "s" : ""}
                       </div>
+
+                      {discussion.comments &&
+                        discussion.comments.map((cm) => (
+                          <div key={cm.id} className="d-flex gap-3 mb-3">
+                            <Avatar name={cm.author} size={32} color="#5f6368" />
+                            <div className="flex-grow-1 bg-light rounded-3 p-2 px-3 border">
+                              <div className="d-flex justify-content-between align-items-center mb-1">
+                                <span className="fw-bold text-dark small">
+                                  {cm.author}
+                                </span>
+                                <span
+                                  className="text-muted"
+                                  style={{ fontSize: "0.75rem" }}
+                                >
+                                  {cm.date}
+                                </span>
+                              </div>
+                              <p
+                                className="mb-0 text-dark small"
+                                style={{ fontSize: "0.88rem" }}
+                              >
+                                {cm.text}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+
+                      {/* Add comment input */}
+                      <form
+                        onSubmit={(e) => handlePostDiscussionComment(discussion.id, e)}
+                        className="d-flex align-items-center gap-2 mt-3"
+                      >
+                        <Avatar name={user} size={32} color={user.color} />
+                        <div className="input-group">
+                          <input
+                            type="text"
+                            className="form-control form-control-sm border rounded-pill px-3 py-2 shadow-none"
+                            placeholder="Add a comment..."
+                            value={discussionCommentInputs[discussion.id] || ""}
+                            onChange={(e) =>
+                              setDiscussionCommentInputs({
+                                ...discussionCommentInputs,
+                                [discussion.id]: e.target.value,
+                              })
+                            }
+                          />
+                          <button
+                            type="submit"
+                            className="btn btn-link text-primary pe-3 ms-n5"
+                            style={{ zIndex: 5 }}
+                            disabled={!discussionCommentInputs[discussion.id]?.trim()}
+                          >
+                            <i className="bi bi-send-fill"></i>
+                          </button>
+                        </div>
+                      </form>
                     </div>
                   </div>
                 </div>
