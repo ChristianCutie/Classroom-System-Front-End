@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Avatar from "../../components/Common/Avatar.jsx";
 import { discussionAPI } from "../../api/client.js";
 
@@ -10,6 +10,8 @@ const StreamTab = ({
   onNavigateTab,
   onDiscussionCreated,
 }) => {
+  const fileInputRef = useRef(null);
+  
   const [isComposing, setIsComposing] = useState(false);
   const [composerMode, setComposerMode] = useState("announcement"); // "announcement" or "discussion"
   const [announcementText, setAnnouncementText] = useState("");
@@ -21,6 +23,8 @@ const StreamTab = ({
   const [attachments, setAttachments] = useState([]);
   const [commentInputs, setCommentInputs] = useState({});
   const [showCodeModal, setShowCodeModal] = useState(false);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkInput, setLinkInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const upcomingWork = [
@@ -47,14 +51,61 @@ const StreamTab = ({
   const fullName = getDisplayName(cls.teacher) || "Teacher";
 
   const handleAddAttachment = (type) => {
-    const names = {
-      drive: "Google Drive Document",
-      link: "https://react.dev/reference",
-      file: "Class_Notes_Attachment.pdf",
-      youtube: "Classroom Tutorial Video",
+    if (type === "file") {
+      // Trigger file input click
+      fileInputRef.current?.click();
+    } else if (type === "link") {
+      // Open link modal
+      setShowLinkModal(true);
+      setLinkInput("");
+    } else if (type === "drive") {
+      // Placeholder for Google Drive integration
+      alert("Google Drive integration coming soon!");
+    } else if (type === "youtube") {
+      // Placeholder for YouTube integration
+      alert("YouTube integration coming soon!");
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const newAtt = {
+      type: "file",
+      name: file.name,
+      url: URL.createObjectURL(file),
+      file: file,
     };
-    const newAtt = { type, name: names[type] || "Attachment.pdf", url: "#" };
     setAttachments([...attachments, newAtt]);
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleAddLink = () => {
+    if (!linkInput.trim()) return;
+
+    // Validate URL
+    try {
+      new URL(linkInput);
+    } catch {
+      alert("Please enter a valid URL");
+      return;
+    }
+
+    const urlObj = new URL(linkInput);
+    const hostName = urlObj.hostname;
+    const newAtt = {
+      type: "link",
+      name: hostName,
+      url: linkInput,
+    };
+    setAttachments([...attachments, newAtt]);
+    setShowLinkModal(false);
+    setLinkInput("");
   };
 
   const handlePost = async (e) => {
@@ -114,6 +165,15 @@ const StreamTab = ({
 
   return (
     <div className="row g-4">
+      {/* Hidden file input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileSelect}
+        style={{ display: "none" }}
+        accept="*/*"
+      />
+
       {/* Left Column: Class Code & Upcoming Work */}
       <div className="col-12 col-lg-3">
         {/* Class code card */}
@@ -352,11 +412,20 @@ const StreamTab = ({
                       className="badge bg-white text-dark border py-2 px-3 d-flex align-items-center gap-2"
                     >
                       <i
-                        className={`bi ${att.type === "drive" ? "bi-google text-primary" : att.type === "youtube" ? "bi-youtube text-danger" : "bi-file-earmark-pdf-fill text-danger"}`}
+                        className={`bi ${
+                          att.type === "drive"
+                            ? "bi-google text-primary"
+                            : att.type === "youtube"
+                            ? "bi-youtube text-danger"
+                            : att.type === "link"
+                            ? "bi-link-45deg text-secondary"
+                            : "bi-file-earmark-text-fill text-primary"
+                        }`}
                       ></i>
                       <span
                         className="text-truncate"
                         style={{ maxWidth: "180px" }}
+                        title={att.name}
                       >
                         {att.name}
                       </span>
@@ -618,7 +687,7 @@ const StreamTab = ({
                     <div className="d-flex align-items-center justify-content-between mb-3">
                       <div className="d-flex align-items-center gap-3">
                         <Avatar
-                          name={discussion.user}
+                          name={`Teacher ${discussion.user_id}`}
                           size={42}
                           color={cls.themeColor || "#1a73e8"}
                         />
@@ -627,7 +696,7 @@ const StreamTab = ({
                             className="fw-bold mb-0 text-dark"
                             style={{ fontSize: "0.95rem" }}
                           >
-                            {discussion.user?.first_name || "Teacher"} (Discussion)
+                            Teacher (Discussion)
                           </h6>
                           <small
                             className="text-muted"
@@ -670,15 +739,7 @@ const StreamTab = ({
                       </p>
                     )}
 
-                    {/* Recipient Info */}
-                    <div className="bg-light p-2 rounded mb-3 border small">
-                      <i className="bi bi-people-fill text-primary me-2"></i>
-                      <span className="fw-medium text-dark">
-                        {discussion.send_to_all
-                          ? "Sent to all students"
-                          : `Sent to ${discussion.student_count || 0} student${discussion.student_count !== 1 ? "s" : ""}`}
-                      </span>
-                    </div>
+
 
                     {/* Attachments */}
                     {discussion.attachments && discussion.attachments.length > 0 && (
@@ -842,8 +903,62 @@ const StreamTab = ({
           </div>
         </div>
       )}
+
+      {/* Link Input Modal */}
+      {showLinkModal && (
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
+        >
+          <div className="modal-dialog modal-dialog-centered modal-md">
+            <div className="modal-content rounded-4 border-0">
+              <div className="modal-header border-bottom ps-4 pe-4 pt-4 pb-3">
+                <h5 className="modal-title fw-bold">Add Link</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowLinkModal(false)}
+                ></button>
+              </div>
+              <div className="modal-body p-4">
+                <div className="form-floating">
+                  <input
+                    type="url"
+                    className="form-control"
+                    placeholder="https://example.com"
+                    id="linkInput"
+                    value={linkInput}
+                    onChange={(e) => setLinkInput(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && handleAddLink()}
+                    autoFocus
+                  />
+                  <label htmlFor="linkInput">Paste link URL</label>
+                </div>
+              </div>
+              <div className="modal-footer border-top ps-4 pe-4 pt-3 pb-3">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowLinkModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleAddLink}
+                  disabled={!linkInput.trim()}
+                >
+                  Add Link
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
 
 export default StreamTab;
