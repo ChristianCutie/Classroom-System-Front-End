@@ -13,7 +13,8 @@ const ClassDetailPage = ({
   onCreateCoursework,
   onSubmitCoursework,
   onUpdateGrade,
-  onUpdateClassBanner
+  onUpdateClassBanner,
+  onDiscussionCreated
 }) => {
   const [activeTab, setActiveTab] = useState('stream');
   const [showCustomizeModal, setShowCustomizeModal] = useState(false);
@@ -102,6 +103,7 @@ const ClassDetailPage = ({
             onPostAnnouncement={onPostAnnouncement}
             onAddComment={onAddComment}
             onNavigateTab={(tab) => setActiveTab(tab)}
+            onDiscussionCreated={onDiscussionCreated}
           />
         )}
         {activeTab === 'classwork' && (

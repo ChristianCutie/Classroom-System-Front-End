@@ -8,6 +8,7 @@ const StreamTab = ({
   onPostAnnouncement,
   onAddComment,
   onNavigateTab,
+  onDiscussionCreated,
 }) => {
   const [isComposing, setIsComposing] = useState(false);
   const [composerMode, setComposerMode] = useState("announcement"); // "announcement" or "discussion"
@@ -80,10 +81,17 @@ const StreamTab = ({
           studentIds: !sendToAll ? selectedStudents : null,
           attachments,
         });
+        
+        // Clear form
         setDiscussionTitle("");
         setDiscussionDescription("");
         setSendToAll(true);
         setSelectedStudents([]);
+        
+        // Trigger refresh of class data
+        if (onDiscussionCreated) {
+          onDiscussionCreated(cls.id);
+        }
       } catch (error) {
         console.error("Failed to create discussion:", error);
         alert("Failed to create discussion. Please try again.");

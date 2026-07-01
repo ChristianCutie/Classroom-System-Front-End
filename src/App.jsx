@@ -304,6 +304,22 @@ const App = () => {
     }
   };
 
+  const handleDiscussionCreated = async (classId) => {
+    try {
+      // Refetch the selected class to load new discussions
+      const res = await apiClient.get(`/classes/${classId}`);
+      setSelectedClass(res.data?.data || null);
+      // Also update the classes list
+      setClasses(prev =>
+        prev.map(c =>
+          c.id === classId ? res.data?.data : c
+        )
+      );
+    } catch (err) {
+      console.error('Failed to refresh class after discussion creation:', err);
+    }
+  };
+
   // ------------------------------------------------------------
   // 11. Role toggle – update user profile via API
   // ------------------------------------------------------------
@@ -387,6 +403,7 @@ const App = () => {
                       onSubmitCoursework={handleSubmitCoursework}
                       onUpdateGrade={handleUpdateGrade}
                       onUpdateClassBanner={handleUpdateClassBanner}
+                      onDiscussionCreated={handleDiscussionCreated}
                     />
                   ) : (
                     <div className="text-center mt-5">Class not found.</div>
