@@ -14,4 +14,18 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+// Discussion API methods
+export const discussionAPI = {
+  createDiscussion: (data) =>
+    apiClient.post('/discussions', {
+      class_id: data.classId,
+      user_id: data.userId,
+      title: data.title,
+      description: data.description,
+      send_to_all: data.sendToAll,
+      student_ids: data.sendToAll ? null : data.studentIds,
+      attachments: data.attachments,
+    }),
+};
+
 export default apiClient;

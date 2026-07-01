@@ -23,7 +23,7 @@ const Navbar = ({
     [person?.first_name || person?.firstName, person?.last_name || person?.lastName]
       .filter(Boolean)
       .join(" ")
-      .trim();
+      .trim(); 
 
   const fullName =
     getDisplayName(user) ||

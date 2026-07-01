@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Avatar from "../../components/Common/Avatar.jsx";
+import { discussionAPI } from "../../api/client.js";
 
 const StreamTab = ({
   cls,
@@ -9,10 +10,17 @@ const StreamTab = ({
   onNavigateTab,
 }) => {
   const [isComposing, setIsComposing] = useState(false);
+  const [composerMode, setComposerMode] = useState("announcement"); // "announcement" or "discussion"
   const [announcementText, setAnnouncementText] = useState("");
+  const [discussionTitle, setDiscussionTitle] = useState("");
+  const [discussionDescription, setDiscussionDescription] = useState("");
+  const [sendToAll, setSendToAll] = useState(true);
+  const [selectedStudents, setSelectedStudents] = useState([]);
+  const [showStudentSelector, setShowStudentSelector] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const [commentInputs, setCommentInputs] = useState({});
   const [showCodeModal, setShowCodeModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const upcomingWork = [
     ...(Array.isArray(cls.assignments)
@@ -48,14 +56,42 @@ const StreamTab = ({
     setAttachments([...attachments, newAtt]);
   };
 
-  const handlePost = (e) => {
+  const handlePost = async (e) => {
     e.preventDefault();
-    if (!announcementText.trim()) return;
-    onPostAnnouncement(cls.id, {
-      text: announcementText.trim(),
-      attachments,
-    });
-    setAnnouncementText("");
+    
+    if (composerMode === "announcement") {
+      if (!announcementText.trim()) return;
+      onPostAnnouncement(cls.id, {
+        text: announcementText.trim(),
+        attachments,
+      });
+      setAnnouncementText("");
+    } else {
+      // Discussion mode
+      if (!discussionTitle.trim()) return;
+      setIsSubmitting(true);
+      try {
+        await discussionAPI.createDiscussion({
+          classId: cls.id,
+          userId: user.id || 1,
+          title: discussionTitle.trim(),
+          description: discussionDescription.trim(),
+          sendToAll: sendToAll,
+          studentIds: !sendToAll ? selectedStudents : null,
+          attachments,
+        });
+        setDiscussionTitle("");
+        setDiscussionDescription("");
+        setSendToAll(true);
+        setSelectedStudents([]);
+      } catch (error) {
+        console.error("Failed to create discussion:", error);
+        alert("Failed to create discussion. Please try again.");
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
+    
     setAttachments([]);
     setIsComposing(false);
   };
@@ -175,33 +211,129 @@ const StreamTab = ({
         ) : (
           <div className="gc-announcement-box p-4 mb-4 shadow">
             <form onSubmit={handlePost}>
+              {/* Mode Toggle */}
+              <div className="d-flex gap-2 mb-3 pb-3 border-bottom">
+                <button
+                  type="button"
+                  className={`btn btn-sm ${composerMode === "announcement" ? "btn-primary" : "btn-outline-secondary"}`}
+                  onClick={() => {
+                    setComposerMode("announcement");
+                    setDiscussionTitle("");
+                    setDiscussionDescription("");
+                  }}
+                >
+                  Announcement
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${composerMode === "discussion" ? "btn-primary" : "btn-outline-secondary"}`}
+                  onClick={() => {
+                    setComposerMode("discussion");
+                    setAnnouncementText("");
+                  }}
+                >
+                  Discussion
+                </button>
+              </div>
+
               <div className="d-flex align-items-center gap-2 mb-3 pb-2 border-bottom">
                 <span className="badge bg-light text-dark border py-1 px-2 small">
                   For: <strong>{cls.name}</strong>
                 </span>
                 <span className="badge bg-light text-dark border py-1 px-2 small">
-                  Students: <strong>All students</strong>
+                  Students: <strong>{sendToAll ? "All students" : `${selectedStudents.length} selected`}</strong>
                 </span>
               </div>
 
-              <div className="form-floating mb-3">
-                <textarea
-                  className="form-control border-0 px-0 shadow-none"
-                  placeholder="Announce something to your class"
-                  id="announceArea"
-                  style={{
-                    minHeight: "120px",
-                    resize: "vertical",
-                    fontSize: "0.95rem",
-                  }}
-                  value={announcementText}
-                  onChange={(e) => setAnnouncementText(e.target.value)}
-                  autoFocus
-                />
-                <label htmlFor="announceArea" className="px-0 text-muted">
-                  Announce something to your class
-                </label>
-              </div>
+              {/* Announcement Mode */}
+              {composerMode === "announcement" && (
+                <div className="form-floating mb-3">
+                  <textarea
+                    className="form-control border-0 px-0 shadow-none"
+                    placeholder="Announce something to your class"
+                    id="announceArea"
+                    style={{
+                      minHeight: "120px",
+                      resize: "vertical",
+                      fontSize: "0.95rem",
+                    }}
+                    value={announcementText}
+                    onChange={(e) => setAnnouncementText(e.target.value)}
+                    autoFocus
+                  />
+                  <label htmlFor="announceArea" className="px-0 text-muted">
+                    Announce something to your class
+                  </label>
+                </div>
+              )}
+
+              {/* Discussion Mode */}
+              {composerMode === "discussion" && (
+                <>
+                  <div className="form-floating mb-3">
+                    <input
+                      type="text"
+                      className="form-control border-0 px-0 shadow-none"
+                      placeholder="Discussion title"
+                      id="discussionTitle"
+                      style={{ fontSize: "0.95rem" }}
+                      value={discussionTitle}
+                      onChange={(e) => setDiscussionTitle(e.target.value)}
+                      autoFocus
+                    />
+                    <label htmlFor="discussionTitle" className="px-0 text-muted">
+                      Discussion title
+                    </label>
+                  </div>
+
+                  <div className="form-floating mb-3">
+                    <textarea
+                      className="form-control border-0 px-0 shadow-none"
+                      placeholder="Add a description (optional)"
+                      id="discussionDescription"
+                      style={{
+                        minHeight: "100px",
+                        resize: "vertical",
+                        fontSize: "0.95rem",
+                      }}
+                      value={discussionDescription}
+                      onChange={(e) => setDiscussionDescription(e.target.value)}
+                    />
+                    <label htmlFor="discussionDescription" className="px-0 text-muted">
+                      Add a description (optional)
+                    </label>
+                  </div>
+
+                  {/* Send to Options */}
+                  <div className="mb-3 p-2 bg-light rounded border">
+                    <div className="d-flex align-items-center gap-2 mb-2">
+                      <input
+                        type="checkbox"
+                        id="sendToAll"
+                        className="form-check-input"
+                        checked={sendToAll}
+                        onChange={(e) => {
+                          setSendToAll(e.target.checked);
+                          if (e.target.checked) setSelectedStudents([]);
+                        }}
+                      />
+                      <label htmlFor="sendToAll" className="form-check-label mb-0 small fw-medium">
+                        Send to all students
+                      </label>
+                    </div>
+                    {!sendToAll && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-primary"
+                        onClick={() => setShowStudentSelector(true)}
+                      >
+                        <i className="bi bi-people me-1"></i>
+                        Select Students ({selectedStudents.length})
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
 
               {/* Attachments preview */}
               {attachments.length > 0 && (
@@ -278,6 +410,10 @@ const StreamTab = ({
                     onClick={() => {
                       setIsComposing(false);
                       setAnnouncementText("");
+                      setDiscussionTitle("");
+                      setDiscussionDescription("");
+                      setSendToAll(true);
+                      setSelectedStudents([]);
                       setAttachments([]);
                     }}
                   >
@@ -287,9 +423,13 @@ const StreamTab = ({
                     type="submit"
                     className="btn text-white px-4 fw-medium small"
                     style={{ backgroundColor: cls.themeColor || "#1a73e8" }}
-                    disabled={!announcementText.trim()}
+                    disabled={
+                      isSubmitting ||
+                      (composerMode === "announcement" && !announcementText.trim()) ||
+                      (composerMode === "discussion" && !discussionTitle.trim())
+                    }
                   >
-                    Post
+                    {isSubmitting ? "Creating..." : "Post"}
                   </button>
                 </div>
               </div>
@@ -298,161 +438,290 @@ const StreamTab = ({
         )}
 
         {/* Stream feed items */}
-        {cls.announcements && cls.announcements.length > 0 ? (
-          cls.announcements.map((ann) => (
-            <div
-              key={ann.id}
-              className="card border shadow-sm mb-3 rounded-3 overflow-hidden"
-            >
-              <div className="card-body p-4">
-                {/* Author header */}
-                <div className="d-flex align-items-center justify-content-between mb-3">
-                  <div className="d-flex align-items-center gap-3">
-                    <Avatar
-                      name={ann.author}
-                      size={42}
-                      color={cls.themeColor || "#1a73e8"}
-                    />
-                    <div>
-                      <h6
-                        className="fw-bold mb-0 text-dark"
-                        style={{ fontSize: "0.95rem" }}
-                      >
-                        {ann.author.name}
-                      </h6>
-                      <small
-                        className="text-muted"
-                        style={{ fontSize: "0.78rem" }}
-                      >
-                        {ann.date}
-                      </small>
-                    </div>
-                  </div>
-                  <button className="btn btn-icon btn-sm text-muted">
-                    <i className="bi bi-three-dots-vertical"></i>
-                  </button>
-                </div>
-
-                {/* Body Text */}
-                <p
-                  className="card-text text-dark mb-3"
-                  style={{
-                    whiteSpace: "pre-wrap",
-                    lineHeight: "1.5",
-                    fontSize: "0.93rem",
-                  }}
+        {(cls.announcements && cls.announcements.length > 0) || (cls.discussions && cls.discussions.length > 0) ? (
+          <>
+            {/* Announcements */}
+            {cls.announcements &&
+              cls.announcements.map((ann) => (
+                <div
+                  key={`announcement-${ann.id}`}
+                  className="card border shadow-sm mb-3 rounded-3 overflow-hidden"
                 >
-                  {ann.text}
-                </p>
-
-                {/* Attachments */}
-                {ann.attachments && ann.attachments.length > 0 && (
-                  <div className="row g-2 mb-4">
-                    {ann.attachments.map((att, aIdx) => (
-                      <div key={aIdx} className="col-12 col-md-6">
-                        <a
-                          href={att.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="border rounded p-2 d-flex align-items-center gap-3 text-decoration-none text-dark bg-white hover-bg-light shadow-sm"
-                          style={{ transition: "background 0.15s" }}
-                        >
-                          <div
-                            className="rounded d-flex align-items-center justify-content-center flex-shrink-0"
-                            style={{
-                              width: "48px",
-                              height: "48px",
-                              backgroundColor: "#f8f9fa",
-                            }}
+                  <div className="card-body p-4">
+                    {/* Author header */}
+                    <div className="d-flex align-items-center justify-content-between mb-3">
+                      <div className="d-flex align-items-center gap-3">
+                        <Avatar
+                          name={ann.author}
+                          size={42}
+                          color={cls.themeColor || "#1a73e8"}
+                        />
+                        <div>
+                          <h6
+                            className="fw-bold mb-0 text-dark"
+                            style={{ fontSize: "0.95rem" }}
                           >
-                            <i
-                              className={`bi fs-4 ${att.type === "pdf" ? "bi-file-earmark-pdf-fill text-danger" : att.type === "drive" ? "bi-google text-primary" : att.type === "youtube" ? "bi-youtube text-danger" : "bi-file-earmark-text-fill text-primary"}`}
-                            ></i>
-                          </div>
-                          <div className="overflow-hidden">
-                            <div className="fw-semibold small text-truncate">
-                              {att.name}
-                            </div>
-                            <div
-                              className="text-muted small text-uppercase"
-                              style={{ fontSize: "0.72rem" }}
-                            >
-                              {att.type}
-                            </div>
-                          </div>
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Comments Section */}
-                <div className="border-top pt-3 mt-3">
-                  <div className="text-muted small mb-3 fw-medium d-flex align-items-center gap-2">
-                    <i className="bi bi-people"></i>
-                    {ann.comments ? ann.comments.length : 0} class{" "}
-                    {ann.comments?.length === 1 ? "comment" : "comments"}
-                  </div>
-
-                  {ann.comments &&
-                    ann.comments.map((cm) => (
-                      <div key={cm.id} className="d-flex gap-3 mb-3">
-                        <Avatar name={cm.author} size={32} color="#5f6368" />
-                        <div className="flex-grow-1 bg-light rounded-3 p-2 px-3 border">
-                          <div className="d-flex justify-content-between align-items-center mb-1">
-                            <span className="fw-bold text-dark small">
-                              {cm.author}
-                            </span>
-                            <span
-                              className="text-muted"
-                              style={{ fontSize: "0.75rem" }}
-                            >
-                              {cm.date}
-                            </span>
-                          </div>
-                          <p
-                            className="mb-0 text-dark small"
-                            style={{ fontSize: "0.88rem" }}
+                            {ann.author.name}
+                          </h6>
+                          <small
+                            className="text-muted"
+                            style={{ fontSize: "0.78rem" }}
                           >
-                            {cm.text}
-                          </p>
+                            {ann.date}
+                          </small>
                         </div>
                       </div>
-                    ))}
-
-                  {/* Add comment input */}
-                  <form
-                    onSubmit={(e) => handlePostComment(ann.id, e)}
-                    className="d-flex align-items-center gap-2 mt-3"
-                  >
-                    <Avatar name={user} size={32} color={user.color} />
-                    <div className="input-group">
-                      <input
-                        type="text"
-                        className="form-control form-control-sm border rounded-pill px-3 py-2 shadow-none"
-                        placeholder="Add class comment..."
-                        value={commentInputs[ann.id] || ""}
-                        onChange={(e) =>
-                          setCommentInputs({
-                            ...commentInputs,
-                            [ann.id]: e.target.value,
-                          })
-                        }
-                      />
-                      <button
-                        type="submit"
-                        className="btn btn-link text-primary pe-3 ms-n5"
-                        style={{ zIndex: 5 }}
-                        disabled={!commentInputs[ann.id]?.trim()}
-                      >
-                        <i className="bi bi-send-fill"></i>
+                      <button className="btn btn-icon btn-sm text-muted">
+                        <i className="bi bi-three-dots-vertical"></i>
                       </button>
                     </div>
-                  </form>
+
+                    {/* Body Text */}
+                    <p
+                      className="card-text text-dark mb-3"
+                      style={{
+                        whiteSpace: "pre-wrap",
+                        lineHeight: "1.5",
+                        fontSize: "0.93rem",
+                      }}
+                    >
+                      {ann.text}
+                    </p>
+
+                    {/* Attachments */}
+                    {ann.attachments && ann.attachments.length > 0 && (
+                      <div className="row g-2 mb-4">
+                        {ann.attachments.map((att, aIdx) => (
+                          <div key={aIdx} className="col-12 col-md-6">
+                            <a
+                              href={att.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="border rounded p-2 d-flex align-items-center gap-3 text-decoration-none text-dark bg-white hover-bg-light shadow-sm"
+                              style={{ transition: "background 0.15s" }}
+                            >
+                              <div
+                                className="rounded d-flex align-items-center justify-content-center flex-shrink-0"
+                                style={{
+                                  width: "48px",
+                                  height: "48px",
+                                  backgroundColor: "#f8f9fa",
+                                }}
+                              >
+                                <i
+                                  className={`bi fs-4 ${att.type === "pdf" ? "bi-file-earmark-pdf-fill text-danger" : att.type === "drive" ? "bi-google text-primary" : att.type === "youtube" ? "bi-youtube text-danger" : "bi-file-earmark-text-fill text-primary"}`}
+                                ></i>
+                              </div>
+                              <div className="overflow-hidden">
+                                <div className="fw-semibold small text-truncate">
+                                  {att.name}
+                                </div>
+                                <div
+                                  className="text-muted small text-uppercase"
+                                  style={{ fontSize: "0.72rem" }}
+                                >
+                                  {att.type}
+                                </div>
+                              </div>
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Comments Section */}
+                    <div className="border-top pt-3 mt-3">
+                      <div className="text-muted small mb-3 fw-medium d-flex align-items-center gap-2">
+                        <i className="bi bi-people"></i>
+                        {ann.comments ? ann.comments.length : 0} class{" "}
+                        {ann.comments?.length === 1 ? "comment" : "comments"}
+                      </div>
+
+                      {ann.comments &&
+                        ann.comments.map((cm) => (
+                          <div key={cm.id} className="d-flex gap-3 mb-3">
+                            <Avatar name={cm.author} size={32} color="#5f6368" />
+                            <div className="flex-grow-1 bg-light rounded-3 p-2 px-3 border">
+                              <div className="d-flex justify-content-between align-items-center mb-1">
+                                <span className="fw-bold text-dark small">
+                                  {cm.author}
+                                </span>
+                                <span
+                                  className="text-muted"
+                                  style={{ fontSize: "0.75rem" }}
+                                >
+                                  {cm.date}
+                                </span>
+                              </div>
+                              <p
+                                className="mb-0 text-dark small"
+                                style={{ fontSize: "0.88rem" }}
+                              >
+                                {cm.text}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+
+                      {/* Add comment input */}
+                      <form
+                        onSubmit={(e) => handlePostComment(ann.id, e)}
+                        className="d-flex align-items-center gap-2 mt-3"
+                      >
+                        <Avatar name={user} size={32} color={user.color} />
+                        <div className="input-group">
+                          <input
+                            type="text"
+                            className="form-control form-control-sm border rounded-pill px-3 py-2 shadow-none"
+                            placeholder="Add class comment..."
+                            value={commentInputs[ann.id] || ""}
+                            onChange={(e) =>
+                              setCommentInputs({
+                                ...commentInputs,
+                                [ann.id]: e.target.value,
+                              })
+                            }
+                          />
+                          <button
+                            type="submit"
+                            className="btn btn-link text-primary pe-3 ms-n5"
+                            style={{ zIndex: 5 }}
+                            disabled={!commentInputs[ann.id]?.trim()}
+                          >
+                            <i className="bi bi-send-fill"></i>
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          ))
+              ))}
+
+            {/* Discussions */}
+            {cls.discussions &&
+              cls.discussions.map((discussion) => (
+                <div
+                  key={`discussion-${discussion.id}`}
+                  className="card border shadow-sm mb-3 rounded-3 overflow-hidden"
+                  style={{ borderLeft: `4px solid ${cls.themeColor || "#1a73e8"}` }}
+                >
+                  <div className="card-body p-4">
+                    {/* Author header */}
+                    <div className="d-flex align-items-center justify-content-between mb-3">
+                      <div className="d-flex align-items-center gap-3">
+                        <Avatar
+                          name={discussion.user}
+                          size={42}
+                          color={cls.themeColor || "#1a73e8"}
+                        />
+                        <div>
+                          <h6
+                            className="fw-bold mb-0 text-dark"
+                            style={{ fontSize: "0.95rem" }}
+                          >
+                            {discussion.user?.first_name || "Teacher"} (Discussion)
+                          </h6>
+                          <small
+                            className="text-muted"
+                            style={{ fontSize: "0.78rem" }}
+                          >
+                            {discussion.created_at
+                              ? new Date(discussion.created_at).toLocaleDateString()
+                              : "Just now"}
+                          </small>
+                        </div>
+                      </div>
+                      <button className="btn btn-icon btn-sm text-muted">
+                        <i className="bi bi-three-dots-vertical"></i>
+                      </button>
+                    </div>
+
+                    {/* Discussion Badge */}
+                    <div className="mb-2">
+                      <span className="badge bg-info text-dark small">
+                        <i className="bi bi-chat-left-quote me-1"></i>Discussion
+                      </span>
+                    </div>
+
+                    {/* Title */}
+                    <h5 className="card-title text-dark fw-bold mb-2">
+                      {discussion.title}
+                    </h5>
+
+                    {/* Description */}
+                    {discussion.description && (
+                      <p
+                        className="card-text text-dark mb-3"
+                        style={{
+                          whiteSpace: "pre-wrap",
+                          lineHeight: "1.5",
+                          fontSize: "0.93rem",
+                        }}
+                      >
+                        {discussion.description}
+                      </p>
+                    )}
+
+                    {/* Recipient Info */}
+                    <div className="bg-light p-2 rounded mb-3 border small">
+                      <i className="bi bi-people-fill text-primary me-2"></i>
+                      <span className="fw-medium text-dark">
+                        {discussion.send_to_all
+                          ? "Sent to all students"
+                          : `Sent to ${discussion.student_count || 0} student${discussion.student_count !== 1 ? "s" : ""}`}
+                      </span>
+                    </div>
+
+                    {/* Attachments */}
+                    {discussion.attachments && discussion.attachments.length > 0 && (
+                      <div className="row g-2 mb-4">
+                        {discussion.attachments.map((att, aIdx) => (
+                          <div key={aIdx} className="col-12 col-md-6">
+                            <a
+                              href={att.file_path || "#"}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="border rounded p-2 d-flex align-items-center gap-3 text-decoration-none text-dark bg-white hover-bg-light shadow-sm"
+                              style={{ transition: "background 0.15s" }}
+                            >
+                              <div
+                                className="rounded d-flex align-items-center justify-content-center flex-shrink-0"
+                                style={{
+                                  width: "48px",
+                                  height: "48px",
+                                  backgroundColor: "#f8f9fa",
+                                }}
+                              >
+                                <i className="bi bi-file-earmark-text-fill text-primary fs-4"></i>
+                              </div>
+                              <div className="overflow-hidden">
+                                <div className="fw-semibold small text-truncate">
+                                  {att.file_name}
+                                </div>
+                                <div
+                                  className="text-muted small text-uppercase"
+                                  style={{ fontSize: "0.72rem" }}
+                                >
+                                  Attachment
+                                </div>
+                              </div>
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Discussion Actions */}
+                    <div className="border-top pt-3 mt-3">
+                      <div className="text-muted small mb-2 fw-medium d-flex align-items-center gap-2">
+                        <i className="bi bi-chat-dots"></i>
+                        Discussion
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+          </>
         ) : (
           <div className="text-center py-5 bg-white border rounded-3 shadow-sm">
             <i className="bi bi-chat-square-text text-muted fs-1 mb-2"></i>
@@ -494,6 +763,73 @@ const StreamTab = ({
               <p className="text-muted small">
                 Students can join at classroom.google.com using this code.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Student Selector Modal */}
+      {showStudentSelector && (
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
+        >
+          <div className="modal-dialog modal-dialog-centered modal-md">
+            <div className="modal-content rounded-4 border-0">
+              <div className="modal-header border-bottom ps-4 pe-4 pt-4 pb-3">
+                <h5 className="modal-title fw-bold">Select Students</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowStudentSelector(false)}
+                ></button>
+              </div>
+              <div className="modal-body p-4" style={{ maxHeight: "400px", overflowY: "auto" }}>
+                {cls.students && cls.students.length > 0 ? (
+                  <div className="d-flex flex-column gap-2">
+                    {cls.students.map((student) => (
+                      <div key={student.id} className="form-check">
+                        <input
+                          className="form-check-input"
+                          type="checkbox"
+                          id={`student-${student.id}`}
+                          checked={selectedStudents.includes(student.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedStudents([...selectedStudents, student.id]);
+                            } else {
+                              setSelectedStudents(
+                                selectedStudents.filter((id) => id !== student.id)
+                              );
+                            }
+                          }}
+                        />
+                        <label className="form-check-label" htmlFor={`student-${student.id}`}>
+                          {student.first_name} {student.last_name}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted small mb-0">No students available</p>
+                )}
+              </div>
+              <div className="modal-footer border-top ps-4 pe-4 pt-3 pb-3">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowStudentSelector(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setShowStudentSelector(false)}
+                >
+                  Done
+                </button>
+              </div>
             </div>
           </div>
         </div>
