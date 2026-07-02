@@ -171,9 +171,10 @@ const StreamTab = ({
     if (!text || !text.trim()) return;
 
     try {
-      // Call API to post comment on discussion
-      await apiClient.post(`/classes/${cls.id}/discussions/${discussionId}/comments`, {
-        text: text.trim(),
+      // Use backend reply endpoint: POST /discussions/{discussionId}/reply
+      await apiClient.post(`/discussions/${discussionId}/reply`, {
+        user_id: user?.id || 1,
+        reply: text.trim(),
       });
 
       // Clear input
@@ -182,13 +183,13 @@ const StreamTab = ({
         [discussionId]: "",
       });
 
-      // Refresh class data to show new comment
+      // Refresh class data to show new reply
       if (onDiscussionCreated) {
         onDiscussionCreated(cls.id);
       }
     } catch (error) {
-      console.error("Failed to post discussion comment:", error);
-      alert("Failed to post comment. Please try again.");
+      console.error("Failed to post discussion reply:", error);
+      alert("Failed to post reply. Please try again.");
     }
   };
 
@@ -813,35 +814,29 @@ const StreamTab = ({
                     <div className="border-top pt-3 mt-3">
                       <div className="text-muted small mb-3 fw-medium d-flex align-items-center gap-2">
                         <i className="bi bi-chat-dots"></i>
-                        {discussion.comments ? discussion.comments.length : 0} comment
-                        {discussion.comments?.length !== 1 ? "s" : ""}
+                        {discussion.replies ? discussion.replies.length : 0} repl
+                        {discussion.replies?.length === 1 ? "y" : "ies"}
                       </div>
 
-                      {discussion.comments &&
-                        discussion.comments.map((cm) => (
-                          <div key={cm.id} className="d-flex gap-3 mb-3">
-                            <Avatar name={cm.author} size={32} color="#5f6368" />
-                            <div className="flex-grow-1 bg-light rounded-3 p-2 px-3 border">
-                              <div className="d-flex justify-content-between align-items-center mb-1">
-                                <span className="fw-bold text-dark small">
-                                  {cm.author}
-                                </span>
-                                <span
-                                  className="text-muted"
-                                  style={{ fontSize: "0.75rem" }}
-                                >
-                                  {cm.date}
-                                </span>
+                      {discussion.replies &&
+                        discussion.replies.map((reply) => {
+                          const authorName = reply.user
+                            ? `${reply.user.first_name || reply.user.firstName || ""} ${reply.user.last_name || reply.user.lastName || ""}`.trim()
+                            : `User ${reply.user_id}`;
+                          const date = reply.created_at ? new Date(reply.created_at).toLocaleDateString() : "Just now";
+                          return (
+                            <div key={reply.id} className="d-flex gap-3 mb-3">
+                              <Avatar name={reply.user || authorName} size={32} color="#5f6368" />
+                              <div className="flex-grow-1 bg-light rounded-3 p-2 px-3 border">
+                                <div className="d-flex justify-content-between align-items-center mb-1">
+                                  <span className="fw-bold text-dark small">{authorName}</span>
+                                  <span   className="text-muted" style={{ fontSize: "0.75rem" }}>{date}</span>
+                                </div>
+                                <p className="mb-0 text-dark small" style={{ fontSize: "0.88rem" }}>{reply.reply}</p>
                               </div>
-                              <p
-                                className="mb-0 text-dark small"
-                                style={{ fontSize: "0.88rem" }}
-                              >
-                                {cm.text}
-                              </p>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
 
                       {/* Add comment input */}
                       <form
