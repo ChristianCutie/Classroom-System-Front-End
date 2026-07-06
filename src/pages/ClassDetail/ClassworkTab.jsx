@@ -5,7 +5,10 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
   const [selectedTopic, setSelectedTopic] = useState('All topics');
   const [expandedId, setExpandedId] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showTopicModal, setShowTopicModal] = useState(false);
   const [createType, setCreateType] = useState('assignment');
+  const [topicName, setTopicName] = useState('');
+  const [customTopics, setCustomTopics] = useState([]);
 
   // Create coursework form state
   const [cwTitle, setCwTitle] = useState('');
@@ -88,9 +91,12 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
 
   // --- Derive topics from the classwork list ---
   const topics = useMemo(() => {
-    const uniqueTopics = new Set(classworkList.map(cw => cw.topic || 'General'));
+    const uniqueTopics = new Set([
+      ...customTopics,
+      ...classworkList.map(cw => cw.topic || 'General')
+    ]);
     return ['All topics', ...uniqueTopics];
-  }, [classworkList]);
+  }, [classworkList, customTopics]);
 
   const filteredWork = selectedTopic === 'All topics'
     ? classworkList
@@ -103,6 +109,18 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
     acc[topic].push(cw);
     return acc;
   }, {});
+
+  const handleAddTopic = (e) => {
+    e.preventDefault();
+    const trimmedTopic = topicName.trim();
+    if (!trimmedTopic) return;
+
+    setCustomTopics((prev) => (prev.includes(trimmedTopic) ? prev : [...prev, trimmedTopic]));
+    setSelectedTopic(trimmedTopic);
+    setTopicName('');
+    setShowTopicModal(false);
+    addToast(`Topic "${trimmedTopic}" added!`, 'info');
+  };
 
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
@@ -218,7 +236,7 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
                 </li>
                 <li><hr className="dropdown-divider" /></li>
                 <li>
-                  <button className="dropdown-item py-2 d-flex align-items-center gap-2" onClick={() => addToast("Topic added!", "info")}>
+                  <button className="dropdown-item py-2 d-flex align-items-center gap-2" onClick={() => setShowTopicModal(true)}>
                     <i className="bi bi-tag text-secondary"></i> Topic
                   </button>
                 </li>
@@ -232,7 +250,7 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
             <i className="bi bi-camera-video text-success fs-6"></i> Meet
           </button>
           <button className="btn btn-sm btn-light border rounded-pill px-3 d-flex align-items-center gap-2 text-dark fw-medium py-2">
-            <i className="bi bi-calendar-date text-primary fs-6"></i> Google Calendar
+            <i className="bi bi-calendar-date text-primary fs-6"></i> Calendar
           </button>
           <button
             className="btn btn-sm btn-light border rounded-pill px-3 d-flex align-items-center gap-2 text-dark fw-medium py-2"
@@ -430,6 +448,44 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
           )}
         </div>
       </div>
+
+      {/* Add Topic Modal */}
+      {showTopicModal && (
+        <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }} tabIndex="-1">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content border-0 shadow-lg rounded-4">
+              <div className="modal-header border-bottom px-4 pt-4 pb-3">
+                <h5 className="modal-title font-google fw-bold">Add topic</h5>
+                <button className="btn-close" onClick={() => setShowTopicModal(false)}></button>
+              </div>
+
+              <form onSubmit={handleAddTopic}>
+                <div className="modal-body p-4">
+                  <label className="form-label small fw-bold text-muted">Topic name</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Enter a topic name"
+                    value={topicName}
+                    onChange={(e) => setTopicName(e.target.value)}
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                <div className="modal-footer border-top px-4 py-3">
+                  <button type="button" className="btn btn-light fw-medium px-4" onClick={() => setShowTopicModal(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary fw-medium px-4">
+                    Add topic
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Coursework Modal */}
       {showCreateModal && (
