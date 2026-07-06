@@ -13,6 +13,7 @@
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.1",
     "clsx": "2.1.1",
+    "docx-preview": "^0.3.7",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "react-router-dom": "^7.18.1",

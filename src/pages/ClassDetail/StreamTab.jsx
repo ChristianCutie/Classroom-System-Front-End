@@ -67,9 +67,9 @@ const StreamTab = ({
     if (rawAttachments.length > 0) {
       return rawAttachments
         .map((att) => {
-          const filePath = resolveAttachmentUrl(
-            att.file_path || att.url || att.path || null,
-          );
+          const attachmentUrl =
+            att.file_url || att.file_path || att.url || att.path || att.filePath || null;
+          const filePath = resolveAttachmentUrl(attachmentUrl);
           if (!filePath) return null;
           return {
             ...att,
@@ -80,8 +80,10 @@ const StreamTab = ({
         .filter(Boolean);
     }
 
-    if (discussion.file_path) {
-      const filePath = resolveAttachmentUrl(discussion.file_path);
+    const attachmentUrl =
+      discussion.file_url || discussion.file_path || discussion.url || discussion.path || discussion.filePath || null;
+    if (attachmentUrl) {
+      const filePath = resolveAttachmentUrl(attachmentUrl);
       if (!filePath) return [];
 
       return [
@@ -153,6 +155,29 @@ const StreamTab = ({
     setAttachments([...attachments, newAtt]);
     setShowLinkModal(false);
     setLinkInput("");
+  };
+
+  const handleDownloadAttachment = (att) => {
+    if (!att) return;
+
+    if (att.type === "file") {
+      const downloadUrl = att.url || URL.createObjectURL(att.file);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = att.name || "attachment";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
+
+    if (att.url) {
+      window.open(att.url, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const handleDownloadAllAttachments = () => {
+    attachments.forEach((att) => handleDownloadAttachment(att));
   };
 
   const handlePost = async (e) => {
@@ -533,41 +558,79 @@ const StreamTab = ({
 
               {/* Attachments preview */}
               {attachments.length > 0 && (
-                <div className="d-flex flex-wrap gap-2 mb-3 bg-light p-2 rounded border">
-                  {attachments.map((att, idx) => (
-                    <div
-                      key={idx}
-                      className="badge bg-white text-dark border py-2 px-3 d-flex align-items-center gap-2"
-                    >
-                      <i
-                        className={`bi ${
-                          att.type === "drive"
-                            ? "bi-google text-primary"
-                            : att.type === "youtube"
-                              ? "bi-youtube text-danger"
-                              : att.type === "link"
-                                ? "bi-link-45deg text-secondary"
-                                : "bi-file-earmark-text-fill text-primary"
-                        }`}
-                      ></i>
-                      <span
-                        className="text-truncate"
-                        style={{ maxWidth: "180px" }}
-                        title={att.name}
-                      >
-                        {att.name}
-                      </span>
-                      <i
-                        className="bi bi-x ms-1 text-muted"
-                        style={{ cursor: "pointer" }}
+                <div className="mb-3">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span className="small fw-semibold text-muted">
+                      Attachments
+                    </span>
+                    <div className="d-flex gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
                         onClick={() =>
-                          setAttachments(
-                            attachments.filter((_, i) => i !== idx),
-                          )
+                          attachments.forEach((att) => handleDownloadAttachment(att))
                         }
-                      ></i>
+                        disabled={attachments.length === 0}
+                      >
+                        <span aria-hidden="true">⬇</span>
+                        <span>Download</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-outline-primary btn-sm d-flex align-items-center gap-1"
+                        onClick={handleDownloadAllAttachments}
+                        disabled={attachments.length === 0}
+                      >
+                        <span aria-hidden="true">⬇</span>
+                        <span>Download All</span>
+                      </button>
                     </div>
-                  ))}
+                  </div>
+                  <div className="d-flex flex-wrap gap-2 bg-light p-2 rounded border">
+                    {attachments.map((att, idx) => (
+                      <div
+                        key={idx}
+                        className="badge bg-white text-dark border py-2 px-3 d-flex align-items-center gap-2"
+                      >
+                        <i
+                          className={`bi ${
+                            att.type === "drive"
+                              ? "bi-google text-primary"
+                              : att.type === "youtube"
+                                ? "bi-youtube text-danger"
+                                : att.type === "link"
+                                  ? "bi-link-45deg text-secondary"
+                                  : "bi-file-earmark-text-fill text-primary"
+                          }`}
+                        ></i>
+                        <span
+                          className="text-truncate"
+                          style={{ maxWidth: "180px" }}
+                          title={att.name}
+                        >
+                          {att.name}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-secondary p-1 d-flex align-items-center gap-1"
+                          onClick={() => handleDownloadAttachment(att)}
+                          title={`Download ${att.name}`}
+                        >
+                          <span aria-hidden="true">⬇</span>
+                          <span className="small">Save</span>
+                        </button>
+                        <i
+                          className="bi bi-x ms-1 text-muted"
+                          style={{ cursor: "pointer" }}
+                          onClick={() =>
+                            setAttachments(
+                              attachments.filter((_, i) => i !== idx),
+                            )
+                          }
+                        ></i>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -715,9 +778,9 @@ const StreamTab = ({
                                   backgroundColor: "#f8f9fa",
                                 }}
                               >
-                                <i
-                                  className={`bi fs-4 ${att.type === "pdf" ? "bi-file-earmark-pdf-fill text-danger" : att.type === "drive" ? "bi-google text-primary" : att.type === "youtube" ? "bi-youtube text-danger" : "bi-file-earmark-text-fill text-primary"}`}
-                                ></i>
+                                <span className="fs-4 text-primary" aria-hidden="true">
+                                  ⬇
+                                </span>
                               </div>
                               <div className="overflow-hidden">
                                 <div className="fw-semibold small text-truncate">
@@ -901,7 +964,9 @@ const StreamTab = ({
                                     backgroundColor: "#f8f9fa",
                                   }}
                                 >
-                                  <i className="bi bi-file-earmark-text-fill text-primary fs-4"></i>
+                                  <span className="fs-4 text-primary" aria-hidden="true">
+                                    ⬇
+                                  </span>
                                 </div>
                                 <div className="overflow-hidden">
                                   <div className="fw-semibold small text-truncate">

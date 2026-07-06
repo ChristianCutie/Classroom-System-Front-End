@@ -1,29 +1,51 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useToast } from '@/context/ToastContext.jsx';
 
-const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => {
+const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onViewInstruction, classwork }) => {
   const [selectedTopic, setSelectedTopic] = useState('All topics');
   const [expandedId, setExpandedId] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createType, setCreateType] = useState('assignment');
-  
+
   // Create coursework form state
   const [cwTitle, setCwTitle] = useState('');
   const [cwInstructions, setCwInstructions] = useState('');
   const [cwTopic, setCwTopic] = useState('General');
   const [cwPoints, setCwPoints] = useState('100');
-  const [cwDueDate, setCwDueDate] = useState('Next Friday, 11:59 PM');
+  const [cwDueDate, setCwDueDate] = useState('');
+  const [cwAttachments, setCwAttachments] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionStatus, setSubmissionStatus] = useState({});
+  const [submittingId, setSubmittingId] = useState(null);
   const { addToast } = useToast();
+
+  const isTeacher = useMemo(() => {
+    if (!user) return false;
+
+    if (typeof user.role === 'string') {
+      const normalized = user.role.toLowerCase();
+      return normalized === 'teacher' || normalized === 'instructor' || normalized === 'teacher/instructor';
+    }
+
+    if (user.role && typeof user.role === 'object') {
+      const roleName = user.role.role_name || user.role.name || user.role.value || '';
+      const normalized = String(roleName).toLowerCase();
+      return normalized === 'teacher' || normalized === 'instructor' || normalized === 'teacher/instructor';
+    }
+
+    return Boolean(user.is_teacher || user.isTeacher);
+  }, [user]);
 
   // --- Merge assignments and quizzes into a unified classwork list ---
   const classworkList = useMemo(() => {
+    if (Array.isArray(classwork) && classwork.length) return classwork;
     const assignments = (cls.assignments || []).map(a => ({
       id: a.id,
       title: a.title,
       dueDate: a.due_date,
       points: a.max_points || 100,
       type: 'assignment',
-      topic: a.topic || 'General', // if topic not present in API, default
+      topic: a.topic || 'General',
       instructions: a.instructions || 'No instructions provided.',
       attachments: a.attachments || [],
       postedDate: a.created_at ? new Date(a.created_at).toLocaleDateString() : 'recently',
@@ -34,7 +56,7 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
       id: q.id,
       title: q.title,
       dueDate: q.due_date,
-      points: q.max_points || 100, // if quizzes don't have points, set default
+      points: q.max_points || 100,
       type: 'quiz',
       topic: q.topic || 'General',
       instructions: q.instructions || 'No instructions provided.',
@@ -44,16 +66,31 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
     }));
 
     return [...assignments, ...quizzes];
-  }, [cls.assignments, cls.quizzes]);
+  }, [classwork, cls.assignments, cls.quizzes]);
+
+  useEffect(() => {
+    setSubmissionStatus((prev) => {
+      const next = { ...prev };
+      classworkList.forEach((cw) => {
+        const hasSubmission = Boolean(
+          cw.submitted ||
+          cw.userSubmitted ||
+          cw.userSubmission?.status === 'submitted' ||
+          cw.userSubmission?.status === 'turned_in' ||
+          cw.userSubmission?.status === 'graded' ||
+          cw.status === 'submitted'
+        );
+        if (hasSubmission) next[cw.id] = true;
+      });
+      return next;
+    });
+  }, [classworkList]);
 
   // --- Derive topics from the classwork list ---
   const topics = useMemo(() => {
     const uniqueTopics = new Set(classworkList.map(cw => cw.topic || 'General'));
-    const topicArray = ['All topics', ...uniqueTopics];
-    return topicArray;
+    return ['All topics', ...uniqueTopics];
   }, [classworkList]);
-
-  // When a new topic is created via the modal, we could add it to the list (not implemented here)
 
   const filteredWork = selectedTopic === 'All topics'
     ? classworkList
@@ -67,22 +104,69 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
     return acc;
   }, {});
 
-  const handleCreateSubmit = (e) => {
+  const handleCreateSubmit = async (e) => {
     e.preventDefault();
     if (!cwTitle.trim()) return;
-    onCreateCoursework(cls.id, {
-      title: cwTitle.trim(),
-      type: createType,
-      topic: cwTopic,
-      dueDate: createType === 'material' ? null : cwDueDate,
-      points: createType === 'material' ? null : Number(cwPoints) || 100,
-      instructions: cwInstructions.trim(),
-      attachments: [{ type: 'pdf', name: `${cwTitle.replace(/\s+/g, '_')}_Docs.pdf`, url: '#' }],
-      postedDate: 'Today'
-    });
-    setCwTitle('');
-    setCwInstructions('');
-    setShowCreateModal(false);
+
+    setIsSubmitting(true);
+    try {
+      const payload = createType === 'assignment'
+        ? (() => {
+            const formData = new FormData();
+            formData.append('class_id', cls.id);
+            formData.append('title', cwTitle.trim());
+            formData.append('instructions', cwInstructions.trim());
+            formData.append('max_points', Number(cwPoints) || 100);
+            formData.append('topic', cwTopic || 'General');
+            if (cwDueDate) formData.append('due_date', cwDueDate);
+            cwAttachments.forEach((file, index) => {
+              if (file instanceof File) {
+                formData.append(`attachments[${index}]`, file);
+              }
+            });
+            return { type: 'assignment', data: formData };
+          })()
+        : {
+            title: cwTitle.trim(),
+            type: createType,
+            topic: cwTopic,
+            dueDate: createType === 'material' ? null : cwDueDate,
+            points: createType === 'material' ? null : Number(cwPoints) || 100,
+            instructions: cwInstructions.trim(),
+            attachments: [{ type: 'pdf', name: `${cwTitle.replace(/\s+/g, '_')}_Docs.pdf`, url: '#' }],
+            postedDate: 'Today'
+          };
+
+      const created = await onCreateCoursework(cls.id, payload);
+      if (created !== false) {
+        setCwTitle('');
+        setCwInstructions('');
+        setCwTopic('General');
+        setCwPoints('100');
+        setCwDueDate('');
+        setCwAttachments([]);
+        setShowCreateModal(false);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleStudentTurnIn = async (cw) => {
+    if (!onSubmitCoursework || submissionStatus[cw.id] || submittingId === cw.id) return;
+
+    setSubmittingId(cw.id);
+    try {
+      const ok = await onSubmitCoursework(cls.id, cw.id);
+      if (ok !== false) {
+        setSubmissionStatus((prev) => ({ ...prev, [cw.id]: true }));
+      }
+    } catch (error) {
+      console.error('Failed to turn in coursework:', error);
+      addToast('Could not turn in the coursework right now.', 'error');
+    } finally {
+      setSubmittingId(null);
+    }
   };
 
   const getTypeIcon = (type) => {
@@ -97,14 +181,14 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
 
   return (
     <div>
-      {/* Top Action Bar - same as before, but uses cls.themeColor or default */}
+      {/* Top Action Bar */}
       <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 pb-3 border-bottom gap-3">
         <div className="d-flex align-items-center gap-2">
-          {user.role === 'teacher' && (
+          {isTeacher && (
             <div className="dropdown">
               <button
-                className="btn text-white rounded-pill px-4 py-2 fw-medium shadow-sm d-flex align-items-center gap-2"
-                style={{ backgroundColor: cls.themeColor || '#1a73e8' }}
+                className="btn text-white rounded-pill px-3 py-2 fw-medium shadow-sm d-flex align-items-center gap-2"
+                style={{ backgroundColor: '#1a73e8' }}
                 data-bs-toggle="dropdown"
                 aria-expanded="false"
               >
@@ -232,7 +316,7 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
                         {isExpanded && (
                           <div className="card-body p-4 bg-white animate-fade-in">
                             <div className="row g-4">
-                              <div className={cw.stats || user.role === 'teacher' ? "col-12 col-lg-8" : "col-12"}>
+                              <div className={cw.stats || isTeacher ? "col-12 col-lg-8" : "col-12"}>
                                 <p className="text-dark mb-4" style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
                                   {cw.instructions || "No instructions provided."}
                                 </p>
@@ -260,7 +344,7 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
 
                               {/* Teacher Stats or Student Action Box */}
                               <div className="col-12 col-lg-4 border-start-lg">
-                                {user.role === 'teacher' && cw.stats ? (
+                                {isTeacher && cw.stats ? (
                                   <div className="p-3 bg-light rounded-3 text-center border">
                                     <h6 className="fw-bold text-muted small text-uppercase mb-3">Submission Summary</h6>
                                     <div className="d-flex justify-content-around mb-3">
@@ -283,23 +367,31 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
                                         </>
                                       )}
                                     </div>
-                                    <button className="btn btn-sm btn-outline-primary w-100 fw-medium">View submissions</button>
+                                    <button
+                                      className="btn btn-sm btn-outline-primary w-100 fw-medium"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onViewInstruction?.(cw, { openTab: 'studentWork' });
+                                      }}
+                                    >
+                                      View submissions
+                                    </button>
                                   </div>
                                 ) : (
                                   <div className="p-3 bg-light rounded-3 border text-center">
                                     <div className="d-flex justify-content-between align-items-center mb-2">
                                       <span className="fw-bold small text-dark">Your work</span>
-                                      <span className="badge bg-success small">Assigned</span>
+                                      <span className={`badge ${submissionStatus[cw.id] ? 'bg-success' : 'bg-warning text-dark'} small`}>
+                                        {submissionStatus[cw.id] ? 'Turned in' : 'Assigned'}
+                                      </span>
                                     </div>
                                     <p className="text-muted small mb-3">Upload your completed files or mark as done.</p>
                                     <button
                                       className="btn btn-primary btn-sm w-100 fw-medium mb-2 shadow-sm"
-                                      onClick={() => {
-                                        onSubmitCoursework(cls.id, cw.id);
-                                        addToast(`Work turned in for "${cw.title}"!`, "success");
-                                      }}
+                                      onClick={() => handleStudentTurnIn(cw)}
+                                      disabled={submissionStatus[cw.id] || submittingId === cw.id}
                                     >
-                                      + Add or Create & Turn In
+                                      {submissionStatus[cw.id] ? 'Turned in' : '+ Add or Create & Turn In'}
                                     </button>
                                     <button className="btn btn-outline-secondary btn-sm w-100 fw-medium">Mark as done</button>
                                   </div>
@@ -311,14 +403,18 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
                               <button className="btn btn-link btn-sm p-0 text-decoration-none fw-medium text-secondary">
                                 <i className="bi bi-chat-left-text me-1"></i> Add class comment
                               </button>
-                              <button className="btn btn-link btn-sm p-0 text-decoration-none fw-medium text-primary">
+                              <button
+                                className="btn btn-link btn-sm p-0 text-decoration-none fw-medium text-primary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onViewInstruction?.(cw);
+                                }}
+                              >
                                 View instructions
                               </button>
                             </div>
-
                           </div>
                         )}
-
                       </div>
                     );
                   })}
@@ -335,7 +431,7 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
         </div>
       </div>
 
-      {/* Create Coursework Modal – unchanged */}
+      {/* Create Coursework Modal */}
       {showCreateModal && (
         <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }} tabIndex="-1">
           <div className="modal-dialog modal-dialog-centered modal-lg">
@@ -375,19 +471,35 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
                     <label htmlFor="cwInstr">Instructions (optional)</label>
                   </div>
 
+                  {createType === 'assignment' && (
+                    <div className="mb-3">
+                      <label className="form-label small fw-bold text-muted">Attachments (optional)</label>
+                      <input
+                        type="file"
+                        className="form-control"
+                        multiple
+                        onChange={(e) => setCwAttachments(Array.from(e.target.files || []))}
+                      />
+                    </div>
+                  )}
+
                   <div className="row g-3 mb-3">
                     <div className="col-12 col-md-4">
                       <label className="form-label small fw-bold text-muted">Topic</label>
-                      <select
-                        className="form-select"
+                      <input
+                        type="text"
+                        className="form-control"
+                        list="topic-suggestions"
                         value={cwTopic}
                         onChange={(e) => setCwTopic(e.target.value)}
-                      >
-                        {/* Use topics derived from classwork, or fallback to a default list */}
+                        placeholder="Enter or choose a topic"
+                      />
+                      <datalist id="topic-suggestions">
                         {topics.filter(t => t !== 'All topics').map((t, i) => (
-                          <option key={i} value={t}>{t}</option>
+                          <option key={i} value={t} />
                         ))}
-                      </select>
+                      </datalist>
+                      <small className="form-text text-muted">You can type a new topic or pick one from the list.</small>
                     </div>
 
                     {createType !== 'material' && (
@@ -406,7 +518,7 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
                         <div className="col-6 col-md-4">
                           <label className="form-label small fw-bold text-muted">Due Date</label>
                           <input
-                            type="text"
+                            type="date"
                             className="form-control"
                             value={cwDueDate}
                             onChange={(e) => setCwDueDate(e.target.value)}
@@ -425,9 +537,9 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
                     type="submit"
                     className="btn text-white fw-medium px-4"
                     style={{ backgroundColor: cls.themeColor || '#1a73e8' }}
-                    disabled={!cwTitle.trim()}
+                    disabled={!cwTitle.trim() || isSubmitting}
                   >
-                    Assign
+                    {isSubmitting ? 'Creating...' : createType === 'assignment' ? 'Create assignment' : 'Assign'}
                   </button>
                 </div>
               </form>

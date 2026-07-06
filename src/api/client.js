@@ -57,4 +57,8 @@ export const discussionAPI = {
   },
 };
 
+export const assignmentAPI = {
+  getAssignments: (classId) => apiClient.get(`/classes/${classId}/assignments`),
+};
+
 export default apiClient;

@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import StreamTab from './StreamTab.jsx';
 import ClassworkTab from './ClassworkTab.jsx';
 import PeopleTab from './PeopleTab.jsx';
 import GradesTab from './GradesTab.jsx';
+import ViewInstructionPage from './ViewInstructionPage.jsx';
+import { useToast } from '@/context/ToastContext.jsx';
+import { assignmentAPI, resolveAttachmentUrl } from '@/api/client.js';
 import { bannerGradients } from '../../data/mockData.jsx';
 
 const ClassDetailPage = ({
@@ -18,8 +21,86 @@ const ClassDetailPage = ({
 }) => {
   const [activeTab, setActiveTab] = useState('stream');
   const [showCustomizeModal, setShowCustomizeModal] = useState(false);
+  const [selectedCoursework, setSelectedCoursework] = useState(null);
+  const [instructionViewTab, setInstructionViewTab] = useState('instructions');
+  const { addToast } = useToast();
+  const [classworkFromApi, setClassworkFromApi] = useState(null);
 
   if (!cls) return null;
+
+  const handleViewInstruction = (coursework, options = {}) => {
+    setSelectedCoursework(coursework);
+    setInstructionViewTab(options.openTab || 'instructions');
+  };
+
+  const handleBackToClasswork = () => {
+    setSelectedCoursework(null);
+    setInstructionViewTab('instructions');
+    setActiveTab('classwork');
+  };
+
+  // Build grade matrix for the selected class so teacher view can read grades
+  const gradeMatrix = useMemo(() => {
+    const matrix = {};
+    const students = cls?.students || [];
+    const assignments = cls?.classwork || [];
+    const initialGrades = cls?.grades || [];
+    students.forEach(st => {
+      matrix[st.id] = {};
+      const stRow = initialGrades.find(g => g.studentId === st.id) || {};
+      assignments.forEach(asg => {
+        matrix[st.id][asg.id] = stRow[asg.id] ?? null;
+      });
+    });
+    return matrix;
+  }, [cls]);
+
+  const handleReturnWork = (classId, courseworkId, studentId) => {
+    addToast('Returned work to student.', 'success');
+    // If there is a more specific API handler for returning work, call it via props
+    // For now, we provide a feedback toast and leave room for server integration.
+  };
+
+  // Fetch assignments for the class from backend and map to frontend shape
+  React.useEffect(() => {
+    let mounted = true;
+    const fetchAssignments = async () => {
+      if (!cls?.id) return;
+
+      try {
+        const res = await assignmentAPI.getAssignments(cls.id);
+        const items = res.data?.data || [];
+        const mapped = items.map(a => {
+          const turnedIn = (a.submissions || []).length;
+          const graded = (a.submissions || []).filter(s => s.grade !== null && s.grade !== undefined).length;
+          return {
+            id: a.id,
+            title: a.title,
+            dueDate: a.due_date || a.dueDate || null,
+            points: a.max_points ?? a.maxPoints ?? null,
+            type: 'assignment',
+            topic: a.topic || 'General',
+            instructions: a.instructions || a.description || 'No instructions provided.',
+            attachments: (a.attachments || []).map(att => ({
+              id: att.id,
+              name: att.file_path?.split('/').pop() || 'Attachment',
+              type: att.file_type || 'file',
+              url: att.file_path ? resolveAttachmentUrl(att.file_path) : att.url || null
+            })),
+            postedDate: a.created_at ? new Date(a.created_at).toLocaleDateString() : 'recently',
+            stats: { turnedIn, assigned: (cls.students || []).length, graded }
+          };
+        });
+        if (mounted) setClassworkFromApi(mapped);
+      } catch (err) {
+        console.error('Failed to load assignments for class:', err);
+        if (mounted) setClassworkFromApi([]);
+      }
+    };
+
+    fetchAssignments();
+    return () => { mounted = false; };
+  }, [cls?.id, cls?.students?.length, cls?.submissionVersion]);
 
   return (
     <div className="container-fluid px-2 px-md-4 py-2">
@@ -96,36 +177,55 @@ const ClassDetailPage = ({
 
       {/* Active Tab Component */}
       <div>
-        {activeTab === 'stream' && (
-          <StreamTab
+        {selectedCoursework ? (
+          <ViewInstructionPage
             cls={cls}
+            coursework={selectedCoursework}
             user={user}
-            onPostAnnouncement={onPostAnnouncement}
-            onAddComment={onAddComment}
-            onNavigateTab={(tab) => setActiveTab(tab)}
-            onDiscussionCreated={onDiscussionCreated}
-          />
-        )}
-        {activeTab === 'classwork' && (
-          <ClassworkTab
-            cls={cls}
-            user={user}
-            onCreateCoursework={onCreateCoursework}
-            onSubmitCoursework={onSubmitCoursework}
-          />
-        )}
-        {activeTab === 'people' && (
-          <PeopleTab
-            cls={cls}
-            user={user}
-          />
-        )}
-        {activeTab === 'grades' && (
-          <GradesTab
-            cls={cls}
-            user={user}
+            students={cls.students || []}
+            gradeMatrix={gradeMatrix}
+            onBack={handleBackToClasswork}
+            onSubmitWork={onSubmitCoursework}
             onUpdateGrade={onUpdateGrade}
+            onReturnWork={handleReturnWork}
+            defaultActiveTab={instructionViewTab}
           />
+        ) : (
+          <>
+            {activeTab === 'stream' && (
+              <StreamTab
+                cls={cls}
+                user={user}
+                onPostAnnouncement={onPostAnnouncement}
+                onAddComment={onAddComment}
+                onNavigateTab={(tab) => setActiveTab(tab)}
+                onDiscussionCreated={onDiscussionCreated}
+              />
+            )}
+            {activeTab === 'classwork' && (
+              <ClassworkTab
+                cls={cls}
+                user={user}
+                onCreateCoursework={onCreateCoursework}
+                onSubmitCoursework={onSubmitCoursework}
+                onViewInstruction={handleViewInstruction}
+                classwork={classworkFromApi || cls.classwork || []}
+              />
+            )}
+            {activeTab === 'people' && (
+              <PeopleTab
+                cls={cls}
+                user={user}
+              />
+            )}
+            {activeTab === 'grades' && (
+              <GradesTab
+                cls={{ ...cls, classwork: classworkFromApi || cls.classwork || [] }}
+                user={user}
+                onUpdateGrade={onUpdateGrade}
+              />
+            )}
+          </>
         )}
       </div>
 

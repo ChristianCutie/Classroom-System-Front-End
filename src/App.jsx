@@ -23,7 +23,7 @@ const App = () => {
   // ------------------------------------------------------------
   // 3. Use AuthContext (replaces isLoggedIn & user state)
   // ------------------------------------------------------------
-  const { user, login, logout, loading } = useAuth();
+  const { user, login, logout, loading, updateUser } = useAuth();
   const { addToast } = useToast();
   const navigate = useNavigate();
 
@@ -272,6 +272,32 @@ const App = () => {
 
   const handleCreateCoursework = async (classId, cwData) => {
     try {
+      if (cwData?.type === 'assignment') {
+        const formData = cwData?.data instanceof FormData ? cwData.data : null;
+        if (!formData) throw new Error('Assignment payload is missing');
+
+        const res = await apiClient.post('/create/assignments', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const newAssignment = res.data?.data;
+
+        setClasses(prev =>
+          prev.map(c =>
+            c.id === classId
+              ? { ...c, classwork: [newAssignment, ...(c.classwork || [])] }
+              : c
+          )
+        );
+        setSelectedClass(prev =>
+          prev?.id === classId
+            ? { ...prev, classwork: [newAssignment, ...(prev.classwork || [])] }
+            : prev
+        );
+        await fetchClasses();
+        addToast('Assignment created.', 'success');
+        return true;
+      }
+
       const res = await apiClient.post(`/classes/${classId}/coursework`, cwData);
       const newCw = res.data.data;
       setClasses(prev =>
@@ -282,32 +308,115 @@ const App = () => {
         )
       );
       addToast('Coursework created.', 'success');
+      return true;
     } catch (err) {
       console.error('Create coursework error:', err);
       addToast('Could not create the coursework.', 'error');
+      return false;
     }
   };
 
-  const handleSubmitCoursework = async (classId, courseworkId) => {
+  const handleSubmitCoursework = async (classId, courseworkId, files = []) => {
     try {
-      await apiClient.post(`/classes/${classId}/coursework/${courseworkId}/submit`);
+      if (files.length > 0) {
+        const formData = new FormData();
+        formData.append('class_id', classId);
+        formData.append('assignment_id', courseworkId);
+        files.forEach((file, index) => {
+          if (file instanceof File) {
+            formData.append(`attachments[${index}]`, file);
+          }
+        });
+
+        await apiClient.post(`/assignments/${courseworkId}/submit`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      } else {
+        await apiClient.post(`/assignments/${courseworkId}/submit`);
+      }
+
+      const markSubmitted = (items = []) =>
+        items.map((item) => (item.id === courseworkId ? {
+          ...item,
+          submitted: true,
+          userSubmitted: true,
+          userSubmission: { status: 'submitted' },
+          status: 'submitted'
+        } : item));
+
+      setSelectedClass((prev) =>
+        prev?.id === classId
+          ? {
+              ...prev,
+              classwork: markSubmitted(prev.classwork || []),
+              assignments: markSubmitted(prev.assignments || []),
+              submissionVersion: Date.now()
+            }
+          : prev
+      );
+
+      setClasses((prev) =>
+        prev.map((clsItem) =>
+          clsItem.id === classId
+            ? {
+                ...clsItem,
+                classwork: markSubmitted(clsItem.classwork || []),
+                assignments: markSubmitted(clsItem.assignments || []),
+                submissionVersion: Date.now()
+              }
+            : clsItem
+        )
+      );
+
       await fetchClasses();
       addToast('Submission turned in.', 'success');
+      return true;
     } catch (err) {
       console.error('Submit coursework error:', err);
       addToast('Could not submit the coursework.', 'error');
+      return false;
     }
   };
 
   const handleUpdateGrade = async (classId, studentId, cwId, newScore) => {
     try {
-      await apiClient.patch(`/classes/${classId}/grades`, {
-        student_id: studentId,
-        coursework_id: cwId,
-        score: newScore
-      });
-      await fetchClasses();
-      addToast('Grade updated.', 'success');
+      // Try to find the submission ID for this student & coursework
+      const classObj = classes.find(c => c.id === classId) || selectedClass;
+      const student = classObj?.students?.find(s => s.id === studentId);
+
+      let submissionId = null;
+      // Try the detailed assignment route first (note: controller exposes '/assignmments/{id}/details')
+      const tryFetchDetails = async (url) => {
+        try {
+          const res = await apiClient.get(url);
+          const data = res.data?.data || res.data;
+          const subs = data?.submissions || [];
+          if (!subs || !subs.length) return null;
+          // attempt to match by student id, student object, or name
+          for (const s of subs) {
+            if (s.student_id && s.student_id === studentId) return s.id;
+            if (s.student && (s.student.id === studentId || s.student_id === studentId)) return s.id;
+            const name = student ? `${student.first_name || student.firstName || ''} ${student.last_name || student.lastName || ''}`.trim() : '';
+            if (name && (s.student_name === name || String(s.student_name).includes(name) )) return s.id;
+          }
+        } catch (e) {
+          return null;
+        }
+        return null;
+      };
+
+      submissionId = await tryFetchDetails(`/assignmments/${cwId}/details`);
+      if (!submissionId) submissionId = await tryFetchDetails(`/assignments/${cwId}`);
+
+      if (submissionId) {
+        await apiClient.post(`/submissions/${submissionId}/grade`, { grade: newScore });
+        await fetchClasses();
+        addToast('Submission graded.', 'success');
+        return;
+      }
+
+      console.warn('Could not find submission id to grade; falling back to server grade endpoint not available');
+      addToast('Could not find the student submission to grade. Try grading from the assignment page.', 'error');
     } catch (err) {
       console.error('Update grade error:', err);
       addToast('Could not update the grade.', 'error');
@@ -347,21 +456,57 @@ const App = () => {
     }
   };
 
+  const getUserRoleName = (roleValue) => {
+    if (typeof roleValue === 'string') return roleValue;
+    if (roleValue?.role_name) return roleValue.role_name;
+    if (roleValue?.name) return roleValue.name;
+    return 'student';
+  };
+
+  const getRoleIdForName = (roleName) => {
+    switch ((roleName || '').toLowerCase()) {
+      case 'teacher':
+        return 2;
+      case 'student':
+        return 3;
+      default:
+        return null;
+    }
+  };
+
   // ------------------------------------------------------------
   // 11. Role toggle – update user profile via API
   // ------------------------------------------------------------
   const handleToggleRole = async () => {
+    if (!user?.id) {
+      addToast('You need to be signed in to change your role.', 'error');
+      return;
+    }
+
+    const currentRole = getUserRoleName(user?.role);
+    const newRole = currentRole === 'teacher' ? 'student' : 'teacher';
+    const roleId = getRoleIdForName(newRole);
+
+    if (!roleId) {
+      addToast('Unable to determine the selected role.', 'error');
+      return;
+    }
+
     try {
-      const newRole = user.role === 'teacher' ? 'student' : 'teacher';
-      const res = await apiClient.patch('/user/role', { role: newRole });
-      // Update user in context – we need to refresh user data
-      // For simplicity, we'll refetch user profile (via a new API call)
-      // Alternatively, we can update local user state if AuthContext provides setUser
-      // but we can also just fetch updated user from /user/me
-      const userRes = await apiClient.get('/user');
-      // We'll assume AuthContext has a method to update user.
-      // For now, we'll reload the page or use a custom event.
-      window.location.reload(); // quick hack – better to use setUser from context
+      const res = await apiClient.post(`/update/users/${user.id}`, {
+        role_id: roleId,
+        role: newRole,
+      });
+
+      const updatedUser = {
+        ...user,
+        ...(res?.data?.data || {}),
+        role: newRole,
+        role_id: roleId,
+      };
+
+      updateUser(updatedUser);
+      addToast('Your role was updated successfully.', 'success');
     } catch (err) {
       console.error('Toggle role error:', err);
       addToast('Could not switch roles right now.', 'error');
@@ -371,6 +516,23 @@ const App = () => {
   // ------------------------------------------------------------
   // 12. Render with React Router
   // ------------------------------------------------------------
+
+    // Helper: Build grade matrix from a class's grades array
+  // Matrix format: { [studentId]: { [courseworkId]: score } }
+  const buildGradeMatrix = (cls) => {
+    const matrix = {};
+    if (!cls || !cls.students) return matrix;
+    cls.students.forEach(st => {
+      matrix[st.id] = {};
+    });
+    if (cls.grades) {
+      cls.grades.forEach(g => {
+        const { studentId, ...scores } = g;
+        matrix[studentId] = { ...(matrix[studentId] || {}), ...scores };
+      });
+    }
+    return matrix;
+  };
   return (
     <div className="d-flex flex-column min-vh-100 bg-light">
       <Navbar
