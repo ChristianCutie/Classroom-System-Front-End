@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import Avatar from "../../components/Common/Avatar.jsx";
+import { useToast } from "@/context/ToastContext.jsx";
 
 const PeopleTab = ({ cls, user }) => {
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
+  const { addToast } = useToast();
 
   const students = cls.students || [];
   const allSelected =
@@ -46,7 +48,7 @@ const PeopleTab = ({ cls, user }) => {
   const handleInvite = (e) => {
     e.preventDefault();
     if (!inviteEmail.trim()) return;
-    alert(`Invitation sent to ${inviteEmail.trim()}`);
+    addToast(`Invitation sent to ${inviteEmail.trim()}`, "success");
     setInviteEmail("");
     setShowInviteModal(false);
   };
@@ -143,8 +145,9 @@ const PeopleTab = ({ cls, user }) => {
                 <button
                   className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
                   onClick={() =>
-                    alert(
+                    addToast(
                       `Emailing ${selectedStudents.length} selected students...`,
+                      "info"
                     )
                   }
                 >
@@ -153,8 +156,9 @@ const PeopleTab = ({ cls, user }) => {
                 <button
                   className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1"
                   onClick={() => {
-                    alert(
+                    addToast(
                       `Removed ${selectedStudents.length} selected students.`,
+                      "success"
                     );
                     setSelectedStudents([]);
                   }}
@@ -222,7 +226,7 @@ const PeopleTab = ({ cls, user }) => {
                         <li>
                           <button
                             className="dropdown-item py-2"
-                            onClick={() => alert(`Muted ${getFullName(st)}`)}
+                            onClick={() => addToast(`Muted ${getFullName(st)}`, "info")}
                           >
                             <i className="bi bi-volume-mute me-2"></i> Mute
                             student
@@ -231,7 +235,7 @@ const PeopleTab = ({ cls, user }) => {
                         <li>
                           <button
                             className="dropdown-item py-2 text-danger"
-                            onClick={() => alert(`Removed ${getFullName(st)}`)}
+                            onClick={() => addToast(`Removed ${getFullName(st)}`, "success")}
                           >
                             <i className="bi bi-person-x me-2"></i> Remove
                           </button>

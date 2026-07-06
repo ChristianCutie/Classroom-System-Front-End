@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Avatar from '../../components/Common/Avatar.jsx';
+import { useToast } from '@/context/ToastContext.jsx';
 
 const SettingsPage = ({ user, classes, onUpdateUser, onToggleRole }) => {
   const [name, setName] = useState(user?.name || '');
@@ -16,6 +17,7 @@ const SettingsPage = ({ user, classes, onUpdateUser, onToggleRole }) => {
   });
 
   const currentRole = typeof user?.role === 'string' ? user.role : user?.role?.role_name || 'student';
+  const { addToast } = useToast();
 
   const getDisplayName = (person) => {
     if (!person) return 'User';
@@ -32,7 +34,7 @@ const SettingsPage = ({ user, classes, onUpdateUser, onToggleRole }) => {
     e.preventDefault();
     if (!name.trim()) return;
     onUpdateUser({ ...user, name: name.trim() });
-    alert("Profile saved!");
+    addToast('Profile saved!', 'success');
   };
 
   const colors = ['#1a73e8', '#1e8e3e', '#00897b', '#8e24aa', '#e65100', '#ea4335', '#37474f'];

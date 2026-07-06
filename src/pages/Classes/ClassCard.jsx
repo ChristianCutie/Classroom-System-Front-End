@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Avatar from '../../components/Common/Avatar.jsx';
+import { useToast } from '@/context/ToastContext.jsx';
 
 const ClassCard = ({
   cls,
@@ -10,6 +11,7 @@ const ClassCard = ({
   onOpenClasswork
 }) => {
   const [showMenu, setShowMenu] = useState(false);
+  const { addToast } = useToast();
 
   const truncateText = (text, maxLength = 25) => {
     if (text.length > maxLength) {
@@ -100,7 +102,7 @@ const ClassCard = ({
                   onClick={() => {
                     setShowMenu(false);
                     navigator.clipboard?.writeText(`https://classroom.google.com/c/${cls.class_code}`);
-                    alert(`Invite link copied for ${cls.subject}`);
+                    addToast(`Invite link copied for ${cls.subject}`, 'success');
                   }}
                 >
                   <i className="bi bi-link-45deg text-secondary fs-5"></i>
@@ -113,7 +115,7 @@ const ClassCard = ({
                       className="dropdown-item d-flex align-items-center gap-2"
                       onClick={() => {
                         setShowMenu(false);
-                        alert(`Edit options for ${cls.subject}`);
+                        addToast(`Edit options for ${cls.subject}`, 'info');
                       }}
                     >
                       <i className="bi bi-pencil text-secondary"></i>

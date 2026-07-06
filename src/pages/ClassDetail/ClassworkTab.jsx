@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useToast } from '@/context/ToastContext.jsx';
 
 const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => {
   const [selectedTopic, setSelectedTopic] = useState('All topics');
@@ -12,6 +13,7 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
   const [cwTopic, setCwTopic] = useState('General');
   const [cwPoints, setCwPoints] = useState('100');
   const [cwDueDate, setCwDueDate] = useState('Next Friday, 11:59 PM');
+  const { addToast } = useToast();
 
   // --- Merge assignments and quizzes into a unified classwork list ---
   const classworkList = useMemo(() => {
@@ -132,7 +134,7 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
                 </li>
                 <li><hr className="dropdown-divider" /></li>
                 <li>
-                  <button className="dropdown-item py-2 d-flex align-items-center gap-2" onClick={() => alert("Topic added!")}>
+                  <button className="dropdown-item py-2 d-flex align-items-center gap-2" onClick={() => addToast("Topic added!", "info")}>
                     <i className="bi bi-tag text-secondary"></i> Topic
                   </button>
                 </li>
@@ -294,7 +296,7 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework }) => 
                                       className="btn btn-primary btn-sm w-100 fw-medium mb-2 shadow-sm"
                                       onClick={() => {
                                         onSubmitCoursework(cls.id, cw.id);
-                                        alert(`Work turned in for "${cw.title}"!`);
+                                        addToast(`Work turned in for "${cw.title}"!`, "success");
                                       }}
                                     >
                                       + Add or Create & Turn In

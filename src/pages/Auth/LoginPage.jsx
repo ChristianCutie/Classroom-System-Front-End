@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import logo from "@/images/Logo.png";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext.jsx";
 
 const LoginPage = ({ onLogin, onSwitchToRegister }) => {
   const { login } = useAuth();
+  const { addToast } = useToast();
   const [email, setEmail] = useState("e.vance@university.edu");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("Dr. Eleanor Vance");
@@ -49,10 +51,10 @@ const LoginPage = ({ onLogin, onSwitchToRegister }) => {
     // Call real login
     const result = await login(email, password);
     if (result.success) {
-      // Redirect to dashboard (or let parent handle)
-      window.location.href = "/dashboard"; // or use navigate from react-router
+      window.location.href = "/dashboard";
     } else {
       setError(result.message);
+      addToast(result.message || "Login failed. Please try again.", "error");
     }
   };
 
@@ -223,7 +225,7 @@ const LoginPage = ({ onLogin, onSwitchToRegister }) => {
                     className="text-decoration-none small text-primary fw-medium"
                     onClick={(e) => {
                       e.preventDefault();
-                      alert("Demo: Enter any valid email to proceed.");
+                      addToast("Demo: Enter any valid email to proceed.", "info");
                     }}
                   >
                     Forgot email?

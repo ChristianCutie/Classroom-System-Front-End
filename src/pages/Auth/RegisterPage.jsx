@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import apiClient from '@/api/client.js';
+import { useToast } from '@/context/ToastContext.jsx';
 
 const RegisterPage = ({ onRegister, onSwitchToLogin }) => {
   const ROLE_IDS = { student: 3, teacher: 2 };
@@ -16,6 +17,7 @@ const RegisterPage = ({ onRegister, onSwitchToLogin }) => {
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const { addToast } = useToast();
 
   const updateField = (field, value) => {
     setFormData({ ...formData, [field]: value });
@@ -105,7 +107,7 @@ const RegisterPage = ({ onRegister, onSwitchToLogin }) => {
       if (onRegister) {
         onRegister(response.data.data);
       }
-      // Optionally redirect or show success
+      addToast('Account created successfully. Please sign in.', 'success');
     } catch (err) {
       if (err.response && err.response.status === 422) {
         const errors = err.response.data.errors;
@@ -113,6 +115,7 @@ const RegisterPage = ({ onRegister, onSwitchToLogin }) => {
         setError(firstError);
       } else {
         setError('Registration failed. Please try again later.');
+        addToast('Registration failed. Please try again later.', 'error');
       }
     } finally {
       setIsLoading(false);

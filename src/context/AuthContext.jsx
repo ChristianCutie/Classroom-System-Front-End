@@ -1,11 +1,13 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import apiClient from '@/api/client.js';
+import { useToast } from '@/context/ToastContext.jsx';
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { addToast } = useToast();
 
   // Check stored token on mount
   useEffect(() => {
@@ -26,10 +28,12 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('auth_token', token);
       localStorage.setItem('auth_user', JSON.stringify(user));
       setUser(user);
+      addToast('Signed in successfully', 'success');
 
       return { success: true };
     } catch (error) {
       const message = error.response?.data?.message || 'Login failed';
+      addToast(message, 'error');
       return { success: false, message };
     }
   };
@@ -43,6 +47,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('auth_token');
       localStorage.removeItem('auth_user');
       setUser(null);
+      addToast('You signed out', 'info');
     }
   };
 

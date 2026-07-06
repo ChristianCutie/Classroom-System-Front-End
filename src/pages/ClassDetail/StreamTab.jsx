@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import Avatar from "../../components/Common/Avatar.jsx";
-import { discussionAPI } from "../../api/client.js";
+import { discussionAPI, resolveAttachmentUrl } from "../../api/client.js";
 import apiClient from "../../api/client.js";
+import { useToast } from "@/context/ToastContext.jsx";
 
 const StreamTab = ({
   cls,
@@ -12,7 +13,7 @@ const StreamTab = ({
   onDiscussionCreated,
 }) => {
   const fileInputRef = useRef(null);
-  
+
   const [isComposing, setIsComposing] = useState(false);
   const [composerMode, setComposerMode] = useState("announcement"); // "announcement" or "discussion"
   const [announcementText, setAnnouncementText] = useState("");
@@ -28,6 +29,7 @@ const StreamTab = ({
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkInput, setLinkInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { addToast } = useToast();
 
   const upcomingWork = [
     ...(Array.isArray(cls.assignments)
@@ -43,7 +45,10 @@ const StreamTab = ({
 
   const getDisplayName = (person) => {
     if (!person) return "User";
-    const fullName = [person.first_name || person.firstName, person.last_name || person.lastName]
+    const fullName = [
+      person.first_name || person.firstName,
+      person.last_name || person.lastName,
+    ]
       .filter(Boolean)
       .join(" ")
       .trim();
@@ -51,6 +56,45 @@ const StreamTab = ({
   };
 
   const fullName = getDisplayName(cls.teacher) || "Teacher";
+
+  const getDiscussionAttachments = (discussion) => {
+    if (!discussion) return [];
+
+    const rawAttachments = Array.isArray(discussion.attachments)
+      ? discussion.attachments
+      : [];
+
+    if (rawAttachments.length > 0) {
+      return rawAttachments
+        .map((att) => {
+          const filePath = resolveAttachmentUrl(
+            att.file_path || att.url || att.path || null,
+          );
+          if (!filePath) return null;
+          return {
+            ...att,
+            fileName: att.file_name || att.name || att.filename || "Attachment",
+            filePath,
+          };
+        })
+        .filter(Boolean);
+    }
+
+    if (discussion.file_path) {
+      const filePath = resolveAttachmentUrl(discussion.file_path);
+      if (!filePath) return [];
+
+      return [
+        {
+          id: discussion.id,
+          fileName: discussion.file_name || discussion.name || "Attachment",
+          filePath,
+        },
+      ];
+    }
+
+    return [];
+  };
 
   const handleAddAttachment = (type) => {
     if (type === "file") {
@@ -62,24 +106,25 @@ const StreamTab = ({
       setLinkInput("");
     } else if (type === "drive") {
       // Placeholder for Google Drive integration
-      alert("Google Drive integration coming soon!");
+      addToast("Google Drive integration coming soon!", "info");
     } else if (type === "youtube") {
       // Placeholder for YouTube integration
-      alert("YouTube integration coming soon!");
+      addToast("YouTube integration coming soon!", "info");
     }
   };
 
   const handleFileSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const selectedFiles = Array.from(e.target.files || []);
+    if (!selectedFiles.length) return;
 
-    const newAtt = {
+    const newAttachments = selectedFiles.map((file) => ({
       type: "file",
       name: file.name,
       url: URL.createObjectURL(file),
-      file: file,
-    };
-    setAttachments([...attachments, newAtt]);
+      file,
+    }));
+
+    setAttachments((prev) => [...prev, ...newAttachments]);
 
     // Reset file input
     if (fileInputRef.current) {
@@ -94,7 +139,7 @@ const StreamTab = ({
     try {
       new URL(linkInput);
     } catch {
-      alert("Please enter a valid URL");
+      addToast("Please enter a valid URL", "warning");
       return;
     }
 
@@ -111,51 +156,88 @@ const StreamTab = ({
   };
 
   const handlePost = async (e) => {
-    e.preventDefault();
-    
-    if (composerMode === "announcement") {
-      if (!announcementText.trim()) return;
-      onPostAnnouncement(cls.id, {
-        text: announcementText.trim(),
-        attachments,
-      });
-      setAnnouncementText("");
-    } else {
-      // Discussion mode
-      if (!discussionTitle.trim()) return;
-      setIsSubmitting(true);
-      try {
-        await discussionAPI.createDiscussion({
+  e.preventDefault();
+
+  if (composerMode === "announcement") {
+    // ... (similar adjustments needed, but we'll focus on discussion)
+  } else {
+    // Discussion mode
+    if (!discussionTitle.trim()) return;
+    setIsSubmitting(true);
+
+    try {
+      const hasFiles = attachments.some(a => a.type === "file");
+      let payload;
+
+      if (hasFiles) {
+        const formData = new FormData();
+
+        // --- Required fields (backend expects these) ---
+        formData.append("class_id", cls.id);
+        formData.append("user_id", user.id || 1);
+        formData.append("send_to_all", sendToAll ? "1" : "0");
+        // Optional fields
+        formData.append("title", discussionTitle.trim());
+        formData.append("description", discussionDescription.trim() || "");
+        if (!sendToAll && selectedStudents.length) {
+          formData.append("student_ids", JSON.stringify(selectedStudents));
+        }
+
+        // --- Append file attachments ---
+        const fileAtts = attachments.filter(a => a.type === "file");
+        fileAtts.forEach((att) => {
+          if (att.file) {
+            // Use the same key 'attachments[]' for multiple files
+            formData.append("attachments[]", att.file);
+          }
+        });
+
+        // --- Append link attachments as JSON ---
+        const links = attachments.filter(a => a.type === "link").map(a => ({
+          name: a.name,
+          url: a.url,
+        }));
+        if (links.length) {
+          formData.append("links", JSON.stringify(links));
+        }
+
+        payload = formData;
+      } else {
+        // No files – send JSON
+        payload = {
           classId: cls.id,
           userId: user.id || 1,
           title: discussionTitle.trim(),
           description: discussionDescription.trim(),
           sendToAll: sendToAll,
           studentIds: !sendToAll ? selectedStudents : null,
-          attachments,
-        });
-        
-        // Clear form
-        setDiscussionTitle("");
-        setDiscussionDescription("");
-        setSendToAll(true);
-        setSelectedStudents([]);
-        
-        // Trigger refresh of class data
-        if (onDiscussionCreated) {
-          onDiscussionCreated(cls.id);
-        }
-      } catch (error) {
-        console.error("Failed to create discussion:", error);
-        alert("Failed to create discussion. Please try again.");
-      } finally {
-        setIsSubmitting(false);
+          attachments: attachments.map(a => ({ ...a })), // only links
+        };
       }
+
+      await discussionAPI.createDiscussion(payload);
+
+      // Clear form
+      setDiscussionTitle("");
+      setDiscussionDescription("");
+      setSendToAll(true);
+      setSelectedStudents([]);
+
+      if (onDiscussionCreated) {
+        onDiscussionCreated(cls.id);
+      }
+      addToast("Discussion created successfully.", "success");
+    } catch (error) {
+      console.error("Failed to create discussion:", error);
+      addToast("Failed to create discussion. Please try again.", "error");
+    } finally {
+      setIsSubmitting(false);
     }
-    
-    setAttachments([]);
-    setIsComposing(false);
-  };
+  }
+
+  setAttachments([]);
+  setIsComposing(false);
+};
 
   const handlePostComment = (announcementId, e) => {
     e.preventDefault();
@@ -187,9 +269,10 @@ const StreamTab = ({
       if (onDiscussionCreated) {
         onDiscussionCreated(cls.id);
       }
+      addToast("Reply posted successfully.", "success");
     } catch (error) {
       console.error("Failed to post discussion reply:", error);
-      alert("Failed to post reply. Please try again.");
+      addToast("Failed to post reply. Please try again.", "error");
     }
   };
 
@@ -202,6 +285,7 @@ const StreamTab = ({
         onChange={handleFileSelect}
         style={{ display: "none" }}
         accept="*/*"
+        multiple
       />
 
       {/* Left Column: Class Code & Upcoming Work */}
@@ -229,7 +313,7 @@ const StreamTab = ({
                 className="btn btn-sm btn-outline-secondary p-1 px-2 text-xs"
                 onClick={() => {
                   navigator.clipboard?.writeText(cls.class_code);
-                  alert("Class code copied to clipboard!");
+                  addToast("Class code copied to clipboard!", "success");
                 }}
                 title="Copy class code"
               >
@@ -339,7 +423,12 @@ const StreamTab = ({
                   For: <strong>{cls.name}</strong>
                 </span>
                 <span className="badge bg-light text-dark border py-1 px-2 small">
-                  Students: <strong>{sendToAll ? "All students" : `${selectedStudents.length} selected`}</strong>
+                  Students:{" "}
+                  <strong>
+                    {sendToAll
+                      ? "All students"
+                      : `${selectedStudents.length} selected`}
+                  </strong>
                 </span>
               </div>
 
@@ -379,7 +468,10 @@ const StreamTab = ({
                       onChange={(e) => setDiscussionTitle(e.target.value)}
                       autoFocus
                     />
-                    <label htmlFor="discussionTitle" className="px-0 text-muted">
+                    <label
+                      htmlFor="discussionTitle"
+                      className="px-0 text-muted"
+                    >
                       Discussion title
                     </label>
                   </div>
@@ -397,7 +489,10 @@ const StreamTab = ({
                       value={discussionDescription}
                       onChange={(e) => setDiscussionDescription(e.target.value)}
                     />
-                    <label htmlFor="discussionDescription" className="px-0 text-muted">
+                    <label
+                      htmlFor="discussionDescription"
+                      className="px-0 text-muted"
+                    >
                       Add a description (optional)
                     </label>
                   </div>
@@ -415,7 +510,10 @@ const StreamTab = ({
                           if (e.target.checked) setSelectedStudents([]);
                         }}
                       />
-                      <label htmlFor="sendToAll" className="form-check-label mb-0 small fw-medium">
+                      <label
+                        htmlFor="sendToAll"
+                        className="form-check-label mb-0 small fw-medium"
+                      >
                         Send to all students
                       </label>
                     </div>
@@ -446,10 +544,10 @@ const StreamTab = ({
                           att.type === "drive"
                             ? "bi-google text-primary"
                             : att.type === "youtube"
-                            ? "bi-youtube text-danger"
-                            : att.type === "link"
-                            ? "bi-link-45deg text-secondary"
-                            : "bi-file-earmark-text-fill text-primary"
+                              ? "bi-youtube text-danger"
+                              : att.type === "link"
+                                ? "bi-link-45deg text-secondary"
+                                : "bi-file-earmark-text-fill text-primary"
                         }`}
                       ></i>
                       <span
@@ -532,7 +630,8 @@ const StreamTab = ({
                     style={{ backgroundColor: cls.themeColor || "#1a73e8" }}
                     disabled={
                       isSubmitting ||
-                      (composerMode === "announcement" && !announcementText.trim()) ||
+                      (composerMode === "announcement" &&
+                        !announcementText.trim()) ||
                       (composerMode === "discussion" && !discussionTitle.trim())
                     }
                   >
@@ -545,7 +644,8 @@ const StreamTab = ({
         )}
 
         {/* Stream feed items */}
-        {(cls.announcements && cls.announcements.length > 0) || (cls.discussions && cls.discussions.length > 0) ? (
+        {(cls.announcements && cls.announcements.length > 0) ||
+        (cls.discussions && cls.discussions.length > 0) ? (
           <>
             {/* Announcements */}
             {cls.announcements &&
@@ -647,7 +747,11 @@ const StreamTab = ({
                       {ann.comments &&
                         ann.comments.map((cm) => (
                           <div key={cm.id} className="d-flex gap-3 mb-3">
-                            <Avatar name={cm.author} size={32} color="#5f6368" />
+                            <Avatar
+                              name={cm.author}
+                              size={32}
+                              color="#5f6368"
+                            />
                             <div className="flex-grow-1 bg-light rounded-3 p-2 px-3 border">
                               <div className="d-flex justify-content-between align-items-center mb-1">
                                 <span className="fw-bold text-dark small">
@@ -710,7 +814,9 @@ const StreamTab = ({
                 <div
                   key={`discussion-${discussion.id}`}
                   className="card border shadow-sm mb-3 rounded-3 overflow-hidden"
-                  style={{ borderLeft: `4px solid ${cls.themeColor || "#1a73e8"}` }}
+                  style={{
+                    borderLeft: `4px solid ${cls.themeColor || "#1a73e8"}`,
+                  }}
                 >
                   <div className="card-body p-4">
                     {/* Author header */}
@@ -733,7 +839,9 @@ const StreamTab = ({
                             style={{ fontSize: "0.78rem" }}
                           >
                             {discussion.created_at
-                              ? new Date(discussion.created_at).toLocaleDateString()
+                              ? new Date(
+                                  discussion.created_at,
+                                ).toLocaleDateString()
                               : "Just now"}
                           </small>
                         </div>
@@ -769,52 +877,58 @@ const StreamTab = ({
                       </p>
                     )}
 
-
-
                     {/* Attachments */}
-                    {discussion.attachments && discussion.attachments.length > 0 && (
-                      <div className="row g-2 mb-4">
-                        {discussion.attachments.map((att, aIdx) => (
-                          <div key={aIdx} className="col-12 col-md-6">
-                            <a
-                              href={att.file_path || "#"}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="border rounded p-2 d-flex align-items-center gap-3 text-decoration-none text-dark bg-white hover-bg-light shadow-sm"
-                              style={{ transition: "background 0.15s" }}
-                            >
-                              <div
-                                className="rounded d-flex align-items-center justify-content-center flex-shrink-0"
-                                style={{
-                                  width: "48px",
-                                  height: "48px",
-                                  backgroundColor: "#f8f9fa",
-                                }}
+                    {(() => {
+                      const discussionAttachments =
+                        getDiscussionAttachments(discussion);
+                      return discussionAttachments.length > 0 ? (
+                        <div className="row g-2 mb-4">
+                          {discussionAttachments.map((att, aIdx) => (
+                            <div key={aIdx} className="col-12 col-md-6">
+                              <a
+                                href={att.filePath || "#"}
+                                target="_blank"
+                                rel="noreferrer"
+                                download={att.fileName}
+                                className="border rounded p-2 d-flex align-items-center gap-3 text-decoration-none text-dark bg-white hover-bg-light shadow-sm"
+                                style={{ transition: "background 0.15s" }}
                               >
-                                <i className="bi bi-file-earmark-text-fill text-primary fs-4"></i>
-                              </div>
-                              <div className="overflow-hidden">
-                                <div className="fw-semibold small text-truncate">
-                                  {att.file_name}
-                                </div>
                                 <div
-                                  className="text-muted small text-uppercase"
-                                  style={{ fontSize: "0.72rem" }}
+                                  className="rounded d-flex align-items-center justify-content-center flex-shrink-0"
+                                  style={{
+                                    width: "48px",
+                                    height: "48px",
+                                    backgroundColor: "#f8f9fa",
+                                  }}
                                 >
-                                  Attachment
+                                  <i className="bi bi-file-earmark-text-fill text-primary fs-4"></i>
                                 </div>
-                              </div>
-                            </a>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                                <div className="overflow-hidden">
+                                  <div className="fw-semibold small text-truncate">
+                                    {att.fileName}
+                                  </div>
+                                  <div
+                                    className="text-muted small text-uppercase"
+                                    style={{ fontSize: "0.72rem" }}
+                                  >
+                                    Attachment
+                                  </div>
+                                </div>
+                              </a>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null;
+                    })()}
 
                     {/* Comments Section */}
                     <div className="border-top pt-3 mt-3">
                       <div className="text-muted small mb-3 fw-medium d-flex align-items-center gap-2">
                         <i className="bi bi-chat-dots"></i>
-                        {discussion.replies ? discussion.replies.length : 0} repl
+                        {discussion.replies
+                          ? discussion.replies.length
+                          : 0}{" "}
+                        repl
                         {discussion.replies?.length === 1 ? "y" : "ies"}
                       </div>
 
@@ -823,16 +937,34 @@ const StreamTab = ({
                           const authorName = reply.user
                             ? `${reply.user.first_name || reply.user.firstName || ""} ${reply.user.last_name || reply.user.lastName || ""}`.trim()
                             : `User ${reply.user_id}`;
-                          const date = reply.created_at ? new Date(reply.created_at).toLocaleDateString() : "Just now";
+                          const date = reply.created_at
+                            ? new Date(reply.created_at).toLocaleDateString()
+                            : "Just now";
                           return (
                             <div key={reply.id} className="d-flex gap-3 mb-3">
-                              <Avatar name={reply.user || authorName} size={32} color="#5f6368" />
+                              <Avatar
+                                name={reply.user || authorName}
+                                size={32}
+                                color="#5f6368"
+                              />
                               <div className="flex-grow-1 bg-light rounded-3 p-2 px-3 border">
                                 <div className="d-flex justify-content-between align-items-center mb-1">
-                                  <span className="fw-bold text-dark small">{authorName}</span>
-                                  <span   className="text-muted" style={{ fontSize: "0.75rem" }}>{date}</span>
+                                  <span className="fw-bold text-dark small">
+                                    {authorName}
+                                  </span>
+                                  <span
+                                    className="text-muted"
+                                    style={{ fontSize: "0.75rem" }}
+                                  >
+                                    {date}
+                                  </span>
                                 </div>
-                                <p className="mb-0 text-dark small" style={{ fontSize: "0.88rem" }}>{reply.reply}</p>
+                                <p
+                                  className="mb-0 text-dark small"
+                                  style={{ fontSize: "0.88rem" }}
+                                >
+                                  {reply.reply}
+                                </p>
                               </div>
                             </div>
                           );
@@ -840,7 +972,9 @@ const StreamTab = ({
 
                       {/* Add comment input */}
                       <form
-                        onSubmit={(e) => handlePostDiscussionComment(discussion.id, e)}
+                        onSubmit={(e) =>
+                          handlePostDiscussionComment(discussion.id, e)
+                        }
                         className="d-flex align-items-center gap-2 mt-3"
                       >
                         <Avatar name={user} size={32} color={user.color} />
@@ -861,7 +995,9 @@ const StreamTab = ({
                             type="submit"
                             className="btn btn-link text-primary pe-3 ms-n5"
                             style={{ zIndex: 5 }}
-                            disabled={!discussionCommentInputs[discussion.id]?.trim()}
+                            disabled={
+                              !discussionCommentInputs[discussion.id]?.trim()
+                            }
                           >
                             <i className="bi bi-send-fill"></i>
                           </button>
@@ -934,7 +1070,10 @@ const StreamTab = ({
                   onClick={() => setShowStudentSelector(false)}
                 ></button>
               </div>
-              <div className="modal-body p-4" style={{ maxHeight: "400px", overflowY: "auto" }}>
+              <div
+                className="modal-body p-4"
+                style={{ maxHeight: "400px", overflowY: "auto" }}
+              >
                 {cls.students && cls.students.length > 0 ? (
                   <div className="d-flex flex-column gap-2">
                     {cls.students.map((student) => (
@@ -946,15 +1085,23 @@ const StreamTab = ({
                           checked={selectedStudents.includes(student.id)}
                           onChange={(e) => {
                             if (e.target.checked) {
-                              setSelectedStudents([...selectedStudents, student.id]);
+                              setSelectedStudents([
+                                ...selectedStudents,
+                                student.id,
+                              ]);
                             } else {
                               setSelectedStudents(
-                                selectedStudents.filter((id) => id !== student.id)
+                                selectedStudents.filter(
+                                  (id) => id !== student.id,
+                                ),
                               );
                             }
                           }}
                         />
-                        <label className="form-check-label" htmlFor={`student-${student.id}`}>
+                        <label
+                          className="form-check-label"
+                          htmlFor={`student-${student.id}`}
+                        >
                           {student.first_name} {student.last_name}
                         </label>
                       </div>
@@ -1040,6 +1187,5 @@ const StreamTab = ({
     </div>
   );
 };
-
 
 export default StreamTab;

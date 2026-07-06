@@ -8,6 +8,8 @@ import Navbar from './components/Navbar/Navbar.jsx';
 import Sidebar from './components/Sidebar/Sidebar.jsx';
 import CreateClassModal from './components/Common/CreateClassModal.jsx';
 import JoinClassModal from './components/Common/JoinClassModal.jsx';
+import ToastContainer from './components/Common/ToastContainer.jsx';
+import { useToast } from '@/context/ToastContext.jsx';
 import LoginPage from './pages/Auth/LoginPage.jsx';
 import RegisterPage from './pages/Auth/RegisterPage.jsx';
 import ClassesPage from './pages/Classes/ClassesPage.jsx';
@@ -22,6 +24,7 @@ const App = () => {
   // 3. Use AuthContext (replaces isLoggedIn & user state)
   // ------------------------------------------------------------
   const { user, login, logout, loading } = useAuth();
+  const { addToast } = useToast();
   const navigate = useNavigate();
 
   // ------------------------------------------------------------
@@ -59,7 +62,7 @@ const App = () => {
       setClasses(res.data.data || []);
     } catch (err) {
       console.error('Failed to fetch classes:', err);
-      // Optionally show toast/error
+      addToast('Unable to load classes right now.', 'error');
     } finally {
       setLoadingClasses(false);
     }
@@ -125,6 +128,7 @@ const App = () => {
     } catch (err) {
       console.error('Failed to load class detail:', err);
       setSelectedClass(null);
+      addToast('Unable to open that class right now.', 'error');
       navigate('/');
     } finally {
       setActiveClassLoading(false);
@@ -149,7 +153,7 @@ const App = () => {
       handleSelectClass(newClass.id);
     } catch (err) {
       console.error('Create class error:', err);
-      // Show error to user
+      addToast('Could not create the class. Please try again.', 'error');
     }
   };
 
@@ -158,10 +162,12 @@ const App = () => {
       const res = await apiClient.post('/classes/join', { code });
       const joinedClass = res.data.data;
       setClasses(prev => [joinedClass, ...prev]);
+      addToast('You joined the class successfully.', 'success');
       handleSelectClass(joinedClass.id);
       return true;
     } catch (err) {
       console.error('Join class error:', err);
+      addToast('Unable to join that class. Check the code and try again.', 'error');
       return false;
     }
   };
@@ -172,9 +178,11 @@ const App = () => {
       setClasses(prev =>
         prev.map(c => (c.id === classId ? { ...c, is_archived: 1 } : c))
       );
+      addToast('Class archived.', 'success');
       navigate('/');
     } catch (err) {
       console.error('Archive error:', err);
+      addToast('Could not archive the class.', 'error');
     }
   };
 
@@ -184,8 +192,10 @@ const App = () => {
       setClasses(prev =>
         prev.map(c => (c.id === classId ? { ...c, is_archived: 0 } : c))
       );
+      addToast('Class restored.', 'success');
     } catch (err) {
       console.error('Restore error:', err);
+      addToast('Could not restore the class.', 'error');
     }
   };
 
@@ -193,9 +203,11 @@ const App = () => {
     try {
       await apiClient.delete(`/classes/${classId}`);
       setClasses(prev => prev.filter(c => c.id !== classId));
+      addToast('Class deleted.', 'success');
       navigate('/');
     } catch (err) {
       console.error('Delete error:', err);
+      addToast('Could not delete the class.', 'error');
     }
   };
 
@@ -203,9 +215,11 @@ const App = () => {
     try {
       await apiClient.delete(`/classes/${classId}/unenroll`);
       setClasses(prev => prev.filter(c => c.id !== classId));
+      addToast('You left the class.', 'success');
       navigate('/');
     } catch (err) {
       console.error('Unenroll error:', err);
+      addToast('Could not leave the class.', 'error');
     }
   };
 
@@ -224,8 +238,10 @@ const App = () => {
             : c
         )
       );
+      addToast('Announcement posted.', 'success');
     } catch (err) {
       console.error('Post announcement error:', err);
+      addToast('Could not post the announcement.', 'error');
     }
   };
 
@@ -247,8 +263,10 @@ const App = () => {
             : c
         )
       );
+      addToast('Comment added.', 'success');
     } catch (err) {
       console.error('Add comment error:', err);
+      addToast('Could not add the comment.', 'error');
     }
   };
 
@@ -263,18 +281,21 @@ const App = () => {
             : c
         )
       );
+      addToast('Coursework created.', 'success');
     } catch (err) {
       console.error('Create coursework error:', err);
+      addToast('Could not create the coursework.', 'error');
     }
   };
 
   const handleSubmitCoursework = async (classId, courseworkId) => {
     try {
       await apiClient.post(`/classes/${classId}/coursework/${courseworkId}/submit`);
-      // Refresh class data or update local state optimistically
-      await fetchClasses(); // simplest: refetch all classes
+      await fetchClasses();
+      addToast('Submission turned in.', 'success');
     } catch (err) {
       console.error('Submit coursework error:', err);
+      addToast('Could not submit the coursework.', 'error');
     }
   };
 
@@ -285,9 +306,11 @@ const App = () => {
         coursework_id: cwId,
         score: newScore
       });
-      await fetchClasses(); // refresh
+      await fetchClasses();
+      addToast('Grade updated.', 'success');
     } catch (err) {
       console.error('Update grade error:', err);
+      addToast('Could not update the grade.', 'error');
     }
   };
 
@@ -299,8 +322,10 @@ const App = () => {
           c.id === classId ? { ...c, banner: bannerCss, theme_color: themeColor } : c
         )
       );
+      addToast('Class theme updated.', 'success');
     } catch (err) {
       console.error('Update banner error:', err);
+      addToast('Could not update the class theme.', 'error');
     }
   };
 
@@ -315,8 +340,10 @@ const App = () => {
           c.id === classId ? res.data?.data : c
         )
       );
+      addToast('Discussion refreshed.', 'success');
     } catch (err) {
       console.error('Failed to refresh class after discussion creation:', err);
+      addToast('Could not refresh the class discussion.', 'error');
     }
   };
 
@@ -337,6 +364,7 @@ const App = () => {
       window.location.reload(); // quick hack – better to use setUser from context
     } catch (err) {
       console.error('Toggle role error:', err);
+      addToast('Could not switch roles right now.', 'error');
     }
   };
 
@@ -472,6 +500,8 @@ const App = () => {
         onJoin={handleJoinClass}
         user={user}
       />
+
+      <ToastContainer />
     </div>
   );
 };

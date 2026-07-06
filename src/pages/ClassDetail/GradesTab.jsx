@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import Avatar from '../../components/Common/Avatar.jsx';
+import { useToast } from '@/context/ToastContext.jsx';
 
 const GradesTab = ({ cls, user, onUpdateGrade }) => {
   const students = cls.students || [];
   const assignments = cls.classwork ? cls.classwork.filter(cw => cw.points !== null && cw.points !== undefined) : [];
+  const { addToast } = useToast();
 
   const getDisplayName = (person) => {
     if (!person) return "User";
@@ -150,7 +152,7 @@ const GradesTab = ({ cls, user, onUpdateGrade }) => {
         </span>
         <button
           className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
-          onClick={() => alert("Grades exported to Google Sheets!")}
+          onClick={() => addToast("Grades exported to Google Sheets!", "success")}
         >
           <i className="bi bi-file-earmark-spreadsheet"></i> Export to Sheets
         </button>
@@ -184,8 +186,8 @@ const GradesTab = ({ cls, user, onUpdateGrade }) => {
                         <i className="bi bi-three-dots-vertical"></i>
                       </button>
                       <ul className="dropdown-menu shadow small">
-                        <li><button className="dropdown-item py-1" onClick={() => alert(`Return all submissions for ${asg.title}`)}>Return all</button></li>
-                        <li><button className="dropdown-item py-1" onClick={() => alert(`View assignment details for ${asg.title}`)}>View assignment</button></li>
+                        <li><button className="dropdown-item py-1" onClick={() => addToast(`Return all submissions for ${asg.title}`, "info")}>Return all</button></li>
+                        <li><button className="dropdown-item py-1" onClick={() => addToast(`View assignment details for ${asg.title}`, "info")}>View assignment</button></li>
                       </ul>
                     </div>
                   </div>

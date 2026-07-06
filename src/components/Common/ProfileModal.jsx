@@ -1,5 +1,6 @@
 import React from "react";
 import Avatar from "@/components/Common/Avatar.jsx";
+import { useToast } from "@/context/ToastContext.jsx";
 
 const ProfileModal = ({
   show,
@@ -10,6 +11,7 @@ const ProfileModal = ({
   onLogout,
 }) => {
   if (!show) return null;
+  const { addToast } = useToast();
 
   const handleSignOut = async () => {
     onClose();
@@ -99,7 +101,7 @@ const ProfileModal = ({
           className="text-decoration-none text-muted"
           onClick={(e) => {
             e.preventDefault();
-            alert("Privacy Policy");
+            addToast("Privacy Policy", "info");
           }}
         >
           Privacy Policy
@@ -110,7 +112,7 @@ const ProfileModal = ({
           className="text-decoration-none text-muted"
           onClick={(e) => {
             e.preventDefault();
-            alert("Terms of Service");
+            addToast("Terms of Service", "info");
           }}
         >
           Terms of Service

@@ -3,6 +3,7 @@ import { bannerGradients } from '../../data/mockData.jsx';
 import apiClient from "@/api/client.js";
 import ClassCard from "./ClassCard"; // your existing presentational card
 import Avatar from '../../components/Common/Avatar.jsx';
+import { useToast } from '@/context/ToastContext.jsx';
 
 // Custom hook to get the authenticated user – replace with your own
 import { useAuth } from "@/context/AuthContext"; // adjust path
@@ -20,6 +21,7 @@ const ClassesPage = ({
 }) => {
   const { user: contextUser } = useAuth(); // fallback user from context
   const user = propUser || contextUser;
+  const { addToast } = useToast();
 
   // State
   const classes = propClasses || [];
@@ -48,6 +50,7 @@ const ClassesPage = ({
     try {
       await apiClient.post("/create/classes", newClass);
       setShowCreateModal(false);
+      addToast('Class created successfully.', 'success');
       setNewClass({
         class_name: "",
         section: "",
@@ -60,6 +63,7 @@ const ClassesPage = ({
       }
     } catch (err) {
       setError(err.response?.data?.message || "Failed to create class. Check your input.");
+      addToast(err.response?.data?.message || 'Failed to create class. Check your input.', 'error');
       console.error(err);
     } finally {
       setLoading(false);
@@ -73,12 +77,14 @@ const ClassesPage = ({
     try {
       await apiClient.post("/join/classes", { class_code: joinCode });
       setShowJoinModal(false);
+      addToast('You joined the class successfully.', 'success');
       setJoinCode("");
       if (onRefreshClasses) {
         await onRefreshClasses();
       }
     } catch (err) {
       setError(err.response?.data?.message || "Failed to join class. Check the code or you may already be enrolled.");
+      addToast(err.response?.data?.message || 'Failed to join class. Check the code or you may already be enrolled.', 'error');
       console.error(err);
     } finally {
       setLoading(false);
