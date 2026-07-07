@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import StreamTab from './StreamTab.jsx';
 import ClassworkTab from './ClassworkTab.jsx';
 import PeopleTab from './PeopleTab.jsx';
@@ -57,21 +57,71 @@ const ClassDetailPage = ({
     return '';
   };
 
-  // Build grade matrix for the selected class so teacher view can read grades
+  const mergedClasswork = useMemo(() => {
+    const apiItems = Array.isArray(classworkFromApi) ? classworkFromApi : [];
+    const localItems = Array.isArray(cls?.classwork) ? cls.classwork : [];
+    const assignmentItems = Array.isArray(cls?.assignments) ? cls.assignments : [];
+    const mergedById = new Map();
+
+    const mergeItem = (item) => {
+      if (!item?.id) return;
+
+      const existing = mergedById.get(item.id) || {};
+      mergedById.set(item.id, {
+        ...existing,
+        ...item,
+        submitted: item.submitted ?? existing.submitted ?? false,
+        userSubmission: item.userSubmission || existing.userSubmission || null,
+        status: item.status || existing.status || null,
+        submissions: item.submissions || existing.submissions || [],
+        stats: item.stats || existing.stats || null,
+      });
+    };
+
+    apiItems.forEach(mergeItem);
+    localItems.forEach(mergeItem);
+    assignmentItems.forEach(mergeItem);
+
+    return Array.from(mergedById.values());
+  }, [classworkFromApi, cls?.classwork, cls?.assignments]);
+
+  // Build grade matrix from assignments with submissions
   const gradeMatrix = useMemo(() => {
     const matrix = {};
     const students = cls?.students || [];
-    const assignments = cls?.classwork || [];
-    const initialGrades = cls?.grades || [];
     students.forEach(st => {
       matrix[st.id] = {};
+    });
+    
+    // Extract grades from API classwork submissions
+    if (classworkFromApi && Array.isArray(classworkFromApi)) {
+      classworkFromApi.forEach(asg => {
+        if (asg.submissions && Array.isArray(asg.submissions)) {
+          asg.submissions.forEach(sub => {
+            const studentId = sub.student_id || sub.studentId;
+            if (studentId && matrix[studentId]) {
+              if (sub.grade !== null && sub.grade !== undefined) {
+                matrix[studentId][asg.id] = sub.grade;
+              }
+            }
+          });
+        }
+      });
+    }
+    
+    // Fall back to class grades if available
+    const initialGrades = cls?.grades || [];
+    students.forEach(st => {
       const stRow = initialGrades.find(g => g.studentId === st.id) || {};
-      assignments.forEach(asg => {
-        matrix[st.id][asg.id] = stRow[asg.id] ?? null;
+      Object.keys(stRow).forEach(key => {
+        if (key !== 'studentId' && matrix[st.id][key] === undefined) {
+          matrix[st.id][key] = stRow[key];
+        }
       });
     });
+    
     return matrix;
-  }, [cls]);
+  }, [cls, classworkFromApi]);
 
   const handleReturnWork = (classId, courseworkId, studentId) => {
     addToast('Returned work to student.', 'success');
@@ -79,8 +129,44 @@ const ClassDetailPage = ({
     // For now, we provide a feedback toast and leave room for server integration.
   };
 
+  useEffect(() => {
+    if (!selectedCoursework?.id) return;
+
+    const sourceClasswork =
+      mergedClasswork.find((item) => item.id === selectedCoursework.id) ||
+      (cls?.classwork || []).find((item) => item.id === selectedCoursework.id) ||
+      (cls?.assignments || []).find((item) => item.id === selectedCoursework.id);
+
+    if (!sourceClasswork) return;
+
+    const mergedCoursework = {
+      ...selectedCoursework,
+      ...sourceClasswork,
+      id: selectedCoursework.id,
+      submitted: sourceClasswork.submitted ?? selectedCoursework.submitted,
+      userSubmission: sourceClasswork.userSubmission || selectedCoursework.userSubmission || null,
+      status: sourceClasswork.status || selectedCoursework.status,
+      submissions: sourceClasswork.submissions || selectedCoursework.submissions || [],
+      stats: sourceClasswork.stats || selectedCoursework.stats || {
+        turnedIn: 0,
+        assigned: cls?.students?.length || 0,
+        graded: 0,
+      },
+    };
+
+    const hasChanged =
+      mergedCoursework.submitted !== selectedCoursework.submitted ||
+      mergedCoursework.status !== selectedCoursework.status ||
+      mergedCoursework.userSubmission?.status !== selectedCoursework.userSubmission?.status ||
+      (mergedCoursework.submissions || []).length !== (selectedCoursework.submissions || []).length;
+
+    if (hasChanged) {
+      setSelectedCoursework(mergedCoursework);
+    }
+  }, [selectedCoursework?.id, selectedCoursework?.submitted, selectedCoursework?.status, selectedCoursework?.userSubmission?.status, selectedCoursework?.submissions?.length, mergedClasswork, cls?.classwork, cls?.assignments, cls?.students?.length, cls?.submissionVersion]);
+
   // Fetch assignments for the class from backend and map to frontend shape
-  React.useEffect(() => {
+  useEffect(() => {
     let mounted = true;
     const fetchAssignments = async () => {
       if (!cls?.id) return;
@@ -89,8 +175,17 @@ const ClassDetailPage = ({
         const res = await assignmentAPI.getAssignments(cls.id);
         const items = res.data?.data || [];
         const mapped = items.map(a => {
-          const turnedIn = (a.submissions || []).length;
-          const graded = (a.submissions || []).filter(s => s.grade !== null && s.grade !== undefined).length;
+          const normalizedSubmissions = Array.isArray(a.submissions) ? a.submissions : [];
+          const hasLocalSubmissionSignal = Boolean(
+            a.submitted ||
+            a.user_submitted ||
+            a.userSubmitted ||
+            a.user_submission?.status ||
+            a.userSubmission?.status ||
+            ['submitted', 'turned_in', 'graded'].includes(a.status)
+          );
+          const turnedIn = hasLocalSubmissionSignal ? Math.max(normalizedSubmissions.length, 1) : normalizedSubmissions.length;
+          const graded = normalizedSubmissions.filter(s => s.grade !== null && s.grade !== undefined).length + (a.user_submission?.status === 'graded' || a.userSubmission?.status === 'graded' ? 1 : 0);
           return {
             id: a.id,
             title: a.title,
@@ -106,7 +201,18 @@ const ClassDetailPage = ({
               url: att.file_path ? resolveAttachmentUrl(att.file_path) : att.url || null
             })),
             postedDate: a.created_at ? new Date(a.created_at).toLocaleDateString() : 'recently',
-            stats: { turnedIn, assigned: (cls.students || []).length, graded }
+            submitted: hasLocalSubmissionSignal || normalizedSubmissions.length > 0,
+            userSubmission: a.userSubmission || a.user_submission || null,
+            status: a.status || a.user_submission?.status || a.userSubmission?.status || null,
+            stats: { turnedIn, assigned: (cls.students || []).length, graded },
+            submissions: normalizedSubmissions.map(sub => ({
+              id: sub.id,
+              student_id: sub.student_id || sub.studentId,
+              grade: sub.grade,
+              feedback: sub.feedback || sub.comments || '',
+              submitted_at: sub.submitted_at || sub.created_at,
+              status: sub.status || 'submitted'
+            }))
           };
         });
         if (mounted) setClassworkFromApi(mapped);
@@ -228,7 +334,7 @@ const ClassDetailPage = ({
                 onSubmitCoursework={onSubmitCoursework}
                 onCreateTopic={onCreateTopic}
                 onViewInstruction={handleViewInstruction}
-                classwork={classworkFromApi || cls.classwork || []}
+                classwork={mergedClasswork}
               />
             )}
             {activeTab === 'people' && (
@@ -239,7 +345,7 @@ const ClassDetailPage = ({
             )}
             {activeTab === 'grades' && (
               <GradesTab
-                cls={{ ...cls, classwork: classworkFromApi || cls.classwork || [] }}
+                cls={{ ...cls, classwork: mergedClasswork }}
                 user={user}
                 onUpdateGrade={onUpdateGrade}
               />

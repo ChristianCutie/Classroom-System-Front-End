@@ -246,11 +246,15 @@ const ViewInstructionPage = ({
   const [submissionState, setSubmissionState] = useState({ submitted: false });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedSubmissionFiles, setSelectedSubmissionFiles] = useState([]);
+  const [submissionMessage, setSubmissionMessage] = useState("");
   const [selectedAttachmentByStudent, setSelectedAttachmentByStudent] =
     useState({});
   const [privateFeedbackByStudent, setPrivateFeedbackByStudent] = useState({});
   const [draftGradesByStudent, setDraftGradesByStudent] = useState({});
   const [savingStudentId, setSavingStudentId] = useState(null);
+  const [showMarkAsDoneModal, setShowMarkAsDoneModal] = useState(false);
+  const [markAsDoneFiles, setMarkAsDoneFiles] = useState([]);
+  const [isMarkingAsDone, setIsMarkingAsDone] = useState(false);
 
   if (!coursework) {
     return (
@@ -264,20 +268,26 @@ const ViewInstructionPage = ({
   }
 
   const normalizeTopicValue = (value) => {
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       const trimmed = value.trim();
-      return trimmed || '';
+      return trimmed || "";
     }
 
-    if (!value || typeof value !== 'object') return '';
+    if (!value || typeof value !== "object") return "";
 
-    const derivedName = value.topic_name || value.name || value.topicName || value.label || value.title || value.topic;
-    if (typeof derivedName === 'string') {
+    const derivedName =
+      value.topic_name ||
+      value.name ||
+      value.topicName ||
+      value.label ||
+      value.title ||
+      value.topic;
+    if (typeof derivedName === "string") {
       const trimmed = derivedName.trim();
-      return trimmed || '';
+      return trimmed || "";
     }
 
-    return '';
+    return "";
   };
 
   const getRoleString = (u) => {
@@ -303,19 +313,38 @@ const ViewInstructionPage = ({
     ["teacher", "instructor", "teacher/instructor"].includes(roleStr) ||
     Boolean(user?.is_teacher || user?.isTeacher);
   const displayTopic =
-    typeof coursework.topic === 'string'
-      ? coursework.topic.trim() || 'No topic'
-      : normalizeTopicValue(coursework.topic) || 'No topic';
+    typeof coursework.topic === "string"
+      ? coursework.topic.trim() || "No topic"
+      : normalizeTopicValue(coursework.topic) || "No topic";
 
-  const cwStats = coursework.stats || { turnedIn: 0, assigned: 0, graded: 0 };
+  // Ensure we have fresh submission data
+  const submissions = coursework.submissions || [];
+  const submittedStudentIds = new Set(submissions.map((s) => s.student_id || s.studentId));
+  const hasLocalSubmissionSignal = Boolean(
+    coursework?.submitted ||
+      coursework?.userSubmission?.status ||
+      coursework?.status === "submitted" ||
+      coursework?.status === "turned_in" ||
+      coursework?.status === "graded"
+  );
+  
+  // Recalculate stats from actual submissions (not from stats field which might be stale)
+  const actualTurnedIn = hasLocalSubmissionSignal && submissions.length === 0 ? 1 : submissions.length;
+  const actualGraded = submissions.filter((s) => s.grade !== null && s.grade !== undefined).length + (coursework?.userSubmission?.status === "graded" || coursework?.status === "graded" ? 1 : 0);
   const totalStudents = students.length;
-  const turnedInCount = cwStats.turnedIn;
-  const assignedCount = cwStats.assigned;
-  const gradedCount = cwStats.graded || 0;
+  
+  // Use calculated stats if different from stored stats (indicates fresh data)
+  const cwStats = coursework.stats || { turnedIn: 0, assigned: 0, graded: 0 };
+  const turnedInCount = actualTurnedIn > cwStats.turnedIn ? actualTurnedIn : cwStats.turnedIn;
+  const assignedCount = cwStats.assigned || totalStudents;
+  const gradedCount = actualGraded > (cwStats.graded || 0) ? actualGraded : (cwStats.graded || 0);
 
-  // Find students who turned in work
-  const studentsWithWork = students.slice(0, turnedInCount);
-  const studentsWithoutWork = students.slice(turnedInCount);
+  const studentsWithWork = students.filter((st) =>
+    submittedStudentIds.has(st.id)
+  );
+  const studentsWithoutWork = students.filter(
+    (st) => !submittedStudentIds.has(st.id)
+  );
 
   useEffect(() => {
     setActiveTab(defaultActiveTab || "instructions");
@@ -324,10 +353,13 @@ const ViewInstructionPage = ({
   useEffect(() => {
     const submitted = Boolean(
       coursework?.submitted ||
-      coursework?.userSubmission?.status === "submitted" ||
-      coursework?.userSubmission?.status === "turned_in" ||
-      coursework?.userSubmission?.status === "graded" ||
-      coursework?.status === "submitted",
+        coursework?.userSubmission?.status === "submitted" ||
+        coursework?.userSubmission?.status === "turned_in" ||
+        coursework?.userSubmission?.status === "graded" ||
+        coursework?.status === "submitted" ||
+        coursework?.submissions?.some((sub) =>
+          ["submitted", "turned_in", "graded"].includes(sub?.status)
+        )
     );
     setSubmissionState({ submitted });
   }, [
@@ -335,6 +367,7 @@ const ViewInstructionPage = ({
     coursework?.submitted,
     coursework?.status,
     coursework?.userSubmission?.status,
+    coursework?.submissions?.length,
   ]);
 
   useEffect(() => {
@@ -389,17 +422,49 @@ const ViewInstructionPage = ({
 
     setIsSubmitting(true);
     try {
-      const ok = await onSubmitWork(
-        cls.id,
-        coursework.id,
-        selectedSubmissionFiles,
-      );
+      const ok = await onSubmitWork(cls.id, coursework.id, selectedSubmissionFiles, {
+        message: submissionMessage.trim(),
+        studentId: user?.id,
+        studentName: user?.name,
+        studentEmail: user?.email,
+        className: cls?.name,
+        assignmentTitle: coursework?.title,
+        submittedAt: new Date().toISOString(),
+        status: "submitted",
+      });
       if (ok !== false) {
         setSubmissionState({ submitted: true });
         setSelectedSubmissionFiles([]);
+        setSubmissionMessage("");
       }
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleMarkAsDone = async () => {
+    if (!onSubmitWork || submissionState.submitted || isMarkingAsDone) return;
+
+    setIsMarkingAsDone(true);
+    try {
+      const ok = await onSubmitWork(cls.id, coursework.id, markAsDoneFiles, {
+        message: submissionMessage.trim(),
+        studentId: user?.id,
+        studentName: user?.name,
+        studentEmail: user?.email,
+        className: cls?.name,
+        assignmentTitle: coursework?.title,
+        submittedAt: new Date().toISOString(),
+        status: "done",
+      });
+      if (ok !== false) {
+        setSubmissionState({ submitted: true });
+        setMarkAsDoneFiles([]);
+        setSubmissionMessage("");
+        setShowMarkAsDoneModal(false);
+      }
+    } finally {
+      setIsMarkingAsDone(false);
     }
   };
 
@@ -641,7 +706,7 @@ const ViewInstructionPage = ({
                         multiple
                         onChange={(e) =>
                           setSelectedSubmissionFiles(
-                            Array.from(e.target.files || []),
+                            Array.from(e.target.files || [])
                           )
                         }
                       />
@@ -650,20 +715,41 @@ const ViewInstructionPage = ({
                       </small>
                     </div>
 
-                    {selectedSubmissionFiles.length > 0 && (
-                      <div className="text-start mb-3">
+                    <div className="text-start mb-3">
+                      <label className="form-label small fw-bold text-muted">
+                        Message for your teacher
+                      </label>
+                      <textarea
+                        className="form-control"
+                        rows="3"
+                        placeholder="Add any notes, links, or context the teacher should see with your submission."
+                        value={submissionMessage}
+                        onChange={(e) => setSubmissionMessage(e.target.value)}
+                      />
+                    </div>
+
+                    {(selectedSubmissionFiles.length > 0 || submissionMessage.trim()) && (
+                      <div className="text-start mb-3 rounded-3 border bg-white p-3 shadow-sm">
                         <div className="fw-semibold small text-dark mb-2">
-                          Selected files
+                          Submission summary
                         </div>
-                        <div className="d-flex flex-wrap gap-2">
-                          {selectedSubmissionFiles.map((file, index) => (
-                            <span
-                              key={`${file.name}-${index}`}
-                              className="badge bg-white text-dark border"
-                            >
-                              {file.name}
-                            </span>
-                          ))}
+                        <div className="small text-muted">
+                          {selectedSubmissionFiles.length > 0 ? (
+                            <div className="mb-2">
+                              <span className="fw-semibold text-dark">Files:</span>{" "}
+                              {selectedSubmissionFiles.map((file, index) => (
+                                <span key={`${file.name}-${index}`} className="badge bg-light text-dark border me-1 mb-1">
+                                  {file.name}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                          {submissionMessage.trim() ? (
+                            <div>
+                              <span className="fw-semibold text-dark">Note:</span>{" "}
+                              {submissionMessage.trim()}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     )}
@@ -678,7 +764,11 @@ const ViewInstructionPage = ({
                           ? "Turned in"
                           : "+ Add or Create & Turn In"}
                       </button>
-                      <button className="btn btn-outline-secondary fw-medium">
+                      <button
+                        className="btn btn-outline-secondary fw-medium"
+                        onClick={() => setShowMarkAsDoneModal(true)}
+                        disabled={submissionState.submitted}
+                      >
                         Mark as done
                       </button>
                     </div>
@@ -801,7 +891,9 @@ const ViewInstructionPage = ({
                       const currentGrade =
                         draftGradesByStudent[st.id] ?? savedGrade ?? "";
                       const isGraded =
-                        currentGrade !== null && currentGrade !== undefined && currentGrade !== "";
+                        currentGrade !== null &&
+                        currentGrade !== undefined &&
+                        currentGrade !== "";
                       const hasPendingGradeChanges =
                         String(currentGrade ?? "") !== String(savedGrade ?? "");
                       const studentName =
@@ -864,7 +956,7 @@ const ViewInstructionPage = ({
                                 className="btn btn-sm btn-outline-primary"
                                 onClick={() =>
                                   setSelectedStudentId(
-                                    selectedStudentId === st.id ? null : st.id,
+                                    selectedStudentId === st.id ? null : st.id
                                   )
                                 }
                               >
@@ -939,9 +1031,12 @@ const ViewInstructionPage = ({
                                     <div className="d-grid gap-2 mb-3">
                                       <button
                                         className="btn btn-outline-success btn-sm"
-                                        onClick={() => handleSaveStudentReview(st.id)}
+                                        onClick={() =>
+                                          handleSaveStudentReview(st.id)
+                                        }
                                         disabled={
-                                          savingStudentId === st.id || !hasPendingGradeChanges
+                                          savingStudentId === st.id ||
+                                          !hasPendingGradeChanges
                                         }
                                       >
                                         {savingStudentId === st.id
@@ -1002,7 +1097,7 @@ const ViewInstructionPage = ({
                                             onReturnWork(
                                               cls.id,
                                               coursework.id,
-                                              st.id,
+                                              st.id
                                             );
                                           alert(`Returned work to ${st.name}`);
                                         }}
@@ -1072,6 +1167,94 @@ const ViewInstructionPage = ({
           )}
         </div>
       </div>
+
+      {/* Mark as Done Modal */}
+      {showMarkAsDoneModal && (
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
+          tabIndex="-1"
+        >
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content border-0 shadow-lg rounded-4">
+              <div className="modal-header border-bottom px-4 pt-4 pb-3">
+                <h5 className="modal-title font-google fw-bold">
+                  Mark as done
+                </h5>
+                <button
+                  className="btn-close"
+                  onClick={() => {
+                    setShowMarkAsDoneModal(false);
+                    setMarkAsDoneFiles([]);
+                  }}
+                ></button>
+              </div>
+
+              <div className="modal-body p-4">
+                <p className="text-muted mb-3">
+                  You can optionally upload files before marking this assignment as done.
+                </p>
+
+                <div className="mb-4">
+                  <label className="form-label small fw-bold text-muted">
+                    Attachments (optional)
+                  </label>
+                  <input
+                    type="file"
+                    className="form-control"
+                    multiple
+                    onChange={(e) =>
+                      setMarkAsDoneFiles(Array.from(e.target.files || []))
+                    }
+                  />
+                  <small className="form-text text-muted d-block mt-2">
+                    Select multiple files if needed, or leave empty to mark without files.
+                  </small>
+                </div>
+
+                {markAsDoneFiles.length > 0 && (
+                  <div className="mb-4">
+                    <div className="fw-semibold small text-dark mb-2">
+                      Selected files ({markAsDoneFiles.length})
+                    </div>
+                    <div className="d-flex flex-wrap gap-2">
+                      {markAsDoneFiles.map((file, index) => (
+                        <span
+                          key={`${file.name}-${index}`}
+                          className="badge bg-white text-dark border"
+                        >
+                          {file.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="modal-footer border-top px-4 py-3">
+                <button
+                  type="button"
+                  className="btn btn-light fw-medium px-4"
+                  onClick={() => {
+                    setShowMarkAsDoneModal(false);
+                    setMarkAsDoneFiles([]);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary fw-medium px-4"
+                  onClick={handleMarkAsDone}
+                  disabled={isMarkingAsDone}
+                >
+                  {isMarkingAsDone ? "Marking..." : "Mark as done"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

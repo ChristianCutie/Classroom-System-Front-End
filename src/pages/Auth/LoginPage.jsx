@@ -13,10 +13,22 @@ const LoginPage = ({ onLogin, onSwitchToRegister }) => {
   const [step, setStep] = useState(1);
   const [error, setError] = useState("");
 
+  // Detect role based on name (checks for titles like Dr., Prof., etc.)
+  const detectRoleFromName = (fullName) => {
+    const lowerName = fullName.toLowerCase();
+    if (lowerName.startsWith("dr.") || lowerName.startsWith("dr ") || 
+        lowerName.startsWith("prof.") || lowerName.startsWith("prof ") ||
+        lowerName.startsWith("professor ")) {
+      return "teacher";
+    }
+    return "student";
+  };
+
   const handleSelectQuickAccount = (acc) => {
     setEmail(acc.email);
     setName(acc.name);
-    setRole(acc.role);
+    const detectedRole = detectRoleFromName(acc.name);
+    setRole(detectedRole);
     // Optionally set a default password for demo (e.g., 'password')
     setPassword("password"); // if your seeded users have a known password
     setStep(2);
@@ -30,13 +42,18 @@ const LoginPage = ({ onLogin, onSwitchToRegister }) => {
     }
     setError("");
     // Extract a display name if custom email entered
+    let displayName = name;
     if (!name || name === "Dr. Eleanor Vance") {
       const parts = email.split("@")[0].replace(/\./g, " ").split(" ");
       const formatted = parts
         .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
         .join(" ");
-      setName(formatted || "Classroom User");
+      displayName = formatted || "Classroom User";
+      setName(displayName);
     }
+    // Detect role based on the name
+    const detectedRole = detectRoleFromName(displayName);
+    setRole(detectedRole);
     setStep(2);
   };
 
@@ -161,7 +178,7 @@ const LoginPage = ({ onLogin, onSwitchToRegister }) => {
                   <label htmlFor="loginEmail">Email or phone</label>
                 </div>
 
-                <div className="form-floating mb-3">
+                {/* <div className="form-floating mb-3">
                   <input
                     type="text"
                     className="form-control rounded-3"
@@ -172,9 +189,9 @@ const LoginPage = ({ onLogin, onSwitchToRegister }) => {
                     required
                   />
                   <label htmlFor="loginName">Your Full Name</label>
-                </div>
+                </div> */}
 
-                <div className="mb-4">
+                {/* <div className="mb-4">
                   <label className="form-label text-muted small fw-medium mb-2">
                     Select Your Role
                   </label>
@@ -217,7 +234,7 @@ const LoginPage = ({ onLogin, onSwitchToRegister }) => {
                       </label>
                     </div>
                   </div>
-                </div>
+                </div> */}
 
                 <div className="d-flex justify-content-between align-items-center mt-4 pt-2">
                   <a
@@ -317,7 +334,7 @@ const LoginPage = ({ onLogin, onSwitchToRegister }) => {
                     <i className="bi bi-shield-check text-success me-1"></i>
                     Signing in as{" "}
                     <strong>
-                      {role === "teacher" ? "Teacher" : "Student"}
+                      {role.charAt(0).toUpperCase() + role.slice(1)}
                     </strong>
                   </div>
                   <span className="text-muted text-xs">

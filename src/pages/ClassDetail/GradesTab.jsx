@@ -187,7 +187,7 @@ const GradesTab = ({ cls, user, onUpdateGrade }) => {
                       </button>
                       <ul className="dropdown-menu shadow small">
                         <li><button className="dropdown-item py-1" onClick={() => addToast(`Return all submissions for ${asg.title}`, "info")}>Return all</button></li>
-                        <li><button className="dropdown-item py-1" onClick={() => addToast(`View assignment details for ${asg.title}`, "info")}>View assignment</button></li>
+                        <li><button className="dropdown-item py-1" onClick={() => addToast(`View assignment  for ${asg.title}`, "info")}>View assignment</button></li>
                       </ul>
                     </div>
                   </div>

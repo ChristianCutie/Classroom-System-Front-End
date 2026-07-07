@@ -59,6 +59,11 @@ export const discussionAPI = {
 
 export const assignmentAPI = {
   getAssignments: (classId) => apiClient.get(`/classes/${classId}/assignments`),
+  getAssignment: (assignmentId) => apiClient.get(`/assignments/${assignmentId}`),
+  getAssignmentDetails: (assignmentId) => apiClient.get(`/assignments/${assignmentId}/details`),
+  submitAssignment: (assignmentId, formData) => apiClient.post(`/assignments/${assignmentId}/submit`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  getAllSubmissions: (assignmentId) => apiClient.get(`/assignments/${assignmentId}/submissions`),
+  gradeSubmission: (submissionId, payload) => apiClient.post(`/submissions/${submissionId}/grade`, payload),
 };
 
 export default apiClient;

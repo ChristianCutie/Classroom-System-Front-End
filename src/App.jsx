@@ -1,23 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/context/AuthContext';          // 1. Import Auth
-import apiClient from '@/api/client';                     // 2. API client
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext"; // 1. Import Auth
+import apiClient from "@/api/client"; // 2. API client
+import { Routes, Route, useNavigate } from "react-router-dom";
 
 // Components
-import Navbar from './components/Navbar/Navbar.jsx';
-import Sidebar from './components/Sidebar/Sidebar.jsx';
-import CreateClassModal from './components/Common/CreateClassModal.jsx';
-import JoinClassModal from './components/Common/JoinClassModal.jsx';
-import ToastContainer from './components/Common/ToastContainer.jsx';
-import { useToast } from '@/context/ToastContext.jsx';
-import LoginPage from './pages/Auth/LoginPage.jsx';
-import RegisterPage from './pages/Auth/RegisterPage.jsx';
-import ClassesPage from './pages/Classes/ClassesPage.jsx';
-import ClassDetailPage from './pages/ClassDetail/ClassDetailPage.jsx';
-import CalendarPage from './pages/Calendar/CalendarPage.jsx';
-import ToDoPage from './pages/ToDo/ToDoPage.jsx';
-import ArchivedPage from './pages/Archived/ArchivedPage.jsx';
-import SettingsPage from './pages/Settings/SettingsPage.jsx';
+import Navbar from "./components/Navbar/Navbar.jsx";
+import Sidebar from "./components/Sidebar/Sidebar.jsx";
+import CreateClassModal from "./components/Common/CreateClassModal.jsx";
+import JoinClassModal from "./components/Common/JoinClassModal.jsx";
+import ToastContainer from "./components/Common/ToastContainer.jsx";
+import { useToast } from "@/context/ToastContext.jsx";
+import LoginPage from "./pages/Auth/LoginPage.jsx";
+import RegisterPage from "./pages/Auth/RegisterPage.jsx";
+import ClassesPage from "./pages/Classes/ClassesPage.jsx";
+import ClassDetailPage from "./pages/ClassDetail/ClassDetailPage.jsx";
+import CalendarPage from "./pages/Calendar/CalendarPage.jsx";
+import ToDoPage from "./pages/ToDo/ToDoPage.jsx";
+import ArchivedPage from "./pages/Archived/ArchivedPage.jsx";
+import SettingsPage from "./pages/Settings/SettingsPage.jsx";
 
 const App = () => {
   // ------------------------------------------------------------
@@ -36,7 +36,7 @@ const App = () => {
   // ------------------------------------------------------------
   // UI state (unchanged)
   // ------------------------------------------------------------
-  const [authMode, setAuthMode] = useState('login');
+  const [authMode, setAuthMode] = useState("login");
   const [selectedClass, setSelectedClass] = useState(null);
   const [activeClassLoading, setActiveClassLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -51,18 +51,18 @@ const App = () => {
       fetchClasses();
     } else {
       setClasses([]);
-      navigate('/');
+      navigate("/");
     }
   }, [user, navigate]);
 
   const fetchClasses = async () => {
     setLoadingClasses(true);
     try {
-      const res = await apiClient.get('/classes');
+      const res = await apiClient.get("/classes");
       setClasses(res.data.data || []);
     } catch (err) {
-      console.error('Failed to fetch classes:', err);
-      addToast('Unable to load classes right now.', 'error');
+      console.error("Failed to fetch classes:", err);
+      addToast("Unable to load classes right now.", "error");
     } finally {
       setLoadingClasses(false);
     }
@@ -71,9 +71,9 @@ const App = () => {
   const handleRegister = (newUser) => {
     // Currently the registration form does not have a backend endpoint,
     // so keep the page flow moving by switching back to sign in.
-    setAuthMode('login');
+    setAuthMode("login");
     // Optionally, you could persist the new user locally or send to API later.
-    console.log('Registered user:', newUser);
+    console.log("Registered user:", newUser);
   };
 
   // ------------------------------------------------------------
@@ -84,8 +84,8 @@ const App = () => {
       setSidebarOpen(window.innerWidth >= 992);
     };
     handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   // ------------------------------------------------------------
@@ -96,12 +96,12 @@ const App = () => {
   }
 
   if (!user) {
-    return authMode === 'login' ? (
-      <LoginPage onSwitchToRegister={() => setAuthMode('register')} />
+    return authMode === "login" ? (
+      <LoginPage onSwitchToRegister={() => setAuthMode("register")} />
     ) : (
       <RegisterPage
         onRegister={handleRegister}
-        onSwitchToLogin={() => setAuthMode('login')}
+        onSwitchToLogin={() => setAuthMode("login")}
       />
     );
   }
@@ -119,17 +119,17 @@ const App = () => {
 
     setActiveClassLoading(true);
     if (window.innerWidth < 992) setSidebarOpen(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: "smooth" });
 
     try {
       const res = await apiClient.get(`/classes/${classId}`);
       setSelectedClass(res.data?.data || null);
       navigate(`/class/${classId}`);
     } catch (err) {
-      console.error('Failed to load class detail:', err);
+      console.error("Failed to load class detail:", err);
       setSelectedClass(null);
-      addToast('Unable to open that class right now.', 'error');
-      navigate('/');
+      addToast("Unable to open that class right now.", "error");
+      navigate("/");
     } finally {
       setActiveClassLoading(false);
     }
@@ -138,8 +138,8 @@ const App = () => {
   const handleNavigatePage = (page) => {
     setSelectedClass(null);
     if (window.innerWidth < 992) setSidebarOpen(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    navigate(`/${page === 'home' ? '' : page}`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    navigate(`/${page === "home" ? "" : page}`);
   };
 
   // ------------------------------------------------------------
@@ -147,27 +147,30 @@ const App = () => {
   // ------------------------------------------------------------
   const handleCreateClass = async (data) => {
     try {
-      const res = await apiClient.post('/classes', data);
+      const res = await apiClient.post("/classes", data);
       const newClass = res.data.data;
-      setClasses(prev => [newClass, ...prev]);
+      setClasses((prev) => [newClass, ...prev]);
       handleSelectClass(newClass.id);
     } catch (err) {
-      console.error('Create class error:', err);
-      addToast('Could not create the class. Please try again.', 'error');
+      console.error("Create class error:", err);
+      addToast("Could not create the class. Please try again.", "error");
     }
   };
 
   const handleJoinClass = async (code) => {
     try {
-      const res = await apiClient.post('/classes/join', { code });
+      const res = await apiClient.post("/classes/join", { code });
       const joinedClass = res.data.data;
-      setClasses(prev => [joinedClass, ...prev]);
-      addToast('You joined the class successfully.', 'success');
+      setClasses((prev) => [joinedClass, ...prev]);
+      addToast("You joined the class successfully.", "success");
       handleSelectClass(joinedClass.id);
       return true;
     } catch (err) {
-      console.error('Join class error:', err);
-      addToast('Unable to join that class. Check the code and try again.', 'error');
+      console.error("Join class error:", err);
+      addToast(
+        "Unable to join that class. Check the code and try again.",
+        "error",
+      );
       return false;
     }
   };
@@ -175,51 +178,51 @@ const App = () => {
   const handleArchiveClass = async (classId) => {
     try {
       await apiClient.patch(`/classes/${classId}/archive`);
-      setClasses(prev =>
-        prev.map(c => (c.id === classId ? { ...c, is_archived: 1 } : c))
+      setClasses((prev) =>
+        prev.map((c) => (c.id === classId ? { ...c, is_archived: 1 } : c)),
       );
-      addToast('Class archived.', 'success');
-      navigate('/');
+      addToast("Class archived.", "success");
+      navigate("/");
     } catch (err) {
-      console.error('Archive error:', err);
-      addToast('Could not archive the class.', 'error');
+      console.error("Archive error:", err);
+      addToast("Could not archive the class.", "error");
     }
   };
 
   const handleRestoreClass = async (classId) => {
     try {
       await apiClient.patch(`/classes/${classId}/restore`);
-      setClasses(prev =>
-        prev.map(c => (c.id === classId ? { ...c, is_archived: 0 } : c))
+      setClasses((prev) =>
+        prev.map((c) => (c.id === classId ? { ...c, is_archived: 0 } : c)),
       );
-      addToast('Class restored.', 'success');
+      addToast("Class restored.", "success");
     } catch (err) {
-      console.error('Restore error:', err);
-      addToast('Could not restore the class.', 'error');
+      console.error("Restore error:", err);
+      addToast("Could not restore the class.", "error");
     }
   };
 
   const handleDeleteClass = async (classId) => {
     try {
       await apiClient.delete(`/classes/${classId}`);
-      setClasses(prev => prev.filter(c => c.id !== classId));
-      addToast('Class deleted.', 'success');
-      navigate('/');
+      setClasses((prev) => prev.filter((c) => c.id !== classId));
+      addToast("Class deleted.", "success");
+      navigate("/");
     } catch (err) {
-      console.error('Delete error:', err);
-      addToast('Could not delete the class.', 'error');
+      console.error("Delete error:", err);
+      addToast("Could not delete the class.", "error");
     }
   };
 
   const handleUnenrollClass = async (classId) => {
     try {
       await apiClient.delete(`/classes/${classId}/unenroll`);
-      setClasses(prev => prev.filter(c => c.id !== classId));
-      addToast('You left the class.', 'success');
-      navigate('/');
+      setClasses((prev) => prev.filter((c) => c.id !== classId));
+      addToast("You left the class.", "success");
+      navigate("/");
     } catch (err) {
-      console.error('Unenroll error:', err);
-      addToast('Could not leave the class.', 'error');
+      console.error("Unenroll error:", err);
+      addToast("Could not leave the class.", "error");
     }
   };
 
@@ -229,53 +232,59 @@ const App = () => {
   // ------------------------------------------------------------
   const handlePostAnnouncement = async (classId, annData) => {
     try {
-      const res = await apiClient.post(`/classes/${classId}/announcements`, annData);
+      const res = await apiClient.post(
+        `/classes/${classId}/announcements`,
+        annData,
+      );
       const newAnn = res.data.data;
-      setClasses(prev =>
-        prev.map(c =>
+      setClasses((prev) =>
+        prev.map((c) =>
           c.id === classId
             ? { ...c, announcements: [newAnn, ...(c.announcements || [])] }
-            : c
-        )
+            : c,
+        ),
       );
-      addToast('Announcement posted.', 'success');
+      addToast("Announcement posted.", "success");
     } catch (err) {
-      console.error('Post announcement error:', err);
-      addToast('Could not post the announcement.', 'error');
+      console.error("Post announcement error:", err);
+      addToast("Could not post the announcement.", "error");
     }
   };
 
   const handleAddComment = async (classId, annId, text) => {
     try {
-      const res = await apiClient.post(`/classes/${classId}/announcements/${annId}/comments`, { text });
+      const res = await apiClient.post(
+        `/classes/${classId}/announcements/${annId}/comments`,
+        { text },
+      );
       const newComment = res.data.data;
-      setClasses(prev =>
-        prev.map(c =>
+      setClasses((prev) =>
+        prev.map((c) =>
           c.id === classId
             ? {
                 ...c,
-                announcements: (c.announcements || []).map(a =>
+                announcements: (c.announcements || []).map((a) =>
                   a.id === annId
                     ? { ...a, comments: [...(a.comments || []), newComment] }
-                    : a
-                )
+                    : a,
+                ),
               }
-            : c
-        )
+            : c,
+        ),
       );
-      addToast('Comment added.', 'success');
+      addToast("Comment added.", "success");
     } catch (err) {
-      console.error('Add comment error:', err);
-      addToast('Could not add the comment.', 'error');
+      console.error("Add comment error:", err);
+      addToast("Could not add the comment.", "error");
     }
   };
 
   const handleCreateTopic = async (topicName) => {
     try {
-      const trimmedTopic = String(topicName || '').trim();
+      const trimmedTopic = String(topicName || "").trim();
       if (!trimmedTopic) return false;
 
-      const res = await apiClient.post('/create/topics', {
+      const res = await apiClient.post("/create/topics", {
         topic_name: trimmedTopic,
       });
 
@@ -286,109 +295,160 @@ const App = () => {
         name: topicLabel,
       };
 
-      setClasses(prev =>
-        prev.map(clsItem =>
+      setClasses((prev) =>
+        prev.map((clsItem) =>
           clsItem.id === selectedClass?.id
             ? {
                 ...clsItem,
-                topics: Array.from(new Set([...(clsItem.topics || []), topicLabel])),
+                topics: Array.from(
+                  new Set([...(clsItem.topics || []), topicLabel]),
+                ),
               }
-            : clsItem
-        )
+            : clsItem,
+        ),
       );
 
-      setSelectedClass(prev =>
+      setSelectedClass((prev) =>
         prev?.id === selectedClass?.id
           ? {
               ...prev,
               topics: Array.from(new Set([...(prev.topics || []), topicLabel])),
             }
-          : prev
+          : prev,
       );
 
-      addToast('Topic created.', 'success');
+      addToast("Topic created.", "success");
       return normalizedTopic;
     } catch (err) {
-      console.error('Create topic error:', err);
-      const message = err?.response?.data?.message || 'Could not create the topic.';
-      addToast(message, 'error');
+      console.error("Create topic error:", err);
+      const message =
+        err?.response?.data?.message || "Could not create the topic.";
+      addToast(message, "error");
       return false;
     }
   };
 
   const handleCreateCoursework = async (classId, cwData) => {
     try {
-      if (cwData?.type === 'assignment') {
+      if (cwData?.type === "assignment") {
         const formData = cwData?.data instanceof FormData ? cwData.data : null;
-        if (!formData) throw new Error('Assignment payload is missing');
+        if (!formData) throw new Error("Assignment payload is missing");
 
-        const res = await apiClient.post('/create/assignments', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
+        const res = await apiClient.post("/create/assignments", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
         });
         const newAssignment = res.data?.data;
 
-        setClasses(prev =>
-          prev.map(c =>
+        setClasses((prev) =>
+          prev.map((c) =>
             c.id === classId
               ? { ...c, classwork: [newAssignment, ...(c.classwork || [])] }
-              : c
-          )
+              : c,
+          ),
         );
-        setSelectedClass(prev =>
+        setSelectedClass((prev) =>
           prev?.id === classId
             ? { ...prev, classwork: [newAssignment, ...(prev.classwork || [])] }
-            : prev
+            : prev,
         );
         await fetchClasses();
-        addToast('Assignment created.', 'success');
+        addToast("Assignment created.", "success");
         return true;
       }
 
-      const res = await apiClient.post(`/classes/${classId}/coursework`, cwData);
+      const res = await apiClient.post(
+        `/classes/${classId}/coursework`,
+        cwData,
+      );
       const newCw = res.data.data;
-      setClasses(prev =>
-        prev.map(c =>
+      setClasses((prev) =>
+        prev.map((c) =>
           c.id === classId
             ? { ...c, classwork: [newCw, ...(c.classwork || [])] }
-            : c
-        )
+            : c,
+        ),
       );
-      addToast('Coursework created.', 'success');
+      addToast("Coursework created.", "success");
       return true;
     } catch (err) {
-      console.error('Create coursework error:', err);
-      addToast('Could not create the coursework.', 'error');
+      console.error("Create coursework error:", err);
+      addToast("Could not create the coursework.", "error");
       return false;
     }
   };
 
-  const handleSubmitCoursework = async (classId, courseworkId, files = []) => {
+  const handleSubmitCoursework = async (
+    classId,
+    courseworkId,
+    files = [],
+    submissionData = {},
+  ) => {
     try {
-      if (files.length > 0) {
-        const formData = new FormData();
-        formData.append('class_id', classId);
-        formData.append('assignment_id', courseworkId);
-        files.forEach((file, index) => {
-          if (file instanceof File) {
-            formData.append(`attachments[${index}]`, file);
-          }
-        });
+      const formData = new FormData();
+      const normalizedFiles = Array.isArray(files) ? files : [];
 
-        await apiClient.post(`/assignments/${courseworkId}/submit`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
+      if (normalizedFiles.length > 0) {
+        normalizedFiles.forEach((file) => {
+          formData.append("files[]", file);
+          formData.append("files", file);
         });
-      } else {
-        await apiClient.post(`/assignments/${courseworkId}/submit`);
+      }
+
+      const studentMessage =
+        submissionData.message ||
+        submissionData.student_message ||
+        submissionData.studentComment ||
+        submissionData.comment ||
+        "";
+      const note = typeof studentMessage === "string" ? studentMessage.trim() : "";
+      const submittedAt = submissionData.submittedAt || new Date().toISOString();
+      const status = submissionData.status || "submitted";
+
+      formData.append("message", note);
+      formData.append("student_message", note);
+      formData.append("student_comment", note);
+      formData.append("student_id", submissionData.studentId ?? user?.id ?? "");
+      formData.append("student_name", submissionData.studentName ?? user?.name ?? "");
+      formData.append("student_email", submissionData.studentEmail ?? user?.email ?? "");
+      formData.append("class_id", classId);
+      formData.append("assignment_id", courseworkId);
+      formData.append("coursework_id", courseworkId);
+      formData.append("class_name", submissionData.className ?? selectedClass?.name ?? "");
+      formData.append("assignment_title", submissionData.assignmentTitle ?? "");
+      formData.append("submitted_at", submittedAt);
+      formData.append("status", status);
+
+      const response = await apiClient.post(
+        `/assignments/${courseworkId}/submit`,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        },
+      );
+
+      if (response.data?.success === false) {
+        throw new Error(response.data.message || "Submission failed");
       }
 
       const markSubmitted = (items = []) =>
-        items.map((item) => (item.id === courseworkId ? {
-          ...item,
-          submitted: true,
-          userSubmitted: true,
-          userSubmission: { status: 'submitted' },
-          status: 'submitted'
-        } : item));
+        items.map((item) =>
+          item.id === courseworkId
+            ? {
+                ...item,
+                submitted: true,
+                userSubmitted: true,
+                userSubmission: {
+                  status,
+                  message: note,
+                  studentName: submissionData.studentName ?? user?.name ?? "",
+                  studentEmail: submissionData.studentEmail ?? user?.email ?? "",
+                  submittedAt,
+                  fileCount: normalizedFiles.length,
+                },
+                status,
+              }
+            : item,
+        );
 
       setSelectedClass((prev) =>
         prev?.id === classId
@@ -396,9 +456,9 @@ const App = () => {
               ...prev,
               classwork: markSubmitted(prev.classwork || []),
               assignments: markSubmitted(prev.assignments || []),
-              submissionVersion: Date.now()
+              submissionVersion: Date.now(),
             }
-          : prev
+          : prev,
       );
 
       setClasses((prev) =>
@@ -408,27 +468,37 @@ const App = () => {
                 ...clsItem,
                 classwork: markSubmitted(clsItem.classwork || []),
                 assignments: markSubmitted(clsItem.assignments || []),
-                submissionVersion: Date.now()
+                submissionVersion: Date.now(),
               }
-            : clsItem
-        )
+            : clsItem,
+        ),
       );
 
       await fetchClasses();
-      addToast('Submission turned in.', 'success');
+      addToast("Submission turned in successfully.", "success");
       return true;
     } catch (err) {
-      console.error('Submit coursework error:', err);
-      addToast('Could not submit the coursework.', 'error');
+      console.error("Submit coursework error:", err);
+      addToast(
+        err.response?.data?.message ||
+          "Could not submit the coursework. Please try again.",
+        "error",
+      );
       return false;
     }
   };
 
-  const handleUpdateGrade = async (classId, studentId, cwId, newScore, feedback = null) => {
+  const handleUpdateGrade = async (
+    classId,
+    studentId,
+    cwId,
+    newScore,
+    feedback = null,
+  ) => {
     try {
       // Try to find the submission ID for this student & coursework
-      const classObj = classes.find(c => c.id === classId) || selectedClass;
-      const student = classObj?.students?.find(s => s.id === studentId);
+      const classObj = classes.find((c) => c.id === classId) || selectedClass;
+      const student = classObj?.students?.find((s) => s.id === studentId);
 
       let submissionId = null;
       // Try the detailed assignment route first (note: controller exposes '/assignmments/{id}/details')
@@ -441,9 +511,19 @@ const App = () => {
           // attempt to match by student id, student object, or name
           for (const s of subs) {
             if (s.student_id && s.student_id === studentId) return s.id;
-            if (s.student && (s.student.id === studentId || s.student_id === studentId)) return s.id;
-            const name = student ? `${student.first_name || student.firstName || ''} ${student.last_name || student.lastName || ''}`.trim() : '';
-            if (name && (s.student_name === name || String(s.student_name).includes(name) )) return s.id;
+            if (
+              s.student &&
+              (s.student.id === studentId || s.student_id === studentId)
+            )
+              return s.id;
+            const name = student
+              ? `${student.first_name || student.firstName || ""} ${student.last_name || student.lastName || ""}`.trim()
+              : "";
+            if (
+              name &&
+              (s.student_name === name || String(s.student_name).includes(name))
+            )
+              return s.id;
           }
         } catch (e) {
           return null;
@@ -451,39 +531,52 @@ const App = () => {
         return null;
       };
 
-      submissionId = await tryFetchDetails(`/assignmments/${cwId}/details`);
-      if (!submissionId) submissionId = await tryFetchDetails(`/assignments/${cwId}`);
+      // Prefer the new single-assignment endpoint which includes attachments
+      // and submission files, fall back to the older /details route if needed.
+      submissionId = await tryFetchDetails(`/assignments/${cwId}`);
+      if (!submissionId)
+        submissionId = await tryFetchDetails(`/assignments/${cwId}/details`);
 
       if (submissionId) {
         await apiClient.post(`/submissions/${submissionId}/grade`, {
           grade: newScore,
-          feedback: feedback ?? '',
+          feedback: feedback ?? "",
         });
         await fetchClasses();
-        addToast('Submission graded.', 'success');
+        addToast("Submission graded.", "success");
         return;
       }
 
-      console.warn('Could not find submission id to grade; falling back to server grade endpoint not available');
-      addToast('Could not find the student submission to grade. Try grading from the assignment page.', 'error');
+      console.warn(
+        "Could not find submission id to grade; falling back to server grade endpoint not available",
+      );
+      addToast(
+        "Could not find the student submission to grade. Try grading from the assignment page.",
+        "error",
+      );
     } catch (err) {
-      console.error('Update grade error:', err);
-      addToast('Could not update the grade.', 'error');
+      console.error("Update grade error:", err);
+      addToast("Could not update the grade.", "error");
     }
   };
 
   const handleUpdateClassBanner = async (classId, bannerCss, themeColor) => {
     try {
-      await apiClient.patch(`/classes/${classId}`, { banner: bannerCss, theme_color: themeColor });
-      setClasses(prev =>
-        prev.map(c =>
-          c.id === classId ? { ...c, banner: bannerCss, theme_color: themeColor } : c
-        )
+      await apiClient.patch(`/classes/${classId}`, {
+        banner: bannerCss,
+        theme_color: themeColor,
+      });
+      setClasses((prev) =>
+        prev.map((c) =>
+          c.id === classId
+            ? { ...c, banner: bannerCss, theme_color: themeColor }
+            : c,
+        ),
       );
-      addToast('Class theme updated.', 'success');
+      addToast("Class theme updated.", "success");
     } catch (err) {
-      console.error('Update banner error:', err);
-      addToast('Could not update the class theme.', 'error');
+      console.error("Update banner error:", err);
+      addToast("Could not update the class theme.", "error");
     }
   };
 
@@ -493,30 +586,28 @@ const App = () => {
       const res = await apiClient.get(`/classes/${classId}`);
       setSelectedClass(res.data?.data || null);
       // Also update the classes list
-      setClasses(prev =>
-        prev.map(c =>
-          c.id === classId ? res.data?.data : c
-        )
+      setClasses((prev) =>
+        prev.map((c) => (c.id === classId ? res.data?.data : c)),
       );
-      addToast('Discussion refreshed.', 'success');
+      addToast("Discussion refreshed.", "success");
     } catch (err) {
-      console.error('Failed to refresh class after discussion creation:', err);
-      addToast('Could not refresh the class discussion.', 'error');
+      console.error("Failed to refresh class after discussion creation:", err);
+      addToast("Could not refresh the class discussion.", "error");
     }
   };
 
   const getUserRoleName = (roleValue) => {
-    if (typeof roleValue === 'string') return roleValue;
+    if (typeof roleValue === "string") return roleValue;
     if (roleValue?.role_name) return roleValue.role_name;
     if (roleValue?.name) return roleValue.name;
-    return 'student';
+    return "student";
   };
 
   const getRoleIdForName = (roleName) => {
-    switch ((roleName || '').toLowerCase()) {
-      case 'teacher':
+    switch ((roleName || "").toLowerCase()) {
+      case "teacher":
         return 2;
-      case 'student':
+      case "student":
         return 3;
       default:
         return null;
@@ -528,16 +619,16 @@ const App = () => {
   // ------------------------------------------------------------
   const handleToggleRole = async () => {
     if (!user?.id) {
-      addToast('You need to be signed in to change your role.', 'error');
+      addToast("You need to be signed in to change your role.", "error");
       return;
     }
 
     const currentRole = getUserRoleName(user?.role);
-    const newRole = currentRole === 'teacher' ? 'student' : 'teacher';
+    const newRole = currentRole === "teacher" ? "student" : "teacher";
     const roleId = getRoleIdForName(newRole);
 
     if (!roleId) {
-      addToast('Unable to determine the selected role.', 'error');
+      addToast("Unable to determine the selected role.", "error");
       return;
     }
 
@@ -555,10 +646,10 @@ const App = () => {
       };
 
       updateUser(updatedUser);
-      addToast('Your role was updated successfully.', 'success');
+      addToast("Your role was updated successfully.", "success");
     } catch (err) {
-      console.error('Toggle role error:', err);
-      addToast('Could not switch roles right now.', 'error');
+      console.error("Toggle role error:", err);
+      addToast("Could not switch roles right now.", "error");
     }
   };
 
@@ -566,16 +657,16 @@ const App = () => {
   // 12. Render with React Router
   // ------------------------------------------------------------
 
-    // Helper: Build grade matrix from a class's grades array
+  // Helper: Build grade matrix from a class's grades array
   // Matrix format: { [studentId]: { [courseworkId]: score } }
   const buildGradeMatrix = (cls) => {
     const matrix = {};
     if (!cls || !cls.students) return matrix;
-    cls.students.forEach(st => {
+    cls.students.forEach((st) => {
       matrix[st.id] = {};
     });
     if (cls.grades) {
-      cls.grades.forEach(g => {
+      cls.grades.forEach((g) => {
         const { studentId, ...scores } = g;
         matrix[studentId] = { ...(matrix[studentId] || {}), ...scores };
       });
@@ -587,12 +678,14 @@ const App = () => {
       <Navbar
         user={user}
         activeClass={selectedClass}
-        onNavigateHome={() => navigate('/')}
+        onNavigateHome={() => navigate("/")}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         onOpenCreateModal={() => setShowCreateModal(true)}
         onOpenJoinModal={() => setShowJoinModal(true)}
         onToggleRole={handleToggleRole}
-        onUpdateUser={(updated) => { /* update user in context if needed */ }}
+        onUpdateUser={(updated) => {
+          /* update user in context if needed */
+        }}
         onLogout={logout}
       />
 
@@ -605,13 +698,15 @@ const App = () => {
           onSelectClass={handleSelectClass}
         />
 
-        <main className={`gc-main-content w-100 ${sidebarOpen ? 'sidebar-open' : ''}`}>
+        <main
+          className={`gc-main-content w-100 ${sidebarOpen ? "sidebar-open" : ""}`}
+        >
           {loadingClasses ? (
             <div className="text-center mt-5">Loading classes…</div>
           ) : (
             <Routes>
-              <Route 
-                path="/" 
+              <Route
+                path="/"
                 element={
                   <ClassesPage
                     classes={classes}
@@ -626,12 +721,14 @@ const App = () => {
                   />
                 }
               />
-              
-              <Route 
-                path="/class/:classId" 
+
+              <Route
+                path="/class/:classId"
                 element={
                   activeClassLoading ? (
-                    <div className="text-center mt-5">Loading class details…</div>
+                    <div className="text-center mt-5">
+                      Loading class details…
+                    </div>
                   ) : selectedClass ? (
                     <ClassDetailPage
                       cls={selectedClass}
@@ -651,8 +748,8 @@ const App = () => {
                 }
               />
 
-              <Route 
-                path="/calendar" 
+              <Route
+                path="/calendar"
                 element={
                   <CalendarPage
                     classes={classes}
@@ -661,8 +758,8 @@ const App = () => {
                 }
               />
 
-              <Route 
-                path="/todo" 
+              <Route
+                path="/todo"
                 element={
                   <ToDoPage
                     classes={classes}
@@ -672,8 +769,8 @@ const App = () => {
                 }
               />
 
-              <Route 
-                path="/archived" 
+              <Route
+                path="/archived"
                 element={
                   <ArchivedPage
                     classes={classes}
@@ -684,13 +781,15 @@ const App = () => {
                 }
               />
 
-              <Route 
-                path="/settings" 
+              <Route
+                path="/settings"
                 element={
                   <SettingsPage
                     user={user}
                     classes={classes}
-                    onUpdateUser={(updated) => { /* update user context */ }}
+                    onUpdateUser={(updated) => {
+                      /* update user context */
+                    }}
                     onToggleRole={handleToggleRole}
                   />
                 }

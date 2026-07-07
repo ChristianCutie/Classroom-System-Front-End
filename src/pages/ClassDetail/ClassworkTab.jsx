@@ -42,6 +42,7 @@ const ClassworkTab = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionStatus, setSubmissionStatus] = useState({});
   const [submittingId, setSubmittingId] = useState(null);
+  const [localClasswork, setLocalClasswork] = useState([]);
   const { addToast } = useToast();
 
   const normalizeTopicValue = (value) => {
@@ -94,9 +95,28 @@ const ClassworkTab = ({
     return Boolean(user.is_teacher || user.isTeacher);
   }, [user]);
 
+  useEffect(() => {
+    if (Array.isArray(classwork)) {
+      setLocalClasswork(classwork);
+    }
+  }, [classwork]);
+
   // --- Merge assignments and quizzes into a unified classwork list ---
   const classworkList = useMemo(() => {
-    if (Array.isArray(classwork) && classwork.length) return classwork;
+    const sourceWork =
+      Array.isArray(localClasswork) && localClasswork.length
+        ? localClasswork
+        : Array.isArray(classwork) && classwork.length
+          ? classwork
+          : null;
+
+    if (sourceWork) {
+      return sourceWork.map((item) => ({
+        ...item,
+        topic: normalizeTopicValue(item.topic) || "General",
+      }));
+    }
+
     const assignments = (cls.assignments || []).map((a) => ({
       id: a.id,
       title: a.title,
@@ -128,7 +148,7 @@ const ClassworkTab = ({
     }));
 
     return [...assignments, ...quizzes];
-  }, [classwork, cls.assignments, cls.quizzes]);
+  }, [localClasswork, classwork, cls.assignments, cls.quizzes]);
 
   useEffect(() => {
     setSubmissionStatus((prev) => {
@@ -140,7 +160,10 @@ const ClassworkTab = ({
           cw.userSubmission?.status === "submitted" ||
           cw.userSubmission?.status === "turned_in" ||
           cw.userSubmission?.status === "graded" ||
-          cw.status === "submitted",
+          cw.status === "submitted" ||
+          (Array.isArray(cw.submissions) && cw.submissions.some((sub) =>
+            ["submitted", "turned_in", "graded"].includes(sub?.status)
+          )),
         );
         if (hasSubmission) next[cw.id] = true;
       });
@@ -152,8 +175,10 @@ const ClassworkTab = ({
     let mounted = true;
 
     const loadTopics = async () => {
+      if (!cls?.id) return;
+
       try {
-        const res = await apiClient.get("/dropdown/topics");
+        const res = await apiClient.get(`/dropdown/topics?class_id=${cls.id}`);
         const topicsFromApi = (res.data?.data || []).map((topic) => ({
           id: topic.id ?? topic.topic_id ?? null,
           name: topic.topic_name || topic.name || topic.topicName || "",
@@ -171,7 +196,7 @@ const ClassworkTab = ({
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [cls?.id]);
 
   // --- Derive topics from the classwork list ---
   const topics = useMemo(() => {
@@ -289,6 +314,16 @@ const ClassworkTab = ({
         ),
       );
       setCustomTopics((prev) => prev.filter((name) => name !== topic.name));
+      setLocalClasswork((prev) =>
+        prev.map((item) =>
+          normalizeTopicValue(item.topic) === topic.name
+            ? { ...item, topic: updatedName }
+            : item,
+        ),
+      );
+      if (selectedTopic === topic.name) {
+        setSelectedTopic(updatedName);
+      }
       setEditingTopicId(null);
       setEditingTopicName("");
       setTopicActionMenuId(null);
@@ -760,7 +795,20 @@ const ClassworkTab = ({
                                     <div className="d-flex justify-content-around mb-3">
                                       <div>
                                         <div className="fs-3 fw-bolder text-primary">
-                                          {cw.stats.turnedIn}
+                                          {(() => {
+                                            const hasLocalSubmissionSignal = Boolean(
+                                              cw.submitted ||
+                                              cw.userSubmitted ||
+                                              cw.userSubmission?.status ||
+                                              cw.status === "submitted" ||
+                                              cw.status === "turned_in" ||
+                                              cw.status === "graded"
+                                            );
+                                            const actualTurnedIn = hasLocalSubmissionSignal && (Array.isArray(cw.submissions) ? cw.submissions.length : 0) === 0
+                                              ? 1
+                                              : (Array.isArray(cw.submissions) ? cw.submissions.length : 0);
+                                            return actualTurnedIn > (cw.stats.turnedIn || 0) ? actualTurnedIn : (cw.stats.turnedIn || 0);
+                                          })()}
                                         </div>
                                         <div className="text-muted small">
                                           Turned in
@@ -780,7 +828,10 @@ const ClassworkTab = ({
                                           <div className="border-end"></div>
                                           <div>
                                             <div className="fs-3 fw-bolder text-success">
-                                              {cw.stats.graded}
+                                              {(() => {
+                                                const actualGraded = (Array.isArray(cw.submissions) ? cw.submissions.filter((s) => s.grade !== null && s.grade !== undefined).length : 0) + (cw.userSubmission?.status === "graded" || cw.status === "graded" ? 1 : 0);
+                                                return actualGraded > (cw.stats.graded || 0) ? actualGraded : (cw.stats.graded || 0);
+                                              })()}
                                             </div>
                                             <div className="text-muted small">
                                               Graded
@@ -1117,7 +1168,7 @@ const ClassworkTab = ({
                                 </option>
                               );
                             })}
-                            <option value="__new__">➕ Create new topic</option>
+                            <option value="__new__">+ Create new topic</option>
                           </select>
                         </>
                       ) : (

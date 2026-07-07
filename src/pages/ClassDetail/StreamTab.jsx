@@ -1076,7 +1076,7 @@ const StreamTab = ({
         ) : (
           <div className="text-center py-5 bg-white border rounded-3 shadow-sm">
             <i className="bi bi-chat-square-text text-muted fs-1 mb-2"></i>
-            <h6 className="fw-semibold text-dark">No announcements yet</h6>
+            <h6 className="fw-semibold text-dark">No announcements or discussions yet</h6>
             <p className="text-muted small mb-0">
               Use the stream to share announcements, post assignments, and
               respond to student questions.
