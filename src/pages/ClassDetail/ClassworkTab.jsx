@@ -1,39 +1,94 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { useToast } from '@/context/ToastContext.jsx';
+import React, { useState, useMemo, useEffect } from "react";
+import { useToast } from "@/context/ToastContext.jsx";
+import apiClient from "@/api/client.js";
 
-const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onViewInstruction, classwork }) => {
-  const [selectedTopic, setSelectedTopic] = useState('All topics');
+const ClassworkTab = ({
+  cls,
+  user,
+  onCreateCoursework,
+  onSubmitCoursework,
+  onCreateTopic,
+  onViewInstruction,
+  classwork,
+}) => {
+  const [selectedTopic, setSelectedTopic] = useState("All topics");
   const [expandedId, setExpandedId] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showTopicModal, setShowTopicModal] = useState(false);
-  const [createType, setCreateType] = useState('assignment');
-  const [topicName, setTopicName] = useState('');
+  const [createType, setCreateType] = useState("assignment");
+  const [topicName, setTopicName] = useState("");
   const [customTopics, setCustomTopics] = useState([]);
+  const [availableTopics, setAvailableTopics] = useState([]);
+  const [cwTopicId, setCwTopicId] = useState(null);
+  const [isCreatingTopic, setIsCreatingTopic] = useState(false);
+  const [topicActionMenuId, setTopicActionMenuId] = useState(null);
+  const [editingTopicId, setEditingTopicId] = useState(null);
+  const [editingTopicName, setEditingTopicName] = useState("");
+  const [showTopicActionModal, setShowTopicActionModal] = useState(false);
+  const [isUpdatingTopic, setIsUpdatingTopic] = useState(false);
+  const [isDeletingTopic, setIsDeletingTopic] = useState(false);
+
+  // 'existing' or 'new'
+  const [topicMode, setTopicMode] = useState("existing");
+  const [isCreatingNewTopic, setIsCreatingNewTopic] = useState(false);
 
   // Create coursework form state
-  const [cwTitle, setCwTitle] = useState('');
-  const [cwInstructions, setCwInstructions] = useState('');
-  const [cwTopic, setCwTopic] = useState('General');
-  const [cwPoints, setCwPoints] = useState('100');
-  const [cwDueDate, setCwDueDate] = useState('');
+  const [cwTitle, setCwTitle] = useState("");
+  const [cwInstructions, setCwInstructions] = useState("");
+  const [cwTopic, setCwTopic] = useState("General");
+  const [cwPoints, setCwPoints] = useState("100");
+  const [cwDueDate, setCwDueDate] = useState("");
   const [cwAttachments, setCwAttachments] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionStatus, setSubmissionStatus] = useState({});
   const [submittingId, setSubmittingId] = useState(null);
   const { addToast } = useToast();
 
+  const normalizeTopicValue = (value) => {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      return trimmed || "";
+    }
+
+    if (!value || typeof value !== "object") return "";
+
+    const directName =
+      value.name ||
+      value.topic_name ||
+      value.topicName ||
+      value.label ||
+      value.title ||
+      value.topic;
+
+    if (typeof directName === "string") {
+      const trimmed = directName.trim();
+      return trimmed || "";
+    }
+
+    return "";
+  };
+
   const isTeacher = useMemo(() => {
     if (!user) return false;
 
-    if (typeof user.role === 'string') {
+    if (typeof user.role === "string") {
       const normalized = user.role.toLowerCase();
-      return normalized === 'teacher' || normalized === 'instructor' || normalized === 'teacher/instructor';
+      return (
+        normalized === "teacher" ||
+        normalized === "instructor" ||
+        normalized === "teacher/instructor"
+      );
     }
 
-    if (user.role && typeof user.role === 'object') {
-      const roleName = user.role.role_name || user.role.name || user.role.value || '';
+    if (user.role && typeof user.role === "object") {
+      const roleName =
+        user.role.role_name || user.role.name || user.role.value || "";
       const normalized = String(roleName).toLowerCase();
-      return normalized === 'teacher' || normalized === 'instructor' || normalized === 'teacher/instructor';
+      return (
+        normalized === "teacher" ||
+        normalized === "instructor" ||
+        normalized === "teacher/instructor"
+      );
     }
 
     return Boolean(user.is_teacher || user.isTeacher);
@@ -42,30 +97,34 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
   // --- Merge assignments and quizzes into a unified classwork list ---
   const classworkList = useMemo(() => {
     if (Array.isArray(classwork) && classwork.length) return classwork;
-    const assignments = (cls.assignments || []).map(a => ({
+    const assignments = (cls.assignments || []).map((a) => ({
       id: a.id,
       title: a.title,
       dueDate: a.due_date,
       points: a.max_points || 100,
-      type: 'assignment',
-      topic: a.topic || 'General',
-      instructions: a.instructions || 'No instructions provided.',
+      type: "assignment",
+      topic: normalizeTopicValue(a.topic) || "General",
+      instructions: a.instructions || "No instructions provided.",
       attachments: a.attachments || [],
-      postedDate: a.created_at ? new Date(a.created_at).toLocaleDateString() : 'recently',
-      stats: a.stats || null
+      postedDate: a.created_at
+        ? new Date(a.created_at).toLocaleDateString()
+        : "recently",
+      stats: a.stats || null,
     }));
 
-    const quizzes = (cls.quizzes || []).map(q => ({
+    const quizzes = (cls.quizzes || []).map((q) => ({
       id: q.id,
       title: q.title,
       dueDate: q.due_date,
       points: q.max_points || 100,
-      type: 'quiz',
-      topic: q.topic || 'General',
-      instructions: q.instructions || 'No instructions provided.',
+      type: "quiz",
+      topic: normalizeTopicValue(q.topic) || "General",
+      instructions: q.instructions || "No instructions provided.",
       attachments: q.attachments || [],
-      postedDate: q.created_at ? new Date(q.created_at).toLocaleDateString() : 'recently',
-      stats: q.stats || null
+      postedDate: q.created_at
+        ? new Date(q.created_at).toLocaleDateString()
+        : "recently",
+      stats: q.stats || null,
     }));
 
     return [...assignments, ...quizzes];
@@ -78,10 +137,10 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
         const hasSubmission = Boolean(
           cw.submitted ||
           cw.userSubmitted ||
-          cw.userSubmission?.status === 'submitted' ||
-          cw.userSubmission?.status === 'turned_in' ||
-          cw.userSubmission?.status === 'graded' ||
-          cw.status === 'submitted'
+          cw.userSubmission?.status === "submitted" ||
+          cw.userSubmission?.status === "turned_in" ||
+          cw.userSubmission?.status === "graded" ||
+          cw.status === "submitted",
         );
         if (hasSubmission) next[cw.id] = true;
       });
@@ -89,37 +148,229 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
     });
   }, [classworkList]);
 
+  useEffect(() => {
+    let mounted = true;
+
+    const loadTopics = async () => {
+      try {
+        const res = await apiClient.get("/dropdown/topics");
+        const topicsFromApi = (res.data?.data || []).map((topic) => ({
+          id: topic.id ?? topic.topic_id ?? null,
+          name: topic.topic_name || topic.name || topic.topicName || "",
+        }));
+
+        if (mounted) {
+          setAvailableTopics(topicsFromApi.filter((topic) => topic.name));
+        }
+      } catch (error) {
+        console.error("Failed to load topics:", error);
+      }
+    };
+
+    loadTopics();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   // --- Derive topics from the classwork list ---
   const topics = useMemo(() => {
-    const uniqueTopics = new Set([
+    const topicList = [
       ...customTopics,
-      ...classworkList.map(cw => cw.topic || 'General')
-    ]);
-    return ['All topics', ...uniqueTopics];
-  }, [classworkList, customTopics]);
+      ...((Array.isArray(cls?.topics) ? cls.topics : [])
+        .map((topic) => normalizeTopicValue(topic))
+        .filter(Boolean)),
+      ...availableTopics.map((topic) => normalizeTopicValue(topic.name)),
+      ...classworkList.map((cw) => normalizeTopicValue(cw.topic) || "General"),
+    ];
 
-  const filteredWork = selectedTopic === 'All topics'
-    ? classworkList
-    : classworkList.filter(cw => cw.topic === selectedTopic);
+    const uniqueTopics = Array.from(new Set(topicList.filter(Boolean)));
+    return ["All topics", ...uniqueTopics];
+  }, [classworkList, customTopics, cls?.topics, availableTopics]);
+
+  const topicOptions = useMemo(() => {
+    const merged = [
+      ...availableTopics.map((topic) => ({
+        id: topic.id,
+        name: normalizeTopicValue(topic.name),
+      })),
+      ...customTopics.map((topicName) => ({
+        id: null,
+        name: normalizeTopicValue(topicName),
+      })),
+    ];
+
+    return merged.filter((topic, index, arr) => {
+      const firstIndex = arr.findIndex((item) => item.name === topic.name);
+      return firstIndex === index;
+    });
+  }, [availableTopics, customTopics]);
+
+  const filteredWork =
+    selectedTopic === "All topics"
+      ? classworkList
+      : classworkList.filter((cw) => cw.topic === selectedTopic);
 
   // Group by topic
   const groupedWork = filteredWork.reduce((acc, cw) => {
-    const topic = cw.topic || 'No topic';
+    const topic = normalizeTopicValue(cw.topic) || "No topic";
     if (!acc[topic]) acc[topic] = [];
     acc[topic].push(cw);
     return acc;
   }, {});
 
-  const handleAddTopic = (e) => {
+  const handleAddTopic = async (e) => {
     e.preventDefault();
     const trimmedTopic = topicName.trim();
     if (!trimmedTopic) return;
 
-    setCustomTopics((prev) => (prev.includes(trimmedTopic) ? prev : [...prev, trimmedTopic]));
-    setSelectedTopic(trimmedTopic);
-    setTopicName('');
-    setShowTopicModal(false);
-    addToast(`Topic "${trimmedTopic}" added!`, 'info');
+    setIsCreatingTopic(true);
+    try {
+      const created = await onCreateTopic?.(trimmedTopic);
+      if (created !== false) {
+        const normalizedTopic =
+          created && typeof created === "object"
+            ? {
+                id: created.id ?? created.topic_id ?? null,
+                name:
+                  created.name ||
+                  created.topic_name ||
+                  created.topicName ||
+                  trimmedTopic,
+              }
+            : { id: null, name: trimmedTopic };
+
+        setCustomTopics((prev) =>
+          prev.includes(normalizedTopic.name)
+            ? prev
+            : [...prev, normalizedTopic.name],
+        );
+        if (normalizedTopic.id) {
+          setAvailableTopics((prev) => {
+            const exists = prev.some((item) => item.id === normalizedTopic.id);
+            return exists
+              ? prev.map((item) =>
+                  item.id === normalizedTopic.id
+                    ? { ...item, name: normalizedTopic.name }
+                    : item,
+                )
+              : [...prev, normalizedTopic];
+          });
+        }
+        setSelectedTopic(normalizedTopic.name);
+        setCwTopic(normalizedTopic.name);
+        setCwTopicId(normalizedTopic.id ?? null);
+        setTopicName("");
+        setShowTopicModal(false);
+      }
+    } catch (error) {
+      console.error("Failed to create topic:", error);
+    } finally {
+      setIsCreatingTopic(false);
+    }
+  };
+
+  const handleRenameTopic = async (topic) => {
+    const trimmedName = editingTopicName.trim();
+    if (!trimmedName || !topic?.id) return;
+
+    setIsUpdatingTopic(true);
+    try {
+      const res = await apiClient.post(`/update/topics/${topic.id}`, {
+        topic_name: trimmedName,
+      });
+
+      const updatedTopic = res.data?.data;
+      const updatedName = updatedTopic?.topic_name || trimmedName;
+
+      setAvailableTopics((prev) =>
+        prev.map((item) =>
+          item.id === topic.id ? { ...item, name: updatedName } : item,
+        ),
+      );
+      setCustomTopics((prev) => prev.filter((name) => name !== topic.name));
+      setEditingTopicId(null);
+      setEditingTopicName("");
+      setTopicActionMenuId(null);
+      setShowTopicActionModal(false);
+      addToast("Topic renamed successfully.", "success");
+    } catch (error) {
+      console.error("Failed to rename topic:", error);
+      addToast("Could not rename the topic.", "error");
+    } finally {
+      setIsUpdatingTopic(false);
+    }
+  };
+
+  const handleDeleteTopic = async (topic) => {
+    if (!topic?.id) return;
+
+    setIsDeletingTopic(true);
+    try {
+      await apiClient.post(`/archive/topics/${topic.id}`);
+      setAvailableTopics((prev) => prev.filter((item) => item.id !== topic.id));
+      setCustomTopics((prev) => prev.filter((name) => name !== topic.name));
+      setTopicActionMenuId(null);
+      setShowTopicActionModal(false);
+      addToast("Topic deleted successfully.", "success");
+    } catch (error) {
+      console.error("Failed to delete topic:", error);
+      addToast("Could not delete the topic.", "error");
+    } finally {
+      setIsDeletingTopic(false);
+    }
+  };
+
+  const ensureTopicExists = async (topicValue) => {
+    const trimmedTopic = topicValue?.trim();
+    if (!trimmedTopic) return { id: null, name: "General" };
+
+    const normalizedInput = trimmedTopic.toLowerCase();
+    const existingTopic = availableTopics.find(
+      (topic) => topic.name?.toLowerCase() === normalizedInput,
+    );
+
+    if (existingTopic) {
+      return {
+        id: existingTopic.id ?? null,
+        name: existingTopic.name,
+      };
+    }
+
+    try {
+      setIsCreatingTopic(true);
+      const res = await apiClient.post("/create/topics", {
+        topic_name: trimmedTopic,
+      });
+
+      const createdTopic = res.data?.data || {};
+      const normalizedTopic = {
+        id: createdTopic.id ?? createdTopic.topic_id ?? null,
+        name: createdTopic.topic_name || createdTopic.name || trimmedTopic,
+      };
+
+      setAvailableTopics((prev) => {
+        const exists = prev.some((item) => item.id === normalizedTopic.id);
+        return exists
+          ? prev.map((item) =>
+              item.id === normalizedTopic.id ? normalizedTopic : item,
+            )
+          : [...prev, normalizedTopic];
+      });
+      setCustomTopics((prev) =>
+        prev.includes(normalizedTopic.name)
+          ? prev
+          : [...prev, normalizedTopic.name],
+      );
+
+      return normalizedTopic;
+    } catch (error) {
+      console.error("Failed to create topic from assignment modal:", error);
+      addToast("Could not create the topic. Please try again.", "error");
+      return null;
+    } finally {
+      setIsCreatingTopic(false);
+    }
   };
 
   const handleCreateSubmit = async (e) => {
@@ -128,40 +379,58 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
 
     setIsSubmitting(true);
     try {
-      const payload = createType === 'assignment'
-        ? (() => {
-            const formData = new FormData();
-            formData.append('class_id', cls.id);
-            formData.append('title', cwTitle.trim());
-            formData.append('instructions', cwInstructions.trim());
-            formData.append('max_points', Number(cwPoints) || 100);
-            formData.append('topic', cwTopic || 'General');
-            if (cwDueDate) formData.append('due_date', cwDueDate);
-            cwAttachments.forEach((file, index) => {
-              if (file instanceof File) {
-                formData.append(`attachments[${index}]`, file);
+      const resolvedTopic = await ensureTopicExists(cwTopic || "General");
+      if (!resolvedTopic) return;
+
+      const finalTopicName = resolvedTopic.name || "General";
+      const finalTopicId = resolvedTopic.id ?? cwTopicId ?? null;
+
+      const payload =
+        createType === "assignment"
+          ? (() => {
+              const formData = new FormData();
+              formData.append("class_id", cls.id);
+              formData.append("title", cwTitle.trim());
+              formData.append("instructions", cwInstructions.trim());
+              formData.append("max_points", Number(cwPoints) || 100);
+              formData.append("topic", finalTopicName);
+              if (finalTopicId) {
+                formData.append("topic_id", finalTopicId);
               }
-            });
-            return { type: 'assignment', data: formData };
-          })()
-        : {
-            title: cwTitle.trim(),
-            type: createType,
-            topic: cwTopic,
-            dueDate: createType === 'material' ? null : cwDueDate,
-            points: createType === 'material' ? null : Number(cwPoints) || 100,
-            instructions: cwInstructions.trim(),
-            attachments: [{ type: 'pdf', name: `${cwTitle.replace(/\s+/g, '_')}_Docs.pdf`, url: '#' }],
-            postedDate: 'Today'
-          };
+              if (cwDueDate) formData.append("due_date", cwDueDate);
+              cwAttachments.forEach((file, index) => {
+                if (file instanceof File) {
+                  formData.append(`attachments[${index}]`, file);
+                }
+              });
+              return { type: "assignment", data: formData };
+            })()
+          : {
+              title: cwTitle.trim(),
+              type: createType,
+              topic: finalTopicName,
+              dueDate: createType === "material" ? null : cwDueDate,
+              points:
+                createType === "material" ? null : Number(cwPoints) || 100,
+              instructions: cwInstructions.trim(),
+              attachments: [
+                {
+                  type: "pdf",
+                  name: `${cwTitle.replace(/\s+/g, "_")}_Docs.pdf`,
+                  url: "#",
+                },
+              ],
+              postedDate: "Today",
+            };
 
       const created = await onCreateCoursework(cls.id, payload);
       if (created !== false) {
-        setCwTitle('');
-        setCwInstructions('');
-        setCwTopic('General');
-        setCwPoints('100');
-        setCwDueDate('');
+        setCwTitle("");
+        setCwInstructions("");
+        setCwTopic("General");
+        setCwTopicId(null);
+        setCwPoints("100");
+        setCwDueDate("");
         setCwAttachments([]);
         setShowCreateModal(false);
       }
@@ -171,7 +440,12 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
   };
 
   const handleStudentTurnIn = async (cw) => {
-    if (!onSubmitCoursework || submissionStatus[cw.id] || submittingId === cw.id) return;
+    if (
+      !onSubmitCoursework ||
+      submissionStatus[cw.id] ||
+      submittingId === cw.id
+    )
+      return;
 
     setSubmittingId(cw.id);
     try {
@@ -180,20 +454,25 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
         setSubmissionStatus((prev) => ({ ...prev, [cw.id]: true }));
       }
     } catch (error) {
-      console.error('Failed to turn in coursework:', error);
-      addToast('Could not turn in the coursework right now.', 'error');
+      console.error("Failed to turn in coursework:", error);
+      addToast("Could not turn in the coursework right now.", "error");
     } finally {
       setSubmittingId(null);
     }
   };
 
   const getTypeIcon = (type) => {
-    switch(type) {
-      case 'assignment': return 'bi-clipboard-check-fill';
-      case 'quiz': return 'bi-card-checklist';
-      case 'material': return 'bi-bookmark-fill';
-      case 'question': return 'bi-question-circle-fill';
-      default: return 'bi-file-earmark-text-fill';
+    switch (type) {
+      case "assignment":
+        return "bi-clipboard-check-fill";
+      case "quiz":
+        return "bi-card-checklist";
+      case "material":
+        return "bi-bookmark-fill";
+      case "question":
+        return "bi-question-circle-fill";
+      default:
+        return "bi-file-earmark-text-fill";
     }
   };
 
@@ -206,7 +485,7 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
             <div className="dropdown">
               <button
                 className="btn text-white rounded-pill px-3 py-2 fw-medium shadow-sm d-flex align-items-center gap-2"
-                style={{ backgroundColor: '#1a73e8' }}
+                style={{ backgroundColor: "#1a73e8" }}
                 data-bs-toggle="dropdown"
                 aria-expanded="false"
               >
@@ -215,28 +494,60 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
               </button>
               <ul className="dropdown-menu shadow my-2 border">
                 <li>
-                  <button className="dropdown-item py-2 d-flex align-items-center gap-2" onClick={() => { setCreateType('assignment'); setShowCreateModal(true); }}>
-                    <i className="bi bi-clipboard-check text-primary"></i> Assignment
+                  <button
+                    className="dropdown-item py-2 d-flex align-items-center gap-2"
+                    onClick={() => {
+                      setCreateType("assignment");
+                      setShowCreateModal(true);
+                    }}
+                  >
+                    <i className="bi bi-clipboard-check text-primary"></i>{" "}
+                    Assignment
                   </button>
                 </li>
                 <li>
-                  <button className="dropdown-item py-2 d-flex align-items-center gap-2" onClick={() => { setCreateType('quiz'); setShowCreateModal(true); }}>
-                    <i className="bi bi-card-checklist text-success"></i> Quiz assignment
+                  <button
+                    className="dropdown-item py-2 d-flex align-items-center gap-2"
+                    onClick={() => {
+                      setCreateType("quiz");
+                      setShowCreateModal(true);
+                    }}
+                  >
+                    <i className="bi bi-card-checklist text-success"></i> Quiz
+                    assignment
                   </button>
                 </li>
                 <li>
-                  <button className="dropdown-item py-2 d-flex align-items-center gap-2" onClick={() => { setCreateType('question'); setShowCreateModal(true); }}>
-                    <i className="bi bi-question-circle text-warning"></i> Question
+                  <button
+                    className="dropdown-item py-2 d-flex align-items-center gap-2"
+                    onClick={() => {
+                      setCreateType("question");
+                      setShowCreateModal(true);
+                    }}
+                  >
+                    <i className="bi bi-question-circle text-warning"></i>{" "}
+                    Question
                   </button>
                 </li>
                 <li>
-                  <button className="dropdown-item py-2 d-flex align-items-center gap-2" onClick={() => { setCreateType('material'); setShowCreateModal(true); }}>
+                  <button
+                    className="dropdown-item py-2 d-flex align-items-center gap-2"
+                    onClick={() => {
+                      setCreateType("material");
+                      setShowCreateModal(true);
+                    }}
+                  >
                     <i className="bi bi-bookmark text-info"></i> Material
                   </button>
                 </li>
-                <li><hr className="dropdown-divider" /></li>
                 <li>
-                  <button className="dropdown-item py-2 d-flex align-items-center gap-2" onClick={() => setShowTopicModal(true)}>
+                  <hr className="dropdown-divider" />
+                </li>
+                <li>
+                  <button
+                    className="dropdown-item py-2 d-flex align-items-center gap-2"
+                    onClick={() => setShowTopicModal(true)}
+                  >
                     <i className="bi bi-tag text-secondary"></i> Topic
                   </button>
                 </li>
@@ -254,9 +565,10 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
           </button>
           <button
             className="btn btn-sm btn-light border rounded-pill px-3 d-flex align-items-center gap-2 text-dark fw-medium py-2"
-            onClick={() => window.open('https://drive.google.com', '_blank')}
+            onClick={() => window.open("https://drive.google.com", "_blank")}
           >
-            <i className="bi bi-folder2-open text-warning fs-6"></i> Class Drive folder
+            <i className="bi bi-folder2-open text-warning fs-6"></i> Class Drive
+            folder
           </button>
         </div>
       </div>
@@ -264,16 +576,18 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
       <div className="row g-4">
         {/* Left Topic Sidebar Pills */}
         <div className="col-12 col-md-3">
-          <h6 className="fw-bold text-muted small text-uppercase mb-3 px-1">Topics</h6>
+          <h6 className="fw-bold text-muted small text-uppercase mb-3 px-1">
+            Topics
+          </h6>
           <div className="d-flex flex-md-column gap-2 flex-wrap">
             {topics.map((t, idx) => (
               <div
                 key={idx}
-                className={`topic-pill text-truncate ${selectedTopic === t ? 'active' : ''}`}
+                className={`topic-pill text-truncate ${selectedTopic === t ? "active" : ""}`}
                 onClick={() => setSelectedTopic(t)}
                 title={t}
               >
-                {t}
+                <span className="flex-grow-1 text-truncate">{t}</span>
               </div>
             ))}
           </div>
@@ -285,37 +599,83 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
             Object.entries(groupedWork).map(([topicName, items]) => (
               <div key={topicName} className="mb-5">
                 <div className="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-                  <h4 className="font-google fw-bold text-dark mb-0" style={{ color: cls.themeColor || '#1a73e8' }}>
-                    {topicName}
-                  </h4>
-                  <span className="badge bg-light text-muted border">{items.length} {items.length === 1 ? 'item' : 'items'}</span>
+                  <div className="d-flex align-items-center gap-2">
+                    <h4
+                      className="font-google fw-bold text-dark mb-0"
+                      style={{ color: cls.themeColor || "#1a73e8" }}
+                    >
+                      {topicName}
+                    </h4>
+                    {(() => {
+                      const topicMeta = topicOptions.find(
+                        (item) => item.name === topicName,
+                      );
+                      return topicMeta?.id ? (
+                        <div className="position-relative">
+                          <button
+                            type="button"
+                            className="btn btn-link btn-sm p-0 text-secondary"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTopicId(topicMeta.id);
+                              setEditingTopicName(topicMeta.name);
+                              setTopicActionMenuId(topicMeta.id ?? topicName);
+                              setShowTopicActionModal(true);
+                            }}
+                          >
+                            <i className="bi bi-three-dots"></i>
+                          </button>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                  <span className="badge bg-light text-muted border">
+                    {items.length} {items.length === 1 ? "item" : "items"}
+                  </span>
                 </div>
 
                 <div className="d-flex flex-column gap-2">
                   {items.map((cw) => {
                     const isExpanded = expandedId === cw.id;
                     return (
-                      <div key={cw.id} className="card border shadow-sm rounded-3 overflow-hidden">
-                        
+                      <div
+                        key={cw.id}
+                        className="card border shadow-sm rounded-3 overflow-hidden"
+                      >
                         {/* Header Row */}
                         <div
-                          className={`p-3 d-flex align-items-center justify-content-between ${isExpanded ? 'bg-light border-bottom' : 'bg-white'}`}
-                          style={{ cursor: 'pointer', transition: 'background 0.15s' }}
-                          onClick={() => setExpandedId(isExpanded ? null : cw.id)}
+                          className={`p-3 d-flex align-items-center justify-content-between ${isExpanded ? "bg-light border-bottom" : "bg-white"}`}
+                          style={{
+                            cursor: "pointer",
+                            transition: "background 0.15s",
+                          }}
+                          onClick={() =>
+                            setExpandedId(isExpanded ? null : cw.id)
+                          }
                         >
                           <div className="d-flex align-items-center gap-3 overflow-hidden">
                             <div
                               className="rounded-circle d-flex align-items-center justify-content-center text-white flex-shrink-0 shadow-sm"
-                              style={{ width: '40px', height: '40px', backgroundColor: cls.themeColor || '#1a73e8' }}
+                              style={{
+                                width: "40px",
+                                height: "40px",
+                                backgroundColor: cls.themeColor || "#1a73e8",
+                              }}
                             >
-                              <i className={`bi ${getTypeIcon(cw.type)} fs-5`}></i>
+                              <i
+                                className={`bi ${getTypeIcon(cw.type)} fs-5`}
+                              ></i>
                             </div>
                             <div className="overflow-hidden">
-                              <h6 className="fw-bold mb-1 text-dark text-truncate" style={{ fontSize: '0.98rem' }}>
+                              <h6
+                                className="fw-bold mb-1 text-dark text-truncate"
+                                style={{ fontSize: "0.98rem" }}
+                              >
                                 {cw.title}
                               </h6>
                               <span className="text-muted small">
-                                Posted {cw.postedDate || 'recently'} {cw.points ? `• ${cw.points} points` : ''}
+                                Posted {cw.postedDate || "recently"}{" "}
+                                {cw.points ? `• ${cw.points} points` : ""}
                               </span>
                             </div>
                           </div>
@@ -323,10 +683,20 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
                           <div className="d-flex align-items-center gap-3 flex-shrink-0 ms-2">
                             {cw.dueDate && (
                               <span className="text-muted small fw-medium d-none d-sm-inline">
-                                Due {cw.dueDate}
+                                Due{" "}
+                                {new Date(cw.dueDate).toLocaleDateString(
+                                  "en-US",
+                                  {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  },
+                                )}
                               </span>
                             )}
-                            <i className={`bi bi-chevron-${isExpanded ? 'up' : 'down'} text-secondary`}></i>
+                            <i
+                              className={`bi bi-chevron-${isExpanded ? "up" : "down"} text-secondary`}
+                            ></i>
                           </div>
                         </div>
 
@@ -334,53 +704,87 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
                         {isExpanded && (
                           <div className="card-body p-4 bg-white animate-fade-in">
                             <div className="row g-4">
-                              <div className={cw.stats || isTeacher ? "col-12 col-lg-8" : "col-12"}>
-                                <p className="text-dark mb-4" style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
-                                  {cw.instructions || "No instructions provided."}
+                              <div
+                                className={
+                                  cw.stats || isTeacher
+                                    ? "col-12 col-lg-8"
+                                    : "col-12"
+                                }
+                              >
+                                <p
+                                  className="text-dark mb-4"
+                                  style={{
+                                    whiteSpace: "pre-wrap",
+                                    lineHeight: "1.6",
+                                  }}
+                                >
+                                  {cw.instructions ||
+                                    "No instructions provided."}
                                 </p>
 
-                                {cw.attachments && cw.attachments.length > 0 && (
-                                  <div>
-                                    <h6 className="fw-semibold small text-muted text-uppercase mb-2">Attachments</h6>
-                                    <div className="d-flex flex-wrap gap-2">
-                                      {cw.attachments.map((att, idx) => (
-                                        <a
-                                          key={idx}
-                                          href={att.url}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="border rounded p-2 px-3 d-flex align-items-center gap-2 text-decoration-none text-dark bg-light hover-bg-white shadow-sm"
-                                        >
-                                          <i className={`bi ${att.type === 'pdf' ? 'bi-file-earmark-pdf-fill text-danger' : att.type === 'form' ? 'bi-file-earmark-check-fill text-purple' : 'bi-file-earmark-word-fill text-primary'} fs-5`}></i>
-                                          <span className="small fw-medium">{att.name}</span>
-                                        </a>
-                                      ))}
+                                {cw.attachments &&
+                                  cw.attachments.length > 0 && (
+                                    <div>
+                                      <h6 className="fw-semibold small text-muted text-uppercase mb-2">
+                                        Attachments
+                                      </h6>
+                                      <div className="d-flex flex-wrap gap-2">
+                                        {cw.attachments.map((att, idx) => (
+                                          <a
+                                            key={idx}
+                                            href={att.url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="border rounded p-2 px-3 d-flex align-items-center gap-2 text-decoration-none text-dark bg-light hover-bg-white shadow-sm"
+                                          >
+                                            <i
+                                              className={`bi ${att.type === "pdf" ? "bi-file-earmark-pdf-fill text-danger" : att.type === "form" ? "bi-file-earmark-check-fill text-purple" : "bi-file-earmark-word-fill text-primary"} fs-5`}
+                                            ></i>
+                                            <span className="small fw-medium">
+                                              {att.name}
+                                            </span>
+                                          </a>
+                                        ))}
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
+                                  )}
                               </div>
 
                               {/* Teacher Stats or Student Action Box */}
                               <div className="col-12 col-lg-4 border-start-lg">
                                 {isTeacher && cw.stats ? (
                                   <div className="p-3 bg-light rounded-3 text-center border">
-                                    <h6 className="fw-bold text-muted small text-uppercase mb-3">Submission Summary</h6>
+                                    <h6 className="fw-bold text-muted small text-uppercase mb-3">
+                                      Submission Summary
+                                    </h6>
                                     <div className="d-flex justify-content-around mb-3">
                                       <div>
-                                        <div className="fs-3 fw-bolder text-primary">{cw.stats.turnedIn}</div>
-                                        <div className="text-muted small">Turned in</div>
+                                        <div className="fs-3 fw-bolder text-primary">
+                                          {cw.stats.turnedIn}
+                                        </div>
+                                        <div className="text-muted small">
+                                          Turned in
+                                        </div>
                                       </div>
                                       <div className="border-end"></div>
                                       <div>
-                                        <div className="fs-3 fw-bolder text-dark">{cw.stats.assigned}</div>
-                                        <div className="text-muted small">Assigned</div>
+                                        <div className="fs-3 fw-bolder text-dark">
+                                          {cw.stats.assigned}
+                                        </div>
+                                        <div className="text-muted small">
+                                          Assigned
+                                        </div>
                                       </div>
                                       {cw.stats.graded !== undefined && (
                                         <>
                                           <div className="border-end"></div>
                                           <div>
-                                            <div className="fs-3 fw-bolder text-success">{cw.stats.graded}</div>
-                                            <div className="text-muted small">Graded</div>
+                                            <div className="fs-3 fw-bolder text-success">
+                                              {cw.stats.graded}
+                                            </div>
+                                            <div className="text-muted small">
+                                              Graded
+                                            </div>
                                           </div>
                                         </>
                                       )}
@@ -389,7 +793,9 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
                                       className="btn btn-sm btn-outline-primary w-100 fw-medium"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        onViewInstruction?.(cw, { openTab: 'studentWork' });
+                                        onViewInstruction?.(cw, {
+                                          openTab: "studentWork",
+                                        });
                                       }}
                                     >
                                       View submissions
@@ -398,20 +804,36 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
                                 ) : (
                                   <div className="p-3 bg-light rounded-3 border text-center">
                                     <div className="d-flex justify-content-between align-items-center mb-2">
-                                      <span className="fw-bold small text-dark">Your work</span>
-                                      <span className={`badge ${submissionStatus[cw.id] ? 'bg-success' : 'bg-warning text-dark'} small`}>
-                                        {submissionStatus[cw.id] ? 'Turned in' : 'Assigned'}
+                                      <span className="fw-bold small text-dark">
+                                        Your work
+                                      </span>
+                                      <span
+                                        className={`badge ${submissionStatus[cw.id] ? "bg-success" : "bg-warning text-dark"} small`}
+                                      >
+                                        {submissionStatus[cw.id]
+                                          ? "Turned in"
+                                          : "Assigned"}
                                       </span>
                                     </div>
-                                    <p className="text-muted small mb-3">Upload your completed files or mark as done.</p>
+                                    <p className="text-muted small mb-3">
+                                      Upload your completed files or mark as
+                                      done.
+                                    </p>
                                     <button
                                       className="btn btn-primary btn-sm w-100 fw-medium mb-2 shadow-sm"
                                       onClick={() => handleStudentTurnIn(cw)}
-                                      disabled={submissionStatus[cw.id] || submittingId === cw.id}
+                                      disabled={
+                                        submissionStatus[cw.id] ||
+                                        submittingId === cw.id
+                                      }
                                     >
-                                      {submissionStatus[cw.id] ? 'Turned in' : '+ Add or Create & Turn In'}
+                                      {submissionStatus[cw.id]
+                                        ? "Turned in"
+                                        : "+ Add or Create & Turn In"}
                                     </button>
-                                    <button className="btn btn-outline-secondary btn-sm w-100 fw-medium">Mark as done</button>
+                                    <button className="btn btn-outline-secondary btn-sm w-100 fw-medium">
+                                      Mark as done
+                                    </button>
                                   </div>
                                 )}
                               </div>
@@ -419,7 +841,8 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
 
                             <div className="border-top mt-4 pt-3 d-flex justify-content-between align-items-center">
                               <button className="btn btn-link btn-sm p-0 text-decoration-none fw-medium text-secondary">
-                                <i className="bi bi-chat-left-text me-1"></i> Add class comment
+                                <i className="bi bi-chat-left-text me-1"></i>{" "}
+                                Add class comment
                               </button>
                               <button
                                 className="btn btn-link btn-sm p-0 text-decoration-none fw-medium text-primary"
@@ -442,26 +865,120 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
           ) : (
             <div className="text-center py-5 bg-white border rounded-3 shadow-sm">
               <i className="bi bi-journal-check text-muted fs-1 mb-2"></i>
-              <h6 className="fw-semibold text-dark">No coursework in this topic</h6>
-              <p className="text-muted small mb-0">Check another topic or click "+ Create" to assign work.</p>
+              <h6 className="fw-semibold text-dark">
+                No coursework in this topic
+              </h6>
+              <p className="text-muted small mb-0">
+                Check another topic or click "+ Create" to assign work.
+              </p>
             </div>
           )}
         </div>
       </div>
 
+      {/* Topic Actions Modal */}
+      {showTopicActionModal && editingTopicId && (
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
+          tabIndex="-1"
+        >
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content border-0 shadow-lg rounded-4">
+              <div className="modal-header border-bottom px-4 pt-4 pb-3">
+                <h5 className="modal-title font-google fw-bold">
+                  Manage topic
+                </h5>
+                <button
+                  className="btn-close"
+                  onClick={() => {
+                    setShowTopicActionModal(false);
+                    setEditingTopicId(null);
+                    setEditingTopicName("");
+                    setTopicActionMenuId(null);
+                  }}
+                ></button>
+              </div>
+              <div className="modal-body p-4">
+                <label className="form-label small fw-bold text-muted">
+                  Topic name
+                </label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={editingTopicName}
+                  onChange={(e) => setEditingTopicName(e.target.value)}
+                  placeholder="Enter topic name"
+                  autoFocus
+                />
+              </div>
+              <div className="modal-footer border-top px-4 py-3">
+                <button
+                  type="button"
+                  className="btn btn-light fw-medium px-4"
+                  onClick={() => {
+                    setShowTopicActionModal(false);
+                    setEditingTopicId(null);
+                    setEditingTopicName("");
+                    setTopicActionMenuId(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline-danger fw-medium px-4"
+                  onClick={() => {
+                    const topicMeta = topicOptions.find(
+                      (item) => item.id === editingTopicId,
+                    );
+                    if (topicMeta) handleDeleteTopic(topicMeta);
+                  }}
+                  disabled={isDeletingTopic}
+                >
+                  {isDeletingTopic ? "Deleting..." : "Delete"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary fw-medium px-4"
+                  onClick={() => {
+                    const topicMeta = topicOptions.find(
+                      (item) => item.id === editingTopicId,
+                    );
+                    if (topicMeta) handleRenameTopic(topicMeta);
+                  }}
+                  disabled={isUpdatingTopic || !editingTopicName.trim()}
+                >
+                  {isUpdatingTopic ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add Topic Modal */}
       {showTopicModal && (
-        <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }} tabIndex="-1">
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
+          tabIndex="-1"
+        >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content border-0 shadow-lg rounded-4">
               <div className="modal-header border-bottom px-4 pt-4 pb-3">
                 <h5 className="modal-title font-google fw-bold">Add topic</h5>
-                <button className="btn-close" onClick={() => setShowTopicModal(false)}></button>
+                <button
+                  className="btn-close"
+                  onClick={() => setShowTopicModal(false)}
+                ></button>
               </div>
 
               <form onSubmit={handleAddTopic}>
                 <div className="modal-body p-4">
-                  <label className="form-label small fw-bold text-muted">Topic name</label>
+                  <label className="form-label small fw-bold text-muted">
+                    Topic name
+                  </label>
                   <input
                     type="text"
                     className="form-control"
@@ -474,11 +991,19 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
                 </div>
 
                 <div className="modal-footer border-top px-4 py-3">
-                  <button type="button" className="btn btn-light fw-medium px-4" onClick={() => setShowTopicModal(false)}>
+                  <button
+                    type="button"
+                    className="btn btn-light fw-medium px-4"
+                    onClick={() => setShowTopicModal(false)}
+                  >
                     Cancel
                   </button>
-                  <button type="submit" className="btn btn-primary fw-medium px-4">
-                    Add topic
+                  <button
+                    type="submit"
+                    className="btn btn-primary fw-medium px-4"
+                    disabled={isCreatingTopic}
+                  >
+                    {isCreatingTopic ? "Adding..." : "Add topic"}
                   </button>
                 </div>
               </form>
@@ -489,14 +1014,21 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
 
       {/* Create Coursework Modal */}
       {showCreateModal && (
-        <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }} tabIndex="-1">
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
+          tabIndex="-1"
+        >
           <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content border-0 shadow-lg rounded-4">
               <div className="modal-header border-bottom px-4 pt-4 pb-3">
                 <h5 className="modal-title font-google fw-bold text-capitalize">
-                  Create {createType.replace('-', ' ')}
+                  Create {createType.replace("-", " ")}
                 </h5>
-                <button className="btn-close" onClick={() => setShowCreateModal(false)}></button>
+                <button
+                  className="btn-close"
+                  onClick={() => setShowCreateModal(false)}
+                ></button>
               </div>
 
               <form onSubmit={handleCreateSubmit}>
@@ -520,48 +1052,123 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
                       className="form-control"
                       id="cwInstr"
                       placeholder="Instructions (optional)"
-                      style={{ minHeight: '120px' }}
+                      style={{ minHeight: "120px" }}
                       value={cwInstructions}
                       onChange={(e) => setCwInstructions(e.target.value)}
                     />
                     <label htmlFor="cwInstr">Instructions (optional)</label>
                   </div>
 
-                  {createType === 'assignment' && (
+                  {createType === "assignment" && (
                     <div className="mb-3">
-                      <label className="form-label small fw-bold text-muted">Attachments (optional)</label>
+                      <label className="form-label small fw-bold text-muted">
+                        Attachments (optional)
+                      </label>
                       <input
                         type="file"
                         className="form-control"
                         multiple
-                        onChange={(e) => setCwAttachments(Array.from(e.target.files || []))}
+                        onChange={(e) =>
+                          setCwAttachments(Array.from(e.target.files || []))
+                        }
                       />
                     </div>
                   )}
 
                   <div className="row g-3 mb-3">
                     <div className="col-12 col-md-4">
-                      <label className="form-label small fw-bold text-muted">Topic</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        list="topic-suggestions"
-                        value={cwTopic}
-                        onChange={(e) => setCwTopic(e.target.value)}
-                        placeholder="Enter or choose a topic"
-                      />
-                      <datalist id="topic-suggestions">
-                        {topics.filter(t => t !== 'All topics').map((t, i) => (
-                          <option key={i} value={t} />
-                        ))}
-                      </datalist>
-                      <small className="form-text text-muted">You can type a new topic or pick one from the list.</small>
+                      <label className="form-label small fw-bold text-muted">
+                        Topic
+                      </label>
+
+                      {!isCreatingNewTopic ? (
+                        <>
+                          <select
+                            className="form-select"
+                            value={cwTopicId ? String(cwTopicId) : ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "__new__") {
+                                setIsCreatingNewTopic(true);
+                                setCwTopic("");
+                                setCwTopicId(null);
+                                return;
+                              }
+                              const matchedTopic = availableTopics.find(
+                                (topic) => String(topic.id) === val,
+                              );
+                              setCwTopic(matchedTopic?.name || "");
+                              setCwTopicId(matchedTopic?.id ?? null);
+                            }}
+                          >
+                            <option value="">Select a topic</option>
+                            {topicOptions.map((topic) => {
+                              // Ensure the label is a string
+                              const label =
+                                typeof topic.name === "string"
+                                  ? topic.name
+                                  : "Unnamed topic";
+                              return (
+                                <option
+                                  key={topic.id ?? topic.name}
+                                  value={String(topic.id ?? topic.name)}
+                                >
+                                  {label}
+                                </option>
+                              );
+                            })}
+                            <option value="__new__">➕ Create new topic</option>
+                          </select>
+                        </>
+                      ) : (
+                        <>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={cwTopic}
+                            onChange={(e) => {
+                              setCwTopic(e.target.value);
+                              setCwTopicId(null);
+                            }}
+                            placeholder="Enter new topic name"
+                            autoFocus
+                          />
+                          <div className="mt-2">
+                            <button
+                              type="button"
+                              className="btn btn-link btn-sm p-0 text-decoration-none"
+                              onClick={() => {
+                                setIsCreatingNewTopic(false);
+                                // Reset dropdown to the first available topic or "General"
+                                if (availableTopics.length > 0) {
+                                  const first = availableTopics[0];
+                                  setCwTopic(first.name);
+                                  setCwTopicId(first.id);
+                                } else {
+                                  setCwTopic("General");
+                                  setCwTopicId(null);
+                                }
+                              }}
+                            >
+                              ← Choose existing topic
+                            </button>
+                          </div>
+                        </>
+                      )}
+
+                      <small className="form-text text-muted d-block mt-1">
+                        {!isCreatingNewTopic
+                          ? "Pick an existing topic or create a new one"
+                          : "Type a new topic name"}
+                      </small>
                     </div>
 
-                    {createType !== 'material' && (
+                    {createType !== "material" && (
                       <>
                         <div className="col-6 col-md-4">
-                          <label className="form-label small fw-bold text-muted">Points</label>
+                          <label className="form-label small fw-bold text-muted">
+                            Points
+                          </label>
                           <input
                             type="number"
                             className="form-control"
@@ -572,7 +1179,9 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
                           />
                         </div>
                         <div className="col-6 col-md-4">
-                          <label className="form-label small fw-bold text-muted">Due Date</label>
+                          <label className="form-label small fw-bold text-muted">
+                            Due Date
+                          </label>
                           <input
                             type="date"
                             className="form-control"
@@ -586,16 +1195,24 @@ const ClassworkTab = ({ cls, user, onCreateCoursework, onSubmitCoursework, onVie
                 </div>
 
                 <div className="modal-footer border-top px-4 py-3">
-                  <button type="button" className="btn btn-light fw-medium px-4" onClick={() => setShowCreateModal(false)}>
+                  <button
+                    type="button"
+                    className="btn btn-light fw-medium px-4"
+                    onClick={() => setShowCreateModal(false)}
+                  >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     className="btn text-white fw-medium px-4"
-                    style={{ backgroundColor: cls.themeColor || '#1a73e8' }}
+                    style={{ backgroundColor: cls.themeColor || "#1a73e8" }}
                     disabled={!cwTitle.trim() || isSubmitting}
                   >
-                    {isSubmitting ? 'Creating...' : createType === 'assignment' ? 'Create assignment' : 'Assign'}
+                    {isSubmitting
+                      ? "Creating..."
+                      : createType === "assignment"
+                        ? "Create assignment"
+                        : "Assign"}
                   </button>
                 </div>
               </form>

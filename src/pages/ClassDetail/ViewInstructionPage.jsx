@@ -261,6 +261,23 @@ const ViewInstructionPage = ({
     );
   }
 
+  const normalizeTopicValue = (value) => {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed || '';
+    }
+
+    if (!value || typeof value !== 'object') return '';
+
+    const derivedName = value.topic_name || value.name || value.topicName || value.label || value.title || value.topic;
+    if (typeof derivedName === 'string') {
+      const trimmed = derivedName.trim();
+      return trimmed || '';
+    }
+
+    return '';
+  };
+
   const getRoleString = (u) => {
     if (!u) return "";
 
@@ -283,6 +300,11 @@ const ViewInstructionPage = ({
   const isTeacher =
     ["teacher", "instructor", "teacher/instructor"].includes(roleStr) ||
     Boolean(user?.is_teacher || user?.isTeacher);
+  const displayTopic =
+    typeof coursework.topic === 'string'
+      ? coursework.topic.trim() || 'No topic'
+      : normalizeTopicValue(coursework.topic) || 'No topic';
+
   const cwStats = coursework.stats || { turnedIn: 0, assigned: 0, graded: 0 };
   const totalStudents = students.length;
   const turnedInCount = cwStats.turnedIn;
@@ -393,7 +415,7 @@ const ViewInstructionPage = ({
                 {coursework.title}
               </h3>
               <div className="small text-white text-opacity-90">
-                {cls.name} • {coursework.topic || "No topic"}
+                {cls.name} • {displayTopic}
               </div>
             </div>
           </div>
@@ -489,7 +511,7 @@ const ViewInstructionPage = ({
                     Topic
                   </div>
                   <div className="fw-bold text-dark text-truncate">
-                    {coursework.topic || "None"}
+                    {displayTopic}
                   </div>
                 </div>
                 <div className="col-6 col-md-3">

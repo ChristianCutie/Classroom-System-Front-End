@@ -15,6 +15,7 @@ const ClassDetailPage = ({
   onAddComment,
   onCreateCoursework,
   onSubmitCoursework,
+  onCreateTopic,
   onUpdateGrade,
   onUpdateClassBanner,
   onDiscussionCreated
@@ -37,6 +38,23 @@ const ClassDetailPage = ({
     setSelectedCoursework(null);
     setInstructionViewTab('instructions');
     setActiveTab('classwork');
+  };
+
+  const normalizeTopicValue = (value) => {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed || '';
+    }
+
+    if (!value || typeof value !== 'object') return '';
+
+    const derivedName = value.topic_name || value.name || value.topicName || value.label || value.title || value.topic;
+    if (typeof derivedName === 'string') {
+      const trimmed = derivedName.trim();
+      return trimmed || '';
+    }
+
+    return '';
   };
 
   // Build grade matrix for the selected class so teacher view can read grades
@@ -79,7 +97,7 @@ const ClassDetailPage = ({
             dueDate: a.due_date || a.dueDate || null,
             points: a.max_points ?? a.maxPoints ?? null,
             type: 'assignment',
-            topic: a.topic || 'General',
+            topic: normalizeTopicValue(a.topic) || 'General',
             instructions: a.instructions || a.description || 'No instructions provided.',
             attachments: (a.attachments || []).map(att => ({
               id: att.id,
@@ -208,6 +226,7 @@ const ClassDetailPage = ({
                 user={user}
                 onCreateCoursework={onCreateCoursework}
                 onSubmitCoursework={onSubmitCoursework}
+                onCreateTopic={onCreateTopic}
                 onViewInstruction={handleViewInstruction}
                 classwork={classworkFromApi || cls.classwork || []}
               />

@@ -270,6 +270,52 @@ const App = () => {
     }
   };
 
+  const handleCreateTopic = async (topicName) => {
+    try {
+      const trimmedTopic = String(topicName || '').trim();
+      if (!trimmedTopic) return false;
+
+      const res = await apiClient.post('/create/topics', {
+        topic_name: trimmedTopic,
+      });
+
+      const createdTopic = res.data?.data;
+      const topicLabel = createdTopic?.topic_name || trimmedTopic;
+      const normalizedTopic = {
+        id: createdTopic?.id ?? createdTopic?.topic_id ?? null,
+        name: topicLabel,
+      };
+
+      setClasses(prev =>
+        prev.map(clsItem =>
+          clsItem.id === selectedClass?.id
+            ? {
+                ...clsItem,
+                topics: Array.from(new Set([...(clsItem.topics || []), topicLabel])),
+              }
+            : clsItem
+        )
+      );
+
+      setSelectedClass(prev =>
+        prev?.id === selectedClass?.id
+          ? {
+              ...prev,
+              topics: Array.from(new Set([...(prev.topics || []), topicLabel])),
+            }
+          : prev
+      );
+
+      addToast('Topic created.', 'success');
+      return normalizedTopic;
+    } catch (err) {
+      console.error('Create topic error:', err);
+      const message = err?.response?.data?.message || 'Could not create the topic.';
+      addToast(message, 'error');
+      return false;
+    }
+  };
+
   const handleCreateCoursework = async (classId, cwData) => {
     try {
       if (cwData?.type === 'assignment') {
@@ -590,6 +636,7 @@ const App = () => {
                       onPostAnnouncement={handlePostAnnouncement}
                       onAddComment={handleAddComment}
                       onCreateCoursework={handleCreateCoursework}
+                      onCreateTopic={handleCreateTopic}
                       onSubmitCoursework={handleSubmitCoursework}
                       onUpdateGrade={handleUpdateGrade}
                       onUpdateClassBanner={handleUpdateClassBanner}
