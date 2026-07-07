@@ -255,6 +255,7 @@ const ViewInstructionPage = ({
   const [showMarkAsDoneModal, setShowMarkAsDoneModal] = useState(false);
   const [markAsDoneFiles, setMarkAsDoneFiles] = useState([]);
   const [isMarkingAsDone, setIsMarkingAsDone] = useState(false);
+  const autoOpenReviewRef = useRef(false);
 
   if (!coursework) {
     return (
@@ -345,10 +346,37 @@ const ViewInstructionPage = ({
   const studentsWithoutWork = students.filter(
     (st) => !submittedStudentIds.has(st.id)
   );
+  const hasSubmittedWork = Boolean(
+    coursework?.submitted ||
+      coursework?.userSubmission?.status === "submitted" ||
+      coursework?.userSubmission?.status === "turned_in" ||
+      coursework?.userSubmission?.status === "graded" ||
+      coursework?.status === "submitted" ||
+      coursework?.status === "turned_in" ||
+      coursework?.status === "graded" ||
+      submissions.some((sub) => ["submitted", "turned_in", "graded"].includes(sub?.status))
+  );
 
   useEffect(() => {
     setActiveTab(defaultActiveTab || "instructions");
   }, [defaultActiveTab]);
+
+  useEffect(() => {
+    autoOpenReviewRef.current = false;
+  }, [coursework?.id]);
+
+  useEffect(() => {
+    if (!isTeacher || activeTab !== "studentWork" || autoOpenReviewRef.current) {
+      return;
+    }
+
+    if (!hasSubmittedWork || studentsWithWork.length === 0) {
+      return;
+    }
+
+    autoOpenReviewRef.current = true;
+    setSelectedStudentId(studentsWithWork[0].id);
+  }, [activeTab, isTeacher, hasSubmittedWork, studentsWithWork.length, studentsWithWork[0]?.id]);
 
   useEffect(() => {
     const submitted = Boolean(
