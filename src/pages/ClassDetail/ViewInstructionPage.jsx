@@ -249,6 +249,8 @@ const ViewInstructionPage = ({
   const [selectedAttachmentByStudent, setSelectedAttachmentByStudent] =
     useState({});
   const [privateFeedbackByStudent, setPrivateFeedbackByStudent] = useState({});
+  const [draftGradesByStudent, setDraftGradesByStudent] = useState({});
+  const [savingStudentId, setSavingStudentId] = useState(null);
 
   if (!coursework) {
     return (
@@ -335,6 +337,14 @@ const ViewInstructionPage = ({
     coursework?.userSubmission?.status,
   ]);
 
+  useEffect(() => {
+    const nextDrafts = {};
+    students.forEach((st) => {
+      nextDrafts[st.id] = gradeMatrix?.[st.id]?.[coursework.id] ?? null;
+    });
+    setDraftGradesByStudent(nextDrafts);
+  }, [students, coursework?.id, gradeMatrix]);
+
   const handleAddComment = () => {
     if (!studentComment.trim()) return;
     const newComment = {
@@ -349,9 +359,28 @@ const ViewInstructionPage = ({
     setStudentComment("");
   };
 
-  const handleGradeStudent = (studentId, score) => {
-    if (onUpdateGrade) {
-      onUpdateGrade(cls.id, studentId, coursework.id, score);
+  const handleGradeInputChange = (studentId, score) => {
+    setDraftGradesByStudent((prev) => ({
+      ...prev,
+      [studentId]: score,
+    }));
+  };
+
+  const handleSaveStudentReview = async (studentId) => {
+    const score = draftGradesByStudent[studentId];
+    const feedback = privateFeedbackByStudent[studentId] || "";
+
+    if (score === null || score === undefined || score === "") {
+      return;
+    }
+
+    setSavingStudentId(studentId);
+    try {
+      if (onUpdateGrade) {
+        await onUpdateGrade(cls.id, studentId, coursework.id, score, feedback);
+      }
+    } finally {
+      setSavingStudentId(null);
     }
   };
 
@@ -767,10 +796,14 @@ const ViewInstructionPage = ({
                 {studentsWithWork.length > 0 ? (
                   <div className="d-flex flex-column gap-3">
                     {studentsWithWork.map((st) => {
-                      const currentGrade =
+                      const savedGrade =
                         gradeMatrix?.[st.id]?.[coursework.id];
+                      const currentGrade =
+                        draftGradesByStudent[st.id] ?? savedGrade ?? "";
                       const isGraded =
-                        currentGrade !== null && currentGrade !== undefined;
+                        currentGrade !== null && currentGrade !== undefined && currentGrade !== "";
+                      const hasPendingGradeChanges =
+                        String(currentGrade ?? "") !== String(savedGrade ?? "");
                       const studentName =
                         st?.name || st?.full_name || st?.email || "Student";
                       const studentFirstName =
@@ -882,10 +915,10 @@ const ViewInstructionPage = ({
                                     <label className="form-label small fw-bold text-muted mb-1">
                                       Grade
                                     </label>
-                                    <div className="d-flex align-items-center gap-2">
+                                    <div className="d-flex align-items-center gap-2 mb-3">
                                       <input
                                         type="number"
-                                        className="form-control w-50" // auto width, fits content
+                                        className="form-control w-50"
                                         placeholder="--"
                                         min="0"
                                         max={coursework.points || 100}
@@ -895,12 +928,26 @@ const ViewInstructionPage = ({
                                             e.target.value === ""
                                               ? null
                                               : Number(e.target.value);
-                                          handleGradeStudent(st.id, val);
+                                          handleGradeInputChange(st.id, val);
                                         }}
                                       />
                                       <span className="text-muted small">
                                         / {coursework.points ?? 100}
                                       </span>
+                                    </div>
+
+                                    <div className="d-grid gap-2 mb-3">
+                                      <button
+                                        className="btn btn-outline-success btn-sm"
+                                        onClick={() => handleSaveStudentReview(st.id)}
+                                        disabled={
+                                          savingStudentId === st.id || !hasPendingGradeChanges
+                                        }
+                                      >
+                                        {savingStudentId === st.id
+                                          ? "Saving..."
+                                          : "Save grade"}
+                                      </button>
                                     </div>
 
                                     <label className="form-label small fw-bold text-muted mb-1">

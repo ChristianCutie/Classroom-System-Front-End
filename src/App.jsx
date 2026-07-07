@@ -424,7 +424,7 @@ const App = () => {
     }
   };
 
-  const handleUpdateGrade = async (classId, studentId, cwId, newScore) => {
+  const handleUpdateGrade = async (classId, studentId, cwId, newScore, feedback = null) => {
     try {
       // Try to find the submission ID for this student & coursework
       const classObj = classes.find(c => c.id === classId) || selectedClass;
@@ -455,7 +455,10 @@ const App = () => {
       if (!submissionId) submissionId = await tryFetchDetails(`/assignments/${cwId}`);
 
       if (submissionId) {
-        await apiClient.post(`/submissions/${submissionId}/grade`, { grade: newScore });
+        await apiClient.post(`/submissions/${submissionId}/grade`, {
+          grade: newScore,
+          feedback: feedback ?? '',
+        });
         await fetchClasses();
         addToast('Submission graded.', 'success');
         return;
