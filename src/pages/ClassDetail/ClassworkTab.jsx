@@ -822,7 +822,7 @@ const ClassworkTab = ({
                       const topicMeta = topicOptions.find(
                         (item) => item.name === topicName,
                       );
-                      return topicMeta?.id ? (
+                      return isTeacher && topicMeta?.id ? (
                         <div className="position-relative">
                           <button
                             type="button"

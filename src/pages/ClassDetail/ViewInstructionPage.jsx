@@ -369,6 +369,49 @@ const ViewInstructionPage = ({
     }
   };
 
+  // Format file display name and date
+  const getFileDisplayInfo = (file, submittedAt) => {
+    // Get the original name (prioritize original_name, fallback to file_name/filename)
+    const originalName =
+      file.original_name ||
+      file.original_filename ||
+      file.original_file_name ||
+      file.file_name ||
+      file.filename ||
+      "file";
+
+    // Split into base and extension
+    const lastDot = originalName.lastIndexOf(".");
+    let baseName = originalName;
+    let ext = "";
+    if (lastDot > 0) {
+      baseName = originalName.substring(0, lastDot);
+      ext = originalName.substring(lastDot); // includes the dot, e.g. ".pdf"
+    }
+
+    // Truncate base if too long (e.g., 20 chars)
+    const maxLen = 20;
+    let displayName = originalName;
+    if (baseName.length > maxLen) {
+      displayName = baseName.substring(0, maxLen) + "..." + ext;
+    }
+
+    // Format submission date
+    let dateStr = "";
+    if (submittedAt) {
+      const date = new Date(submittedAt);
+      if (!isNaN(date)) {
+        dateStr = date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+      }
+    }
+
+    return { displayName, dateStr, originalName };
+  };
+
   // ---------- Helper functions ----------
   const normalizeTopicValue = (value) => {
     if (typeof value === "string") {
@@ -1595,18 +1638,20 @@ const ViewInstructionPage = ({
                                   handleSendStudentPrivateComment();
                                 }
                               }}
-                              disabled={
-                                !studentSubmission?.submission?.id ||
-                                isSendingStudentComment
-                              }
+                              disabled={isSendingStudentComment} // Only disabled while sending
                             />
                             <button
-                              className="btn btn-primary rounded-pill px-3"
+                              className="btn btn-lg border-0 px-1"
                               onClick={handleSendStudentPrivateComment}
                               disabled={
-                                !studentSubmission?.submission?.id ||
+                                !studentSubmission?.submission?.id || // Requires a submission ID
                                 isSendingStudentComment ||
                                 !studentPrivateCommentInput.trim()
+                              }
+                              title={
+                                !studentSubmission?.submission?.id
+                                  ? "You need to submit the assignment first to send a comment."
+                                  : ""
                               }
                             >
                               {isSendingStudentComment ? (
@@ -1621,12 +1666,14 @@ const ViewInstructionPage = ({
                             </button>
                           </div>
                         </div>
-                        {!studentSubmission?.submission?.id && (
-                          <div className="text-muted small mt-2">
-                            You need to submit the assignment first to send a
-                            private comment.
-                          </div>
-                        )}
+                        {!studentSubmission?.submission?.id &&
+                          studentPrivateCommentInput.trim() && (
+                            <div className="text-muted small mt-2">
+                              <i className="bi bi-info-circle me-1"></i>
+                              This comment will be included when you turn in the
+                              assignment.
+                            </div>
+                          )}
                       </div>
                     </div>
 
@@ -1680,22 +1727,51 @@ const ViewInstructionPage = ({
                                             "file",
                                           type: file.file_type || "pdf",
                                           url: file.file_url || file.url || "#",
+                                          originalName:
+                                            file.original_name ||
+                                            file.original_filename ||
+                                            file.file_name ||
+                                            file.filename,
                                         };
+
+                                        const { displayName, dateStr } =
+                                          getFileDisplayInfo(
+                                            file,
+                                            studentSubmission.submission
+                                              .submitted_at,
+                                          );
+
                                         return (
-                                          <a
+                                          <div
                                             key={idx}
-                                            href={fileObj.url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="border rounded p-2 px-3 d-flex align-items-center gap-2 text-decoration-none text-dark bg-white shadow-sm"
+                                            className="border rounded p-2 px-3 d-flex flex-column align-items-start text-decoration-none text-dark bg-white shadow-sm w-100"
+                                            style={{ minWidth: "120px" }}
                                           >
-                                            <i
-                                              className={`bi ${getPreviewIcon(fileObj)} fs-5`}
-                                            ></i>
-                                            <span className="small fw-medium">
-                                              {fileObj.name}
-                                            </span>
-                                          </a>
+                                            <a
+                                              href={fileObj.url}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="d-flex align-items-center gap-2 text-decoration-none text-dark w-100"
+                                            >
+                                              <i
+                                                className={`bi ${getPreviewIcon(fileObj)} fs-5`}
+                                              ></i>
+                                              <span className="small fw-medium">
+                                                {displayName}
+                                              </span>
+                                            </a>
+                                            {dateStr && (
+                                              <span
+                                                className="text-muted small"
+                                                style={{
+                                                  fontSize: "0.7rem",
+                                                  marginLeft: "2rem",
+                                                }}
+                                              >
+                                                {dateStr}
+                                              </span>
+                                            )}
+                                          </div>
                                         );
                                       },
                                     )}
@@ -1741,7 +1817,7 @@ const ViewInstructionPage = ({
 
                             <div className="border-top pt-3">
                               <button
-                                className="btn btn-primary w-100"
+                                className="btn btn-outline-primary w-100"
                                 onClick={() => setShowTurnInModal(true)}
                               >
                                 <i className="bi bi-arrow-repeat me-1"></i>{" "}
