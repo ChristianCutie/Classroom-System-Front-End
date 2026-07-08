@@ -17,11 +17,39 @@ const getFileExtension = (file) => {
 const getPreviewMode = (file) => {
   const type = String(file?.type || "").toLowerCase();
   const ext = getFileExtension(file);
-  if (["png","jpg","jpeg","gif","webp","svg","bmp","ico"].includes(ext) || type.includes("image")) return "image";
+  if (
+    ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"].includes(ext) ||
+    type.includes("image")
+  )
+    return "image";
   if (ext === "pdf" || type === "pdf") return "pdf";
   if (ext === "docx" || type === "docx") return "docx";
-  if (["doc","xls","xlsx","ppt","pptx","odt","ods","odp","txt","csv","rtf"].includes(ext) ||
-      ["word","excel","sheet","spreadsheet","powerpoint","presentation","document","text","csv"].includes(type))
+  if (
+    [
+      "doc",
+      "xls",
+      "xlsx",
+      "ppt",
+      "pptx",
+      "odt",
+      "ods",
+      "odp",
+      "txt",
+      "csv",
+      "rtf",
+    ].includes(ext) ||
+    [
+      "word",
+      "excel",
+      "sheet",
+      "spreadsheet",
+      "powerpoint",
+      "presentation",
+      "document",
+      "text",
+      "csv",
+    ].includes(type)
+  )
     return "office";
   return "unsupported";
 };
@@ -30,7 +58,22 @@ const getPreviewUrl = (file) => {
   const url = file?.url;
   if (!url || url === "#") return null;
   const ext = getFileExtension(file);
-  if (["doc","docx","xls","xlsx","ppt","pptx","odt","ods","odp","txt","csv","rtf"].includes(ext)) {
+  if (
+    [
+      "doc",
+      "docx",
+      "xls",
+      "xlsx",
+      "ppt",
+      "pptx",
+      "odt",
+      "ods",
+      "odp",
+      "txt",
+      "csv",
+      "rtf",
+    ].includes(ext)
+  ) {
     return `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(url)}`;
   }
   return url;
@@ -38,11 +81,16 @@ const getPreviewUrl = (file) => {
 
 const getPreviewIcon = (file) => {
   switch (getPreviewMode(file)) {
-    case "image": return "bi-image-fill text-success";
-    case "pdf": return "bi-file-earmark-pdf-fill text-danger";
-    case "docx": return "bi-file-earmark-word-fill text-primary";
-    case "office": return "bi-file-earmark-word-fill text-primary";
-    default: return "bi-file-earmark-text-fill text-secondary";
+    case "image":
+      return "bi-image-fill text-success";
+    case "pdf":
+      return "bi-file-earmark-pdf-fill text-danger";
+    case "docx":
+      return "bi-file-earmark-word-fill text-primary";
+    case "office":
+      return "bi-file-earmark-word-fill text-primary";
+    default:
+      return "bi-file-earmark-text-fill text-secondary";
   }
 };
 
@@ -80,37 +128,79 @@ const SubmissionFilePreview = ({ file }) => {
       }
     };
     renderPreview();
-    return () => { cancelled = true; if (containerRef.current) containerRef.current.innerHTML = ""; };
+    return () => {
+      cancelled = true;
+      if (containerRef.current) containerRef.current.innerHTML = "";
+    };
   }, [file?.id, file?.name, file?.url, previewMode, previewUrl]);
 
   if (previewMode === "pdf" && previewUrl) {
-    return <iframe title="Preview" src={previewUrl} className="w-100" style={{ minHeight: "420px", border: 0 }} />;
+    return (
+      <iframe
+        title="Preview"
+        src={previewUrl}
+        className="w-100"
+        style={{ minHeight: "420px", border: 0 }}
+      />
+    );
   }
   if (previewMode === "image" && previewUrl) {
     return (
-      <div className="d-flex justify-content-center align-items-center p-3 bg-white" style={{ minHeight: "420px" }}>
-        <img src={previewUrl} alt={file?.name || "Preview"} style={{ maxWidth: "100%", maxHeight: "400px", objectFit: "contain" }} />
+      <div
+        className="d-flex justify-content-center align-items-center p-3 bg-white"
+        style={{ minHeight: "420px" }}
+      >
+        <img
+          src={previewUrl}
+          alt={file?.name || "Preview"}
+          style={{ maxWidth: "100%", maxHeight: "400px", objectFit: "contain" }}
+        />
       </div>
     );
   }
   if (previewMode === "docx" && previewUrl) {
     return (
       <div className="p-3 bg-white" style={{ minHeight: "420px" }}>
-        <div ref={containerRef} className="docx-preview-container" style={{ minHeight: "380px", overflow: "auto" }} />
-        {previewError && <p className="text-muted small mt-2 mb-0">{previewError}</p>}
+        <div
+          ref={containerRef}
+          className="docx-preview-container"
+          style={{ minHeight: "380px", overflow: "auto" }}
+        />
+        {previewError && (
+          <p className="text-muted small mt-2 mb-0">{previewError}</p>
+        )}
       </div>
     );
   }
   if (previewMode === "office" && previewUrl) {
-    return <iframe title="Preview" src={previewUrl} className="w-100" style={{ minHeight: "420px", border: 0 }} />;
+    return (
+      <iframe
+        title="Preview"
+        src={previewUrl}
+        className="w-100"
+        style={{ minHeight: "420px", border: 0 }}
+      />
+    );
   }
   return (
-    <div className="d-flex flex-column justify-content-center align-items-center text-center p-5" style={{ minHeight: "420px" }}>
+    <div
+      className="d-flex flex-column justify-content-center align-items-center text-center p-5"
+      style={{ minHeight: "420px" }}
+    >
       <i className="bi bi-file-earmark-text fs-1 text-muted mb-3"></i>
       <h6 className="fw-semibold text-dark">Preview unavailable</h6>
-      <p className="text-muted small mb-0">This file type cannot be previewed directly in the browser.</p>
+      <p className="text-muted small mb-0">
+        This file type cannot be previewed directly in the browser.
+      </p>
       {previewUrl && (
-        <a href={previewUrl} target="_blank" rel="noreferrer" className="btn btn-outline-primary btn-sm mt-3">Open file</a>
+        <a
+          href={previewUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="btn btn-outline-primary btn-sm mt-3"
+        >
+          Open file
+        </a>
       )}
     </div>
   );
@@ -129,7 +219,9 @@ const ViewInstructionPage = ({
   onReturnWork,
   defaultActiveTab = "instructions",
 }) => {
-  const [activeTab, setActiveTab] = useState(defaultActiveTab || "instructions");
+  const [activeTab, setActiveTab] = useState(
+    defaultActiveTab || "instructions",
+  );
   const [studentComment, setStudentComment] = useState("");
   const [privateComments, setPrivateComments] = useState([]);
   const [selectedStudentId, setSelectedStudentId] = useState(null);
@@ -137,19 +229,26 @@ const ViewInstructionPage = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedSubmissionFiles, setSelectedSubmissionFiles] = useState([]);
   const [submissionMessage, setSubmissionMessage] = useState("");
-  const [selectedAttachmentByStudent, setSelectedAttachmentByStudent] = useState({});
+  const [selectedAttachmentByStudent, setSelectedAttachmentByStudent] =
+    useState({});
   const [privateFeedbackByStudent, setPrivateFeedbackByStudent] = useState({});
   const [draftGradesByStudent, setDraftGradesByStudent] = useState({});
   const [savingStudentId, setSavingStudentId] = useState(null);
+  const [returningStudentId, setReturningStudentId] = useState(null);
   const [showMarkAsDoneModal, setShowMarkAsDoneModal] = useState(false);
   const [markAsDoneFiles, setMarkAsDoneFiles] = useState([]);
   const [isMarkingAsDone, setIsMarkingAsDone] = useState(false);
   const autoOpenReviewRef = useRef(false);
 
-  // ---------- NEW: All submissions map and loading state ----------
+  // ---------- Teacher: all submissions map ----------
   const [submissionsMap, setSubmissionsMap] = useState({});
   const [isLoadingAllSubmissions, setIsLoadingAllSubmissions] = useState(false);
   const [fetchError, setFetchError] = useState(null);
+
+  // ---------- Student: own submission data ----------
+  const [studentSubmission, setStudentSubmission] = useState(null);
+  const [isLoadingStudentSubmission, setIsLoadingStudentSubmission] =
+    useState(false);
 
   // ---------- Helper functions ----------
   const normalizeTopicValue = (value) => {
@@ -158,7 +257,13 @@ const ViewInstructionPage = ({
       return trimmed || "";
     }
     if (!value || typeof value !== "object") return "";
-    const derivedName = value.topic_name || value.name || value.topicName || value.label || value.title || value.topic;
+    const derivedName =
+      value.topic_name ||
+      value.name ||
+      value.topicName ||
+      value.label ||
+      value.title ||
+      value.topic;
     if (typeof derivedName === "string") {
       const trimmed = derivedName.trim();
       return trimmed || "";
@@ -179,13 +284,22 @@ const ViewInstructionPage = ({
   };
 
   const roleStr = (getRoleString(user) || "").toString().toLowerCase();
-  const isTeacher = ["teacher","instructor","teacher/instructor"].includes(roleStr) || Boolean(user?.is_teacher || user?.isTeacher);
-  const displayTopic = typeof coursework.topic === "string" ? coursework.topic.trim() || "No topic" : normalizeTopicValue(coursework.topic) || "No topic";
+  const isTeacher =
+    ["teacher", "instructor", "teacher/instructor"].includes(roleStr) ||
+    Boolean(user?.is_teacher || user?.isTeacher);
+  const displayTopic =
+    typeof coursework.topic === "string"
+      ? coursework.topic.trim() || "No topic"
+      : normalizeTopicValue(coursework.topic) || "No topic";
 
-  // ---------- Fetch all submissions when Student Work tab is opened ----------
+  // ---------- Fetch teacher submissions ----------
   useEffect(() => {
-    if (!isTeacher || activeTab !== "studentWork" || !coursework?.id || !students?.length) {
-      // Clear map when leaving tab
+    if (
+      !isTeacher ||
+      activeTab !== "studentWork" ||
+      !coursework?.id ||
+      !students?.length
+    ) {
       if (activeTab !== "studentWork") {
         setSubmissionsMap({});
       }
@@ -197,18 +311,19 @@ const ViewInstructionPage = ({
       setFetchError(null);
       const map = {};
       try {
-        // Fetch for each student in parallel
         const promises = students.map(async (st) => {
           try {
             const res = await assignmentAPI.getStudentAssignmentSubmission(
               coursework.id,
-              st.id
+              st.id,
             );
             const data = res.data?.data || res.data;
-            map[st.id] = data; // store full response
+            map[st.id] = data;
           } catch (err) {
-            console.error(`Failed to fetch submission for student ${st.id}:`, err);
-            // store null to indicate failure
+            console.error(
+              `Failed to fetch submission for student ${st.id}:`,
+              err,
+            );
             map[st.id] = null;
           }
         });
@@ -225,32 +340,64 @@ const ViewInstructionPage = ({
     fetchAllSubmissions();
   }, [activeTab, coursework?.id, isTeacher, students]);
 
-  // ---------- Compute studentsWithWork and counts from map ----------
-  const studentsWithWork = students.filter((st) => {
-    const data = submissionsMap[st.id];
-    return data && data.submission_status !== "not_submitted";
-  });
+  // ---------- Fetch student's own submission ----------
+  useEffect(() => {
+    if (isTeacher || activeTab !== "yourWork" || !coursework?.id || !user?.id) {
+      if (activeTab !== "yourWork") {
+        setStudentSubmission(null);
+      }
+      return;
+    }
 
-  const studentsWithoutWork = students.filter((st) => {
-    const data = submissionsMap[st.id];
-    return !data || data.submission_status === "not_submitted";
-  });
+    const fetchMySubmission = async () => {
+      setIsLoadingStudentSubmission(true);
+      try {
+        const res = await assignmentAPI.getStudentAssignmentSubmission(
+          coursework.id,
+          user.id,
+        );
+        const data = res.data?.data || res.data;
+        setStudentSubmission(data);
+      } catch (err) {
+        console.error("Failed to fetch your submission:", err);
+        setStudentSubmission(null);
+      } finally {
+        setIsLoadingStudentSubmission(false);
+      }
+    };
 
-  // Counts from map
+    fetchMySubmission();
+  }, [activeTab, coursework?.id, isTeacher, user?.id]);
+
+  // ---------- Compute teacher counts ----------
+  const studentsWithWork = isTeacher
+    ? students.filter((st) => {
+        const data = submissionsMap[st.id];
+        return data && data.submission_status !== "not_submitted";
+      })
+    : [];
+
+  const studentsWithoutWork = isTeacher
+    ? students.filter((st) => {
+        const data = submissionsMap[st.id];
+        return !data || data.submission_status === "not_submitted";
+      })
+    : [];
+
   const turnedInCount = studentsWithWork.length;
   const gradedCount = studentsWithWork.filter((st) => {
     const data = submissionsMap[st.id];
-    return data?.submission?.grade !== null && data?.submission?.grade !== undefined;
+    return (
+      data?.submission?.grade !== null && data?.submission?.grade !== undefined
+    );
   }).length;
   const totalStudents = students.length;
-  const assignedCount = totalStudents; // or totalStudents - turnedInCount? We'll keep total.
+  const assignedCount = totalStudents;
 
-  // Fallback if no map yet (still loading)
-  const hasSubmittedWork = turnedInCount > 0;
-
-  // Auto-open first student's review if submissions exist
+  // Auto-open first student's review for teacher
   useEffect(() => {
-    if (!isTeacher || activeTab !== "studentWork" || isLoadingAllSubmissions) return;
+    if (!isTeacher || activeTab !== "studentWork" || isLoadingAllSubmissions)
+      return;
     if (autoOpenReviewRef.current) return;
     if (studentsWithWork.length > 0) {
       autoOpenReviewRef.current = true;
@@ -275,11 +422,17 @@ const ViewInstructionPage = ({
       coursework?.userSubmission?.status === "graded" ||
       coursework?.status === "submitted" ||
       coursework?.submissions?.some((sub) =>
-        ["submitted","turned_in","graded"].includes(sub?.status)
-      )
+        ["submitted", "turned_in", "graded"].includes(sub?.status),
+      ),
     );
     setSubmissionState({ submitted });
-  }, [coursework?.id, coursework?.submitted, coursework?.status, coursework?.userSubmission?.status, coursework?.submissions?.length]);
+  }, [
+    coursework?.id,
+    coursework?.submitted,
+    coursework?.status,
+    coursework?.userSubmission?.status,
+    coursework?.submissions?.length,
+  ]);
 
   useEffect(() => {
     const nextDrafts = {};
@@ -308,9 +461,8 @@ const ViewInstructionPage = ({
     setDraftGradesByStudent((prev) => ({ ...prev, [studentId]: score }));
   };
 
-  const handleSaveStudentReview = async (studentId) => {
-    const score = draftGradesByStudent[studentId];
-    const feedback = privateFeedbackByStudent[studentId] || "";
+  // Save grade (teacher)
+  const saveGrade = async (studentId, score, feedback) => {
     if (score === null || score === undefined || score === "") return;
     setSavingStudentId(studentId);
     try {
@@ -322,24 +474,66 @@ const ViewInstructionPage = ({
     }
   };
 
+  // Return to student (teacher)
+  const handleReturnToStudent = async (studentId) => {
+    const score = draftGradesByStudent[studentId];
+    const feedback = privateFeedbackByStudent[studentId] || "";
+    if (score === null || score === undefined || score === "") return;
+
+    setReturningStudentId(studentId);
+    try {
+      const savedGrade = gradeMatrix?.[studentId]?.[coursework.id];
+      if (String(score) !== String(savedGrade ?? "")) {
+        await saveGrade(studentId, score, feedback);
+        // Update local draft to match saved grade
+        setDraftGradesByStudent((prev) => ({ ...prev, [studentId]: score }));
+      }
+      if (onReturnWork) {
+        await onReturnWork(cls.id, coursework.id, studentId, score, feedback);
+        alert(
+          `Returned work to ${students.find((s) => s.id === studentId)?.name || "student"}`,
+        );
+      }
+    } catch (err) {
+      console.error("Error returning work:", err);
+      alert("Could not return work. Please try again.");
+    } finally {
+      setReturningStudentId(null);
+    }
+  };
+
+  // Student turn in
   const handleTurnInWork = async () => {
     if (!onSubmitWork || submissionState.submitted || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      const ok = await onSubmitWork(cls.id, coursework.id, selectedSubmissionFiles, {
-        message: submissionMessage.trim(),
-        studentId: user?.id,
-        studentName: user?.name,
-        studentEmail: user?.email,
-        className: cls?.name,
-        assignmentTitle: coursework?.title,
-        submittedAt: new Date().toISOString(),
-        status: "submitted",
-      });
+      const ok = await onSubmitWork(
+        cls.id,
+        coursework.id,
+        selectedSubmissionFiles,
+        {
+          private_comment: submissionMessage.trim(),
+          studentId: user?.id,
+          studentName: user?.name,
+          studentEmail: user?.email,
+          className: cls?.name,
+          assignmentTitle: coursework?.title,
+          submittedAt: new Date().toISOString(),
+          status: "submitted",
+        },
+      );
       if (ok !== false) {
         setSubmissionState({ submitted: true });
         setSelectedSubmissionFiles([]);
         setSubmissionMessage("");
+        // Refetch student submission after submission
+        if (!isTeacher && activeTab === "yourWork") {
+          const res = await assignmentAPI.getStudentAssignmentSubmission(
+            coursework.id,
+            user.id,
+          );
+          setStudentSubmission(res.data?.data || res.data);
+        }
       }
     } finally {
       setIsSubmitting(false);
@@ -351,7 +545,7 @@ const ViewInstructionPage = ({
     setIsMarkingAsDone(true);
     try {
       const ok = await onSubmitWork(cls.id, coursework.id, markAsDoneFiles, {
-        message: submissionMessage.trim(),
+        private_comment: submissionMessage.trim(),
         studentId: user?.id,
         studentName: user?.name,
         studentEmail: user?.email,
@@ -365,6 +559,13 @@ const ViewInstructionPage = ({
         setMarkAsDoneFiles([]);
         setSubmissionMessage("");
         setShowMarkAsDoneModal(false);
+        if (!isTeacher && activeTab === "yourWork") {
+          const res = await assignmentAPI.getStudentAssignmentSubmission(
+            coursework.id,
+            user.id,
+          );
+          setStudentSubmission(res.data?.data || res.data);
+        }
       }
     } finally {
       setIsMarkingAsDone(false);
@@ -374,30 +575,68 @@ const ViewInstructionPage = ({
   // ---------- Render ----------
   return (
     <div className="container-fluid px-2 px-md-4 py-3">
-      <button className="btn btn-link text-decoration-none text-primary fw-medium mb-3 d-flex align-items-center gap-2 p-0" onClick={onBack}>
+      <button
+        className="btn btn-link text-decoration-none text-primary fw-medium mb-3 d-flex align-items-center gap-2 p-0"
+        onClick={onBack}
+      >
         <i className="bi bi-arrow-left"></i> Back to Classwork
       </button>
 
       <div className="card border shadow-sm rounded-3 mb-4 bg-white overflow-hidden">
-        <div className="p-4 d-flex align-items-center justify-content-between" style={{ backgroundColor: cls.themeColor || "#1a73e8", minHeight: "120px" }}>
+        <div
+          className="p-4 d-flex align-items-center justify-content-between"
+          style={{
+            backgroundColor: cls.themeColor || "#1a73e8",
+            minHeight: "120px",
+          }}
+        >
           <div className="d-flex align-items-center gap-3">
-            <div className="rounded-circle d-flex align-items-center justify-content-center text-white shadow-sm" style={{ width: "56px", height: "56px", backgroundColor: "rgba(255,255,255,0.2)" }}>
-              <i className={`bi ${coursework.type === "quiz" ? "bi-card-checklist" : "bi-clipboard-check"} fs-3`}></i>
+            <div
+              className="rounded-circle d-flex align-items-center justify-content-center text-white shadow-sm"
+              style={{
+                width: "56px",
+                height: "56px",
+                backgroundColor: "rgba(255,255,255,0.2)",
+              }}
+            >
+              <i
+                className={`bi ${coursework.type === "quiz" ? "bi-card-checklist" : "bi-clipboard-check"} fs-3`}
+              ></i>
             </div>
             <div className="text-white">
-              <h3 className="font-google fw-bold mb-1" style={{ fontSize: "1.5rem" }}>{coursework.title}</h3>
-              <div className="small text-white text-opacity-90">{cls.name} • {displayTopic}</div>
+              <h3
+                className="font-google fw-bold mb-1"
+                style={{ fontSize: "1.5rem" }}
+              >
+                {coursework.title}
+              </h3>
+              <div className="small text-white text-opacity-90">
+                {cls.name} • {displayTopic}
+              </div>
             </div>
           </div>
           {isTeacher && (
             <div className="d-none d-md-flex gap-4 text-white text-center">
-              <div><div className="fs-3 fw-bold">{turnedInCount}</div><div className="small text-white text-opacity-90">Turned in</div></div>
+              <div>
+                <div className="fs-3 fw-bold">{turnedInCount}</div>
+                <div className="small text-white text-opacity-90">
+                  Turned in
+                </div>
+              </div>
               <div className="border-start border-white border-opacity-50"></div>
-              <div><div className="fs-3 fw-bold">{assignedCount}</div><div className="small text-white text-opacity-90">Assigned</div></div>
+              <div>
+                <div className="fs-3 fw-bold">{assignedCount}</div>
+                <div className="small text-white text-opacity-90">Assigned</div>
+              </div>
               {gradedCount > 0 && (
                 <>
                   <div className="border-start border-white border-opacity-50"></div>
-                  <div><div className="fs-3 fw-bold">{gradedCount}</div><div className="small text-white text-opacity-90">Graded</div></div>
+                  <div>
+                    <div className="fs-3 fw-bold">{gradedCount}</div>
+                    <div className="small text-white text-opacity-90">
+                      Graded
+                    </div>
+                  </div>
                 </>
               )}
             </div>
@@ -408,59 +647,137 @@ const ViewInstructionPage = ({
         <div className="border-bottom bg-white">
           <ul className="nav gc-nav-tabs px-3">
             <li className="nav-item">
-              <button className={`nav-link ${activeTab === "instructions" ? "active" : ""}`} onClick={() => setActiveTab("instructions")}>Instructions</button>
+              <button
+                className={`nav-link ${activeTab === "instructions" ? "active" : ""}`}
+                onClick={() => setActiveTab("instructions")}
+              >
+                Instructions
+              </button>
             </li>
-            {isTeacher && (
+            {isTeacher ? (
               <li className="nav-item">
-                <button className={`nav-link ${activeTab === "studentWork" ? "active" : ""}`} onClick={() => setActiveTab("studentWork")}>Student Work</button>
+                <button
+                  className={`nav-link ${activeTab === "studentWork" ? "active" : ""}`}
+                  onClick={() => setActiveTab("studentWork")}
+                >
+                  Student Work
+                </button>
+              </li>
+            ) : (
+              <li className="nav-item">
+                <button
+                  className={`nav-link ${activeTab === "yourWork" ? "active" : ""}`}
+                  onClick={() => setActiveTab("yourWork")}
+                >
+                  Your Work
+                </button>
               </li>
             )}
           </ul>
         </div>
 
         <div className="card-body p-4">
-          {/* ---------- INSTRUCTIONS TAB (unchanged) ---------- */}
+          {/* ---------- INSTRUCTIONS TAB (student & teacher) ---------- */}
           {activeTab === "instructions" && (
             <div>
               <div className="row g-3 mb-4 pb-4 border-bottom">
                 <div className="col-6 col-md-3">
-                  <div className="text-muted small fw-semibold text-uppercase mb-1" style={{ fontSize: "0.72rem" }}>Points</div>
-                  <div className="fw-bold text-dark">{coursework.points !== null && coursework.points !== undefined ? coursework.points : "Ungraded"}</div>
+                  <div
+                    className="text-muted small fw-semibold text-uppercase mb-1"
+                    style={{ fontSize: "0.72rem" }}
+                  >
+                    Points
+                  </div>
+                  <div className="fw-bold text-dark">
+                    {coursework.points !== null &&
+                    coursework.points !== undefined
+                      ? coursework.points
+                      : "Ungraded"}
+                  </div>
                 </div>
                 <div className="col-6 col-md-3">
-                  <div className="text-muted small fw-semibold text-uppercase mb-1" style={{ fontSize: "0.72rem" }}>Due Date</div>
-                  <div className="fw-bold text-dark">{coursework.dueDate || "No due date"}</div>
+                  <div
+                    className="text-muted small fw-semibold text-uppercase mb-1"
+                    style={{ fontSize: "0.72rem" }}
+                  >
+                    Due Date
+                  </div>
+                  <div className="fw-bold text-dark">
+                    {coursework.dueDate || "No due date"}
+                  </div>
                 </div>
                 <div className="col-6 col-md-3">
-                  <div className="text-muted small fw-semibold text-uppercase mb-1" style={{ fontSize: "0.72rem" }}>Topic</div>
-                  <div className="fw-bold text-dark text-truncate">{displayTopic}</div>
+                  <div
+                    className="text-muted small fw-semibold text-uppercase mb-1"
+                    style={{ fontSize: "0.72rem" }}
+                  >
+                    Topic
+                  </div>
+                  <div className="fw-bold text-dark text-truncate">
+                    {displayTopic}
+                  </div>
                 </div>
                 <div className="col-6 col-md-3">
-                  <div className="text-muted small fw-semibold text-uppercase mb-1" style={{ fontSize: "0.72rem" }}>Posted</div>
-                  <div className="fw-bold text-dark">{coursework.postedDate || "Recently"}</div>
+                  <div
+                    className="text-muted small fw-semibold text-uppercase mb-1"
+                    style={{ fontSize: "0.72rem" }}
+                  >
+                    Posted
+                  </div>
+                  <div className="fw-bold text-dark">
+                    {coursework.postedDate || "Recently"}
+                  </div>
                 </div>
               </div>
 
               <div className="mb-4">
-                <h6 className="fw-bold text-muted small text-uppercase mb-3">Instructions</h6>
-                <div className="bg-light rounded-3 p-4 border" style={{ whiteSpace: "pre-wrap", lineHeight: "1.6" }}>
+                <h6 className="fw-bold text-muted small text-uppercase mb-3">
+                  Instructions
+                </h6>
+                <div
+                  className="bg-light rounded-3 p-4 border"
+                  style={{ whiteSpace: "pre-wrap", lineHeight: "1.6" }}
+                >
                   {coursework.instructions || "No instructions provided."}
                 </div>
               </div>
 
               {coursework.attachments && coursework.attachments.length > 0 && (
                 <div className="mb-4">
-                  <h6 className="fw-bold text-muted small text-uppercase mb-3">Attachments</h6>
+                  <h6 className="fw-bold text-muted small text-uppercase mb-3">
+                    Attachments
+                  </h6>
                   <div className="row g-2">
                     {coursework.attachments.map((att, idx) => (
                       <div key={idx} className="col-12 col-md-6">
-                        <a href={att.url} target="_blank" rel="noreferrer" className="border rounded p-3 d-flex align-items-center gap-3 text-decoration-none text-dark bg-white shadow-sm hover-shadow">
-                          <div className="rounded d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "48px", height: "48px", backgroundColor: "#f8f9fa" }}>
-                            <i className={`bi fs-4 ${att.type === "pdf" ? "bi-file-earmark-pdf-fill text-danger" : att.type === "form" ? "bi-file-earmark-check-fill text-purple" : att.type === "youtube" ? "bi-youtube text-danger" : "bi-file-earmark-word-fill text-primary"}`}></i>
+                        <a
+                          href={att.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="border rounded p-3 d-flex align-items-center gap-3 text-decoration-none text-dark bg-white shadow-sm hover-shadow"
+                        >
+                          <div
+                            className="rounded d-flex align-items-center justify-content-center flex-shrink-0"
+                            style={{
+                              width: "48px",
+                              height: "48px",
+                              backgroundColor: "#f8f9fa",
+                            }}
+                          >
+                            <i
+                              className={`bi fs-4 ${att.type === "pdf" ? "bi-file-earmark-pdf-fill text-danger" : att.type === "form" ? "bi-file-earmark-check-fill text-purple" : att.type === "youtube" ? "bi-youtube text-danger" : "bi-file-earmark-word-fill text-primary"}`}
+                            ></i>
                           </div>
                           <div className="overflow-hidden">
-                            <div className="fw-semibold small text-truncate">{att.name}</div>
-                            <div className="text-muted text-xs text-uppercase" style={{ fontSize: "0.72rem" }}>{att.type}</div>
+                            <div className="fw-semibold small text-truncate">
+                              {att.name}
+                            </div>
+                            <div
+                              className="text-muted text-xs text-uppercase"
+                              style={{ fontSize: "0.72rem" }}
+                            >
+                              {att.type}
+                            </div>
                           </div>
                         </a>
                       </div>
@@ -469,51 +786,11 @@ const ViewInstructionPage = ({
                 </div>
               )}
 
-              {!isTeacher && (
-                <div className="border-top pt-4 mt-4">
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h6 className="fw-bold text-dark mb-0">Your Work</h6>
-                    <span className={`badge ${submissionState.submitted ? "bg-success" : "bg-warning text-dark"} border`}>
-                      {submissionState.submitted ? "Turned in" : "Assigned"}
-                    </span>
-                  </div>
-                  <div className="bg-light rounded-3 p-4 border text-center">
-                    <i className="bi bi-cloud-upload text-primary fs-1 mb-2"></i>
-                    <p className="text-muted small mb-3">Upload your completed files or mark as done.</p>
-                    <div className="text-start mb-3">
-                      <label className="form-label small fw-bold text-muted">Attachments (multiple files)</label>
-                      <input type="file" className="form-control" multiple onChange={(e) => setSelectedSubmissionFiles(Array.from(e.target.files || []))} />
-                      <small className="form-text text-muted">You can select more than one file for your submission.</small>
-                    </div>
-                    <div className="text-start mb-3">
-                      <label className="form-label small fw-bold text-muted">Message for your teacher</label>
-                      <textarea className="form-control" rows="3" placeholder="Add any notes, links, or context the teacher should see with your submission." value={submissionMessage} onChange={(e) => setSubmissionMessage(e.target.value)} />
-                    </div>
-                    {(selectedSubmissionFiles.length > 0 || submissionMessage.trim()) && (
-                      <div className="text-start mb-3 rounded-3 border bg-white p-3 shadow-sm">
-                        <div className="fw-semibold small text-dark mb-2">Submission summary</div>
-                        <div className="small text-muted">
-                          {selectedSubmissionFiles.length > 0 && (
-                            <div className="mb-2"><span className="fw-semibold text-dark">Files:</span> {selectedSubmissionFiles.map((file, index) => (
-                              <span key={`${file.name}-${index}`} className="badge bg-light text-dark border me-1 mb-1">{file.name}</span>
-                            ))}</div>
-                          )}
-                          {submissionMessage.trim() && <div><span className="fw-semibold text-dark">Note:</span> {submissionMessage.trim()}</div>}
-                        </div>
-                      </div>
-                    )}
-                    <div className="d-flex gap-2 justify-content-center flex-wrap">
-                      <button className="btn btn-primary fw-medium shadow-sm" onClick={handleTurnInWork} disabled={submissionState.submitted || isSubmitting}>
-                        {submissionState.submitted ? "Turned in" : "+ Add or Create & Turn In"}
-                      </button>
-                      <button className="btn btn-outline-secondary fw-medium" onClick={() => setShowMarkAsDoneModal(true)} disabled={submissionState.submitted}>Mark as done</button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
+              {/* Private Comments section (both teacher and student) */}
               <div className="border-top pt-4 mt-4">
-                <h6 className="fw-bold text-muted small text-uppercase mb-3"><i className="bi bi-chat-left-text me-1"></i> Private Comments</h6>
+                <h6 className="fw-bold text-muted small text-uppercase mb-3">
+                  <i className="bi bi-chat-left-text me-1"></i> Private Comments
+                </h6>
                 {privateComments.length > 0 ? (
                   <div className="mb-3">
                     {privateComments.map((cm) => (
@@ -521,61 +798,103 @@ const ViewInstructionPage = ({
                         <Avatar name={cm.author} size={36} color="#5f6368" />
                         <div className="flex-grow-1 bg-light rounded-3 p-3 border">
                           <div className="d-flex justify-content-between align-items-center mb-1">
-                            <span className="fw-bold text-dark small">{cm.author}</span>
-                            <span className="text-muted" style={{ fontSize: "0.75rem" }}>{cm.date}</span>
+                            <span className="fw-bold text-dark small">
+                              {cm.author}
+                            </span>
+                            <span
+                              className="text-muted"
+                              style={{ fontSize: "0.75rem" }}
+                            >
+                              {cm.date}
+                            </span>
                           </div>
-                          <p className="mb-0 text-dark small" style={{ fontSize: "0.88rem" }}>{cm.text}</p>
+                          <p
+                            className="mb-0 text-dark small"
+                            style={{ fontSize: "0.88rem" }}
+                          >
+                            {cm.text}
+                          </p>
                         </div>
                       </div>
                     ))}
                   </div>
-                ) : <p className="text-muted small mb-3 fst-italic">No private comments yet.</p>}
+                ) : (
+                  <p className="text-muted small mb-3 fst-italic">
+                    No private comments yet.
+                  </p>
+                )}
                 <div className="d-flex gap-2">
                   <Avatar name={user.name} size={36} color={user.color} />
                   <div className="input-group">
-                    <input type="text" className="form-control border rounded-pill px-3 py-2 shadow-none" placeholder="Add a private comment to your teacher..." value={studentComment} onChange={(e) => setStudentComment(e.target.value)} />
-                    <button className="btn btn-primary rounded-pill px-4" onClick={handleAddComment} disabled={!studentComment.trim()}><i className="bi bi-send-fill"></i></button>
+                    <input
+                      type="text"
+                      className="form-control border rounded-pill px-3 py-2 shadow-none"
+                      placeholder="Add a private comment..."
+                      value={studentComment}
+                      onChange={(e) => setStudentComment(e.target.value)}
+                    />
+                    <button
+                      className="btn px-3 border-0"
+                      onClick={handleAddComment}
+                      disabled={!studentComment.trim()}
+                    >
+                      <i className="bi bi-send-fill"></i>
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* ---------- STUDENT WORK TAB (UPDATED) ---------- */}
+          {/* ---------- TEACHER: STUDENT WORK TAB ---------- */}
           {activeTab === "studentWork" && isTeacher && (
             <div>
               {isLoadingAllSubmissions ? (
                 <div className="text-center py-5">
-                  <div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading submissions...</span></div>
-                  <p className="text-muted mt-2">Loading student submissions...</p>
+                  <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">
+                      Loading submissions...
+                    </span>
+                  </div>
+                  <p className="text-muted mt-2">
+                    Loading student submissions...
+                  </p>
                 </div>
               ) : fetchError ? (
                 <div className="alert alert-danger">{fetchError}</div>
               ) : (
                 <>
-                  {/* Summary Stats (now accurate) */}
+                  {/* Summary Stats */}
                   <div className="row g-3 mb-4 pb-4 border-bottom">
                     <div className="col-6 col-md-3">
                       <div className="border rounded-3 p-3 bg-white text-center shadow-sm">
-                        <div className="fs-2 fw-bold text-primary">{turnedInCount}</div>
+                        <div className="fs-2 fw-bold text-primary">
+                          {turnedInCount}
+                        </div>
                         <div className="text-muted small">Turned in</div>
                       </div>
                     </div>
                     <div className="col-6 col-md-3">
                       <div className="border rounded-3 p-3 bg-white text-center shadow-sm">
-                        <div className="fs-2 fw-bold text-warning">{assignedCount}</div>
+                        <div className="fs-2 fw-bold text-warning">
+                          {assignedCount}
+                        </div>
                         <div className="text-muted small">Assigned</div>
                       </div>
                     </div>
                     <div className="col-6 col-md-3">
                       <div className="border rounded-3 p-3 bg-white text-center shadow-sm">
-                        <div className="fs-2 fw-bold text-success">{gradedCount}</div>
+                        <div className="fs-2 fw-bold text-success">
+                          {gradedCount}
+                        </div>
                         <div className="text-muted small">Graded</div>
                       </div>
                     </div>
                     <div className="col-6 col-md-3">
                       <div className="border rounded-3 p-3 bg-white text-center shadow-sm">
-                        <div className="fs-2 fw-bold text-dark">{totalStudents}</div>
+                        <div className="fs-2 fw-bold text-dark">
+                          {totalStudents}
+                        </div>
                         <div className="text-muted small">Total students</div>
                       </div>
                     </div>
@@ -583,114 +902,247 @@ const ViewInstructionPage = ({
 
                   <div className="mb-4">
                     <h6 className="fw-bold text-dark mb-3 d-flex align-items-center gap-2">
-                      <i className="bi bi-clipboard-check-fill text-primary"></i> Submission Review
+                      <i className="bi bi-clipboard-check-fill text-primary"></i>{" "}
+                      Submission Review
                     </h6>
-
                     {studentsWithWork.length > 0 ? (
                       <div className="d-flex flex-column gap-3">
                         {studentsWithWork.map((st) => {
                           const subData = submissionsMap[st.id];
-                          const savedGrade = gradeMatrix?.[st.id]?.[coursework.id];
-                          const currentGrade = draftGradesByStudent[st.id] ?? savedGrade ?? "";
-                          const isGraded = currentGrade !== null && currentGrade !== undefined && currentGrade !== "";
-                          const hasPendingGradeChanges = String(currentGrade ?? "") !== String(savedGrade ?? "");
-                          const studentName = st?.name || st?.full_name || st?.email || "Student";
-                          const studentFirstName = (studentName || "").split(" ")[0] || "Submission";
+                          const savedGrade =
+                            gradeMatrix?.[st.id]?.[coursework.id];
+                          const currentGrade =
+                            draftGradesByStudent[st.id] ?? savedGrade ?? "";
+                          const gradeFromApi = subData?.submission?.grade;
+                          const gradeToShow =
+                            gradeFromApi !== null && gradeFromApi !== undefined
+                              ? gradeFromApi
+                              : currentGrade;
+                          const isGraded =
+                            gradeToShow !== null &&
+                            gradeToShow !== undefined &&
+                            gradeToShow !== "";
+                          const studentName =
+                            st?.name || st?.full_name || st?.email || "Student";
+                          const studentFirstName =
+                            (studentName || "").split(" ")[0] || "Submission";
 
                           const isSelected = selectedStudentId === st.id;
-                          const submissionFiles = subData?.submission?.files || [];
-                          const previewFiles = submissionFiles.length > 0
-                            ? submissionFiles.map((f, idx) => ({
-                                id: `${st.id}-${idx}`,
-                                name: f.file_name || f.filename || `file_${idx}`,
-                                type: f.file_type || f.type || "pdf",
-                                url: f.file_url || f.url || "#",
-                              }))
-                            : [{ id: `${st.id}-sample`, name: `${studentFirstName}_work.pdf`, type: "pdf", url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf" }];
-                          const selectedAttachment = selectedAttachmentByStudent[st.id] || previewFiles[0];
-                          const privateFeedback = privateFeedbackByStudent[st.id] || "";
-                          const gradeFromApi = subData?.submission?.grade;
-                          const gradeToShow = gradeFromApi !== null && gradeFromApi !== undefined ? gradeFromApi : currentGrade;
+                          const submissionFiles =
+                            subData?.submission?.files || [];
+                          const previewFiles =
+                            submissionFiles.length > 0
+                              ? submissionFiles.map((f, idx) => ({
+                                  id: `${st.id}-${idx}`,
+                                  name:
+                                    f.file_name || f.filename || `file_${idx}`,
+                                  type: f.file_type || f.type || "pdf",
+                                  url: f.file_url || f.url || "#",
+                                }))
+                              : [
+                                  {
+                                    id: `${st.id}-sample`,
+                                    name: `${studentFirstName}_work.pdf`,
+                                    type: "pdf",
+                                    url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+                                  },
+                                ];
+                          const selectedAttachment =
+                            selectedAttachmentByStudent[st.id] ||
+                            previewFiles[0];
+                          const privateFeedback =
+                            privateFeedbackByStudent[st.id] || "";
+                          const hasGrade =
+                            gradeToShow !== null &&
+                            gradeToShow !== undefined &&
+                            gradeToShow !== "";
 
                           return (
-                            <div key={st.id} className="border rounded-4 p-4 bg-white shadow-sm">
+                            <div
+                              key={st.id}
+                              className="border rounded-4 p-4 bg-white shadow-sm"
+                            >
                               <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                                 <div className="d-flex align-items-center gap-3">
-                                  <Avatar name={studentName} size={44} color="#1a73e8" />
+                                  <Avatar
+                                    name={studentName}
+                                    size={44}
+                                    color="#1a73e8"
+                                  />
                                   <div>
-                                    <div className="fw-semibold text-dark">{studentName}</div>
-                                    <div className="text-muted small">{st.email || "No email provided"}</div>
+                                    <div className="fw-semibold text-dark">
+                                      {studentName}
+                                    </div>
+                                    <div className="text-muted small">
+                                      {st.email || "No email provided"}
+                                    </div>
                                   </div>
                                 </div>
                                 <div className="d-flex align-items-center gap-2 flex-wrap">
                                   {isGraded ? (
-                                    <span className="badge bg-success fs-6 font-monospace">{gradeToShow} / {coursework.points}</span>
+                                    <span className="badge bg-success fs-6 font-monospace">
+                                      {gradeToShow} / {coursework.points}
+                                    </span>
                                   ) : (
-                                    <span className="badge bg-warning text-dark border">Not graded</span>
+                                    <span className="badge bg-warning text-dark border">
+                                      Not graded
+                                    </span>
                                   )}
-                                  <button className="btn btn-sm btn-outline-primary" onClick={() => setSelectedStudentId(isSelected ? null : st.id)}>
-                                    {isSelected ? "Hide review" : "Review submission"}
+                                  <button
+                                    className="btn btn-sm btn-outline-primary"
+                                    onClick={() =>
+                                      setSelectedStudentId(
+                                        isSelected ? null : st.id,
+                                      )
+                                    }
+                                  >
+                                    {isSelected
+                                      ? "Hide review"
+                                      : "Review submission"}
                                   </button>
                                 </div>
                               </div>
 
                               {isSelected && (
                                 <div className="border-top mt-3 pt-3">
-                                  {/* We already have subData, no extra fetch needed */}
                                   {subData?.submission ? (
                                     <div className="row g-4">
                                       <div className="col-12 col-lg-8">
                                         <div className="border rounded-3 overflow-hidden bg-light">
                                           <div className="px-3 py-2 border-bottom bg-white d-flex justify-content-between align-items-center">
-                                            <div><div className="fw-semibold text-dark">Preview</div><div className="small text-muted">Current file: {selectedAttachment.name}</div></div>
-                                            <span className="badge bg-light text-muted border">{selectedAttachment.type}</span>
+                                            <div>
+                                              <div className="fw-semibold text-dark">
+                                                Preview
+                                              </div>
+                                              <div className="small text-muted">
+                                                Current file:{" "}
+                                                {selectedAttachment.name}
+                                              </div>
+                                            </div>
+                                            <span className="badge bg-light text-muted border">
+                                              {selectedAttachment.type}
+                                            </span>
                                           </div>
-                                          <SubmissionFilePreview file={selectedAttachment} />
+                                          <SubmissionFilePreview
+                                            file={selectedAttachment}
+                                          />
                                         </div>
                                       </div>
                                       <div className="col-12 col-lg-4">
                                         <div className="border rounded-3 p-3 bg-white shadow-sm">
-                                          <div className="mb-3"><div className="fw-semibold text-dark mb-2">Current file</div><div className="text-muted small">{selectedAttachment.name}</div></div>
+                                          <div className="mb-3">
+                                            <div className="fw-semibold text-dark mb-2">
+                                              Current file
+                                            </div>
+                                            <div className="text-muted small">
+                                              {selectedAttachment.name}
+                                            </div>
+                                          </div>
 
-                                          <label className="form-label small fw-bold text-muted mb-1">Grade</label>
+                                          <label className="form-label small fw-bold text-muted mb-1">
+                                            Grade
+                                          </label>
                                           <div className="d-flex align-items-center gap-2 mb-3">
-                                            <input type="number" className="form-control w-50" placeholder="--" min="0" max={coursework.points || 100}
+                                            <input
+                                              type="number"
+                                              className="form-control w-50"
+                                              placeholder="--"
+                                              min="0"
+                                              max={coursework.points || 100}
                                               value={gradeToShow ?? ""}
                                               onChange={(e) => {
-                                                const val = e.target.value === "" ? null : Number(e.target.value);
-                                                handleGradeInputChange(st.id, val);
-                                              }} />
-                                            <span className="text-muted small">/ {coursework.points ?? 100}</span>
+                                                const val =
+                                                  e.target.value === ""
+                                                    ? null
+                                                    : Number(e.target.value);
+                                                handleGradeInputChange(
+                                                  st.id,
+                                                  val,
+                                                );
+                                              }}
+                                            />
+                                            <span className="text-muted small">
+                                              / {coursework.points ?? 100}
+                                            </span>
                                           </div>
 
-                                          <div className="d-grid gap-2 mb-3">
-                                            <button className="btn btn-outline-success btn-sm" onClick={() => handleSaveStudentReview(st.id)}
-                                              disabled={savingStudentId === st.id || !hasPendingGradeChanges}>
-                                              {savingStudentId === st.id ? "Saving..." : "Save grade"}
-                                            </button>
-                                          </div>
-
-                                          <label className="form-label small fw-bold text-muted mb-1">Private comment</label>
-                                          <textarea className="form-control mb-3" rows="4" placeholder="Add feedback for this student..." value={privateFeedback} onChange={(e) => setPrivateFeedbackByStudent({ ...privateFeedbackByStudent, [st.id]: e.target.value })} />
+                                          <label className="form-label small fw-bold text-muted mb-1">
+                                            Private comment
+                                          </label>
+                                          <textarea
+                                            className="form-control mb-3"
+                                            rows="4"
+                                            placeholder="Add feedback for this student..."
+                                            value={privateFeedback}
+                                            onChange={(e) =>
+                                              setPrivateFeedbackByStudent({
+                                                ...privateFeedbackByStudent,
+                                                [st.id]: e.target.value,
+                                              })
+                                            }
+                                          />
 
                                           <div className="mb-3">
-                                            <h6 className="fw-semibold text-muted small text-uppercase mb-2">Attached files</h6>
+                                            <h6 className="fw-semibold text-muted small text-uppercase mb-2">
+                                              Attached files
+                                            </h6>
                                             <div className="d-flex flex-wrap gap-2">
                                               {previewFiles.map((file) => (
-                                                <button key={file.id} type="button" className={`border rounded p-2 px-3 d-flex align-items-center gap-2 text-decoration-none text-dark bg-white shadow-sm ${selectedAttachment.id === file.id ? "border-primary" : ""}`}
-                                                  onClick={() => setSelectedAttachmentByStudent({ ...selectedAttachmentByStudent, [st.id]: file })}>
-                                                  <i className={`bi ${getPreviewIcon(file)} fs-5`}></i>
-                                                  <span className="small fw-medium">{file.name}</span>
+                                                <button
+                                                  key={file.id}
+                                                  type="button"
+                                                  className={`border rounded p-2 px-3 d-flex align-items-center gap-2 text-decoration-none text-dark bg-white shadow-sm ${selectedAttachment.id === file.id ? "border-primary" : ""}`}
+                                                  onClick={() =>
+                                                    setSelectedAttachmentByStudent(
+                                                      {
+                                                        ...selectedAttachmentByStudent,
+                                                        [st.id]: file,
+                                                      },
+                                                    )
+                                                  }
+                                                >
+                                                  <i
+                                                    className={`bi ${getPreviewIcon(file)} fs-5`}
+                                                  ></i>
+                                                  <span className="small fw-medium">
+                                                    {file.name}
+                                                  </span>
                                                 </button>
                                               ))}
                                             </div>
                                           </div>
 
                                           <div className="d-grid gap-2">
-                                            <button className="btn btn-primary" onClick={() => { if (onReturnWork) onReturnWork(cls.id, coursework.id, st.id); alert(`Returned work to ${st.name}`); }}>
-                                              <i className="bi bi-reply me-2"></i> Return to student
+                                            <button
+                                              className="btn btn-primary"
+                                              onClick={() =>
+                                                handleReturnToStudent(st.id)
+                                              }
+                                              disabled={
+                                                !hasGrade ||
+                                                returningStudentId === st.id
+                                              }
+                                            >
+                                              {returningStudentId === st.id ? (
+                                                <>
+                                                  <span
+                                                    className="spinner-border spinner-border-sm me-2"
+                                                    role="status"
+                                                    aria-hidden="true"
+                                                  ></span>{" "}
+                                                  Returning...
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <i className="bi bi-reply me-2"></i>{" "}
+                                                  Return to student
+                                                </>
+                                              )}
                                             </button>
-                                            <button className="btn btn-outline-secondary"><i className="bi bi-download me-2"></i> Download all files</button>
+                                            <button className="btn btn-outline-secondary">
+                                              <i className="bi bi-download me-2"></i>{" "}
+                                              Download all files
+                                            </button>
                                           </div>
                                         </div>
                                       </div>
@@ -698,7 +1150,10 @@ const ViewInstructionPage = ({
                                   ) : (
                                     <div className="text-center py-4 text-muted">
                                       <i className="bi bi-inbox fs-2"></i>
-                                      <p>No submission data available for this student.</p>
+                                      <p>
+                                        No submission data available for this
+                                        student.
+                                      </p>
                                     </div>
                                   )}
                                 </div>
@@ -710,7 +1165,9 @@ const ViewInstructionPage = ({
                     ) : (
                       <div className="text-center py-4 bg-light border rounded-3">
                         <i className="bi bi-inbox text-muted fs-1 mb-2"></i>
-                        <p className="text-muted small mb-0">No students have turned in work yet.</p>
+                        <p className="text-muted small mb-0">
+                          No students have turned in work yet.
+                        </p>
                       </div>
                     )}
                   </div>
@@ -718,21 +1175,294 @@ const ViewInstructionPage = ({
                   {studentsWithoutWork.length > 0 && (
                     <div>
                       <h6 className="fw-bold text-dark mb-3 d-flex align-items-center gap-2">
-                        <i className="bi bi-clock-fill text-warning"></i> Students who haven't turned in work ({studentsWithoutWork.length})
+                        <i className="bi bi-clock-fill text-warning"></i>{" "}
+                        Students who haven't turned in work (
+                        {studentsWithoutWork.length})
                       </h6>
                       <div className="d-flex flex-column gap-2">
                         {studentsWithoutWork.map((st) => (
-                          <div key={st.id} className="border rounded-3 p-3 bg-white shadow-sm">
+                          <div
+                            key={st.id}
+                            className="border rounded-3 p-3 bg-white shadow-sm"
+                          >
                             <div className="d-flex justify-content-between align-items-center">
                               <div className="d-flex align-items-center gap-3">
-                                <Avatar name={st.name} size={40} color="#00897b" />
-                                <div><div className="fw-semibold text-dark">{st.name}</div><div className="text-muted small">{st.email}</div></div>
+                                <Avatar
+                                  name={st.name}
+                                  size={40}
+                                  color="#00897b"
+                                />
+                                <div>
+                                  <div className="fw-semibold text-dark">
+                                    {st.name}
+                                  </div>
+                                  <div className="text-muted small">
+                                    {st.email}
+                                  </div>
+                                </div>
                               </div>
-                              <div><span className="badge bg-light text-muted border">Assigned</span></div>
+                              <div>
+                                <span className="badge bg-light text-muted border">
+                                  Assigned
+                                </span>
+                              </div>
                             </div>
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ---------- STUDENT: YOUR WORK TAB ---------- */}
+          {activeTab === "yourWork" && !isTeacher && (
+            <div>
+              {isLoadingStudentSubmission ? (
+                <div className="text-center py-5">
+                  <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">
+                      Loading your submission...
+                    </span>
+                  </div>
+                  <p className="text-muted mt-2">Loading your work...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Status badge */}
+                  <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+                    <h5 className="fw-bold text-dark mb-0">Your Submission</h5>
+                    {studentSubmission?.submission_status ===
+                    "not_submitted" ? (
+                      <span className="badge bg-warning text-dark">
+                        Not submitted
+                      </span>
+                    ) : studentSubmission?.submission?.grade !== null &&
+                      studentSubmission?.submission?.grade !== undefined ? (
+                      <span className="badge bg-success">Graded</span>
+                    ) : (
+                      <span className="badge bg-primary">Submitted</span>
+                    )}
+                  </div>
+
+                  {studentSubmission?.submission_status === "not_submitted" ? (
+                    /* ---------- NOT SUBMITTED: show upload form & actions ---------- */
+                    <div className="text-center py-4 bg-light border rounded-3">
+                      <i className="bi bi-inbox text-muted fs-1 mb-2"></i>
+                      <p className="text-muted mb-3">
+                        You haven't submitted this assignment yet.
+                      </p>
+
+                      {/* File upload */}
+                      <div className="text-start mb-3">
+                        <label className="form-label small fw-bold text-muted">
+                          Attachments (multiple files)
+                        </label>
+                        <input
+                          type="file"
+                          className="form-control"
+                          multiple
+                          onChange={(e) =>
+                            setSelectedSubmissionFiles(
+                              Array.from(e.target.files || []),
+                            )
+                          }
+                        />
+                        <small className="form-text text-muted">
+                          You can select more than one file for your submission.
+                        </small>
+                      </div>
+
+                      {/* Private comment */}
+                      <div className="text-start mb-3">
+                        <label className="form-label small fw-bold text-muted">
+                          Private comment (optional)
+                        </label>
+                        <textarea
+                          className="form-control"
+                          rows="3"
+                          placeholder="Add a private note for the teacher..."
+                          value={submissionMessage}
+                          onChange={(e) => setSubmissionMessage(e.target.value)}
+                        />
+                      </div>
+
+                      {/* Summary of selected files + comment */}
+                      {(selectedSubmissionFiles.length > 0 ||
+                        submissionMessage.trim()) && (
+                        <div className="text-start mb-3 rounded-3 border bg-white p-3 shadow-sm">
+                          <div className="fw-semibold small text-dark mb-2">
+                            Submission summary
+                          </div>
+                          <div className="small text-muted">
+                            {selectedSubmissionFiles.length > 0 && (
+                              <div className="mb-2">
+                                <span className="fw-semibold text-dark">
+                                  Files:
+                                </span>{" "}
+                                {selectedSubmissionFiles.map((file, index) => (
+                                  <span
+                                    key={`${file.name}-${index}`}
+                                    className="badge bg-light text-dark border me-1 mb-1"
+                                  >
+                                    {file.name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {submissionMessage.trim() && (
+                              <div>
+                                <span className="fw-semibold text-dark">
+                                  Note:
+                                </span>{" "}
+                                {submissionMessage.trim()}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Action buttons */}
+                      <div className="d-flex gap-2 justify-content-center flex-wrap">
+                        <button
+                          className="btn btn-primary fw-medium shadow-sm"
+                          onClick={handleTurnInWork}
+                          disabled={isSubmitting}
+                        >
+                          {isSubmitting
+                            ? "Submitting..."
+                            : "+ Add or Create & Turn In"}
+                        </button>
+                        <button
+                          className="btn btn-outline-secondary fw-medium"
+                          onClick={() => setShowMarkAsDoneModal(true)}
+                        >
+                          Mark as done
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* ---------- SUBMITTED: show details, grade, feedback, files ---------- */
+                    <div className="bg-light rounded-3 p-4 border">
+                      <div className="row g-4">
+                        <div className="col-12 col-md-6">
+                          <div className="fw-semibold text-dark mb-2">
+                            Status
+                          </div>
+                          <div>
+                            <span className="badge bg-success">Submitted</span>
+                            {studentSubmission?.submission?.grade !== null &&
+                              studentSubmission?.submission?.grade !==
+                                undefined && (
+                                <span className="badge bg-info text-dark ms-2">
+                                  Graded
+                                </span>
+                              )}
+                          </div>
+                          <div className="mt-3">
+                            <div className="fw-semibold text-dark mb-1">
+                              Submitted at
+                            </div>
+                            <div className="text-muted small">
+                              {studentSubmission?.submission?.submitted_at
+                                ? new Date(
+                                    studentSubmission.submission.submitted_at,
+                                  ).toLocaleString()
+                                : "N/A"}
+                            </div>
+                          </div>
+
+                          {/* ----- PRIVATE COMMENT (display) ----- */}
+                          {studentSubmission?.submission?.private_comment && (
+                            <div className="mt-3">
+                              <div className="fw-semibold text-dark mb-1">
+                                Your private comment
+                              </div>
+                              <div className="text-muted small">
+                                {studentSubmission.submission.private_comment}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="col-12 col-md-6">
+                          <div className="fw-semibold text-dark mb-2">
+                            Grade & Feedback
+                          </div>
+                          {studentSubmission?.submission?.grade !== null &&
+                          studentSubmission?.submission?.grade !== undefined ? (
+                            <>
+                              <div className="display-6 fw-bold text-success">
+                                {studentSubmission.submission.grade} /{" "}
+                                {coursework.points}
+                              </div>
+                              {studentSubmission.submission.feedback && (
+                                <div className="mt-2">
+                                  <div className="fw-semibold text-dark mb-1">
+                                    Feedback
+                                  </div>
+                                  <div
+                                    className="bg-white p-3 rounded border"
+                                    style={{ whiteSpace: "pre-wrap" }}
+                                  >
+                                    {studentSubmission.submission.feedback}
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <p className="text-muted">Not graded yet.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* ----- FILES (display) ----- */}
+                      {studentSubmission?.submission?.files &&
+                        studentSubmission.submission.files.length > 0 && (
+                          <div className="mt-4">
+                            <h6 className="fw-semibold text-dark mb-2">
+                              Your submitted files
+                            </h6>
+                            <div className="d-flex flex-wrap gap-2">
+                              {studentSubmission.submission.files.map(
+                                (file, idx) => {
+                                  const fileObj = {
+                                    id: `sub-${idx}`,
+                                    name:
+                                      file.file_name || file.filename || "file",
+                                    type: file.file_type || "pdf",
+                                    url: file.file_url || file.url || "#",
+                                  };
+                                  return (
+                                    <a
+                                      key={idx}
+                                      href={fileObj.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="border rounded p-2 px-3 d-flex align-items-center gap-2 text-decoration-none text-dark bg-white shadow-sm"
+                                    >
+                                      <i
+                                        className={`bi ${getPreviewIcon(fileObj)} fs-5`}
+                                      ></i>
+                                      <span className="small fw-medium">
+                                        {fileObj.name}
+                                      </span>
+                                    </a>
+                                  );
+                                },
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                      {/* If returned, show a note */}
+                      {studentSubmission?.submission?.status === "returned" && (
+                        <div className="mt-3 alert alert-info">
+                          This work has been returned to you by your teacher.
+                        </div>
+                      )}
                     </div>
                   )}
                 </>
@@ -744,34 +1474,84 @@ const ViewInstructionPage = ({
 
       {/* Mark as Done Modal */}
       {showMarkAsDoneModal && (
-        <div className="modal fade show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }} tabIndex="-1">
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
+          tabIndex="-1"
+        >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content border-0 shadow-lg rounded-4">
               <div className="modal-header border-bottom px-4 pt-4 pb-3">
-                <h5 className="modal-title font-google fw-bold">Mark as done</h5>
-                <button className="btn-close" onClick={() => { setShowMarkAsDoneModal(false); setMarkAsDoneFiles([]); }}></button>
+                <h5 className="modal-title font-google fw-bold">
+                  Mark as done
+                </h5>
+                <button
+                  className="btn-close"
+                  onClick={() => {
+                    setShowMarkAsDoneModal(false);
+                    setMarkAsDoneFiles([]);
+                  }}
+                ></button>
               </div>
               <div className="modal-body p-4">
-                <p className="text-muted mb-3">You can optionally upload files before marking this assignment as done.</p>
+                <p className="text-muted mb-3">
+                  You can optionally upload files before marking this assignment
+                  as done.
+                </p>
                 <div className="mb-4">
-                  <label className="form-label small fw-bold text-muted">Attachments (optional)</label>
-                  <input type="file" className="form-control" multiple onChange={(e) => setMarkAsDoneFiles(Array.from(e.target.files || []))} />
-                  <small className="form-text text-muted d-block mt-2">Select multiple files if needed, or leave empty to mark without files.</small>
+                  <label className="form-label small fw-bold text-muted">
+                    Attachments (optional)
+                  </label>
+                  <input
+                    type="file"
+                    className="form-control"
+                    multiple
+                    onChange={(e) =>
+                      setMarkAsDoneFiles(Array.from(e.target.files || []))
+                    }
+                  />
+                  <small className="form-text text-muted d-block mt-2">
+                    Select multiple files if needed, or leave empty to mark
+                    without files.
+                  </small>
                 </div>
                 {markAsDoneFiles.length > 0 && (
                   <div className="mb-4">
-                    <div className="fw-semibold small text-dark mb-2">Selected files ({markAsDoneFiles.length})</div>
+                    <div className="fw-semibold small text-dark mb-2">
+                      Selected files ({markAsDoneFiles.length})
+                    </div>
                     <div className="d-flex flex-wrap gap-2">
                       {markAsDoneFiles.map((file, index) => (
-                        <span key={`${file.name}-${index}`} className="badge bg-white text-dark border">{file.name}</span>
+                        <span
+                          key={`${file.name}-${index}`}
+                          className="badge bg-white text-dark border"
+                        >
+                          {file.name}
+                        </span>
                       ))}
                     </div>
                   </div>
                 )}
               </div>
               <div className="modal-footer border-top px-4 py-3">
-                <button type="button" className="btn btn-light fw-medium px-4" onClick={() => { setShowMarkAsDoneModal(false); setMarkAsDoneFiles([]); }}>Cancel</button>
-                <button type="button" className="btn btn-primary fw-medium px-4" onClick={handleMarkAsDone} disabled={isMarkingAsDone}>{isMarkingAsDone ? "Marking..." : "Mark as done"}</button>
+                <button
+                  type="button"
+                  className="btn btn-light fw-medium px-4"
+                  onClick={() => {
+                    setShowMarkAsDoneModal(false);
+                    setMarkAsDoneFiles([]);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary fw-medium px-4"
+                  onClick={handleMarkAsDone}
+                  disabled={isMarkingAsDone}
+                >
+                  {isMarkingAsDone ? "Marking..." : "Mark as done"}
+                </button>
               </div>
             </div>
           </div>

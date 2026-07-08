@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { useAuth } from "@/context/AuthContext"; // 1. Import Auth
-import { classAPI, userAPI } from "@/api/client"; // 2. API client
+import { useAuth } from "@/context/AuthContext";
+import { classAPI, userAPI, assignmentAPI } from "@/api/client";
 import { Routes, Route, useNavigate } from "react-router-dom";
 
 // Components
@@ -381,36 +381,44 @@ const App = () => {
         });
       }
 
-      const studentMessage =
+      // Use private_comment from submissionData
+      const privateComment =
+        submissionData.private_comment ||
         submissionData.message ||
         submissionData.student_message ||
         submissionData.studentComment ||
         submissionData.comment ||
         "";
-      const note = typeof studentMessage === "string" ? studentMessage.trim() : "";
-      const submittedAt = submissionData.submittedAt || new Date().toISOString();
+      const note =
+        typeof privateComment === "string" ? privateComment.trim() : "";
+      const submittedAt =
+        submissionData.submittedAt || new Date().toISOString();
       const status = submissionData.status || "submitted";
 
-      formData.append("message", note);
-      formData.append("student_message", note);
-      formData.append("student_comment", note);
+      formData.append("private_comment", note);
       formData.append("student_id", submissionData.studentId ?? user?.id ?? "");
-      formData.append("student_name", submissionData.studentName ?? user?.name ?? "");
-      formData.append("student_email", submissionData.studentEmail ?? user?.email ?? "");
+      formData.append(
+        "student_name",
+        submissionData.studentName ?? user?.name ?? "",
+      );
+      formData.append(
+        "student_email",
+        submissionData.studentEmail ?? user?.email ?? "",
+      );
       formData.append("class_id", classId);
       formData.append("assignment_id", courseworkId);
       formData.append("coursework_id", courseworkId);
-      formData.append("class_name", submissionData.className ?? selectedClass?.name ?? "");
+      formData.append(
+        "class_name",
+        submissionData.className ?? selectedClass?.name ?? "",
+      );
       formData.append("assignment_title", submissionData.assignmentTitle ?? "");
       formData.append("submitted_at", submittedAt);
       formData.append("status", status);
 
       const response = await classAPI.submitCoursework(courseworkId, formData);
 
-      if (response.data?.success === false) {
-        throw new Error(response.data.message || "Submission failed");
-      }
-
+      // --- Update local state to mark as submitted ---
       const markSubmitted = (items = []) =>
         items.map((item) =>
           item.id === courseworkId
@@ -422,7 +430,8 @@ const App = () => {
                   status,
                   message: note,
                   studentName: submissionData.studentName ?? user?.name ?? "",
-                  studentEmail: submissionData.studentEmail ?? user?.email ?? "",
+                  studentEmail:
+                    submissionData.studentEmail ?? user?.email ?? "",
                   submittedAt,
                   fileCount: normalizedFiles.length,
                 },
@@ -469,78 +478,46 @@ const App = () => {
     }
   };
 
-  const handleUpdateGrade = async (
+   const handleUpdateGrade = async (
     classId,
     studentId,
-    cwId,
+    courseworkId,
     newScore,
     feedback = null,
   ) => {
     try {
-      // Try to find the submission ID for this student & coursework
-      const classObj = classes.find((c) => c.id === classId) || selectedClass;
-      const student = classObj?.students?.find((s) => s.id === studentId);
+      // 1. Fetch the submission for this student & assignment
+      const res = await assignmentAPI.getStudentAssignmentSubmission(
+        courseworkId,
+        studentId,
+      );
+      const data = res.data?.data || res.data;
 
-      let submissionId = null;
-      // Try the detailed assignment route first (note: controller exposes '/assignmments/{id}/details')
-      const tryFetchDetails = async (url) => {
-        try {
-          const res = await apiClient.get(url);
-          const data = res.data?.data || res.data;
-          const subs = data?.submissions || [];
-          if (!subs || !subs.length) return null;
-          // attempt to match by student id, student object, or name
-          for (const s of subs) {
-            if (s.student_id && s.student_id === studentId) return s.id;
-            if (
-              s.student &&
-              (s.student.id === studentId || s.student_id === studentId)
-            )
-              return s.id;
-            const name = student
-              ? `${student.first_name || student.firstName || ""} ${student.last_name || student.lastName || ""}`.trim()
-              : "";
-            if (
-              name &&
-              (s.student_name === name || String(s.student_name).includes(name))
-            )
-              return s.id;
-          }
-        } catch (e) {
-          return null;
-        }
-        return null;
-      };
-
-      // Prefer the new single-assignment endpoint which includes attachments
-      // and submission files, fall back to the older /details route if needed.
-      submissionId = await tryFetchDetails(classAPI.getSubmissionDetails(cwId));
-      if (!submissionId)
-        submissionId = await tryFetchDetails(classAPI.getSubmissionDetailsLegacy(cwId));
-
-      if (submissionId) {
-        await classAPI.gradeSubmission(submissionId, {
-          grade: newScore,
-          feedback: feedback ?? "",
-        });
-        await fetchClasses();
-        addToast("Submission graded.", "success");
-        return;
+      // 2. Check if submission exists and has an id
+      const submission = data?.submission;
+      if (!submission || !submission.id) {
+        addToast("No submission found for this student.", "error");
+        return false;
       }
 
-      console.warn(
-        "Could not find submission id to grade; falling back to server grade endpoint not available",
-      );
-      addToast(
-        "Could not find the student submission to grade. Try grading from the assignment page.",
-        "error",
-      );
+      // 3. Grade the submission
+      await assignmentAPI.gradeSubmission(submission.id, {
+        grade: newScore,
+        feedback: feedback ?? "",
+      });
+
+      // 4. Refresh class data
+      await fetchClasses();
+      addToast("Submission graded successfully.", "success");
+      return true;
     } catch (err) {
       console.error("Update grade error:", err);
-      addToast("Could not update the grade.", "error");
+      const message = err.response?.data?.message || "Could not update the grade.";
+      addToast(message, "error");
+      return false;
     }
   };
-
+  
   const handleUpdateClassBanner = async (classId, bannerCss, themeColor) => {
     try {
       await classAPI.updateClassBanner(classId, bannerCss, themeColor);

@@ -1,6 +1,7 @@
+// ClassworkTab.jsx
 import React, { useState, useMemo, useEffect } from "react";
 import { useToast } from "@/context/ToastContext.jsx";
-import apiClient from "@/api/client.js";
+import apiClient, { assignmentAPI } from "@/api/client.js";
 
 const ClassworkTab = ({
   cls,
@@ -43,6 +44,10 @@ const ClassworkTab = ({
   const [submittingId, setSubmittingId] = useState(null);
   const [localClasswork, setLocalClasswork] = useState([]);
   const { addToast } = useToast();
+
+  // ---------- NEW: Submissions per coursework ----------
+  const [submissionsMap, setSubmissionsMap] = useState({});
+  const [loadingSubmissionsMap, setLoadingSubmissionsMap] = useState({});
 
   const normalizeTopicValue = (value) => {
     if (typeof value === "string") {
@@ -230,6 +235,82 @@ const ClassworkTab = ({
     return acc;
   }, {});
 
+  // ---------- Fetch submissions for a specific coursework ----------
+  const fetchSubmissionsForCoursework = async (cwId) => {
+    if (!cwId || !isTeacher) return;
+    // If already fetched or currently fetching, skip
+    if (submissionsMap[cwId] || loadingSubmissionsMap[cwId]) return;
+
+    // Mark as loading
+    setLoadingSubmissionsMap((prev) => ({ ...prev, [cwId]: true }));
+
+    try {
+      const students = cls.students || [];
+      if (students.length === 0) {
+        // No students, set empty result
+        setSubmissionsMap((prev) => ({
+          ...prev,
+          [cwId]: { turnedIn: 0, graded: 0, submissions: [] },
+        }));
+        setLoadingSubmissionsMap((prev) => ({ ...prev, [cwId]: false }));
+        return;
+      }
+
+      // Fetch for each student in parallel
+      const promises = students.map(async (st) => {
+        try {
+          const res = await assignmentAPI.getStudentAssignmentSubmission(cwId, st.id);
+          const data = res.data?.data || res.data;
+          return { studentId: st.id, data };
+        } catch (err) {
+          console.error(`Failed to fetch submission for student ${st.id}:`, err);
+          return { studentId: st.id, data: null };
+        }
+      });
+
+      const results = await Promise.all(promises);
+
+      // Aggregate
+      let turnedIn = 0;
+      let graded = 0;
+      const submissions = [];
+
+      results.forEach(({ studentId, data }) => {
+        if (data && data.submission_status !== "not_submitted") {
+          turnedIn++;
+          if (data.submission?.grade !== null && data.submission?.grade !== undefined) {
+            graded++;
+          }
+          submissions.push({
+            studentId,
+            ...data,
+          });
+        }
+      });
+
+      setSubmissionsMap((prev) => ({
+        ...prev,
+        [cwId]: { turnedIn, graded, submissions },
+      }));
+    } catch (err) {
+      console.error("Failed to fetch submissions for coursework:", err);
+      // Set empty to avoid retrying
+      setSubmissionsMap((prev) => ({
+        ...prev,
+        [cwId]: { turnedIn: 0, graded: 0, submissions: [] },
+      }));
+    } finally {
+      setLoadingSubmissionsMap((prev) => ({ ...prev, [cwId]: false }));
+    }
+  };
+
+  // When a teacher expands a coursework, fetch submissions if needed
+  useEffect(() => {
+    if (!isTeacher || !expandedId) return;
+    fetchSubmissionsForCoursework(expandedId);
+  }, [expandedId, isTeacher]);
+
+  // ---------- Handlers ----------
   const handleAddTopic = async (e) => {
     e.preventDefault();
     const trimmedTopic = topicName.trim();
@@ -495,20 +576,10 @@ const ClassworkTab = ({
     }
   };
 
-  // Helper to get assignment stats (use stats from backend or fallback)
-  const getStats = (cw) => {
-    const stats = cw.stats || { turnedIn: 0, assigned: 0, graded: 0 };
-    const totalStudents = cls.students?.length || 0;
-    return {
-      turnedIn: stats.turnedIn || 0,
-      assigned: stats.assigned || totalStudents,
-      graded: stats.graded || 0,
-    };
-  };
-
+  // ---------- Render ----------
   return (
     <div>
-      {/* Top Action Bar */}
+      {/* Top Action Bar (unchanged) */}
       <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 pb-3 border-bottom gap-3">
         <div className="d-flex align-items-center gap-2">
           {isTeacher && (
@@ -600,7 +671,7 @@ const ClassworkTab = ({
       </div>
 
       <div className="row g-4">
-        {/* Left Topic Sidebar Pills */}
+        {/* Left Topic Sidebar Pills (unchanged) */}
         <div className="col-12 col-md-3">
           <h6 className="fw-bold text-muted small text-uppercase mb-3 px-1">
             Topics
@@ -663,14 +734,19 @@ const ClassworkTab = ({
                 <div className="d-flex flex-column gap-2">
                   {items.map((cw) => {
                     const isExpanded = expandedId === cw.id;
-                    const stats = getStats(cw);
+                    // Get submission stats from map or fallback
+                    const subInfo = submissionsMap[cw.id];
+                    const turnedIn = subInfo?.turnedIn ?? cw.stats?.turnedIn ?? 0;
+                    const graded = subInfo?.graded ?? cw.stats?.graded ?? 0;
+                    const assigned = cw.stats?.assigned ?? cls.students?.length ?? 0;
+                    const isLoading = loadingSubmissionsMap[cw.id];
 
                     return (
                       <div
                         key={cw.id}
                         className="card border shadow-sm rounded-3 overflow-hidden"
                       >
-                        {/* Header Row */}
+                        {/* Header Row (unchanged) */}
                         <div
                           className={`p-3 d-flex align-items-center justify-content-between ${isExpanded ? "bg-light border-bottom" : "bg-white"}`}
                           style={{
@@ -785,34 +861,43 @@ const ClassworkTab = ({
                                     <h6 className="fw-bold text-muted small text-uppercase mb-3">
                                       Submission Summary
                                     </h6>
-                                    <div className="d-flex justify-content-around mb-3">
-                                      <div>
-                                        <div className="fs-3 fw-bolder text-primary">
-                                          {stats.turnedIn}
+                                    {isLoading ? (
+                                      <div className="py-2">
+                                        <div className="spinner-border spinner-border-sm text-primary" role="status">
+                                          <span className="visually-hidden">Loading...</span>
                                         </div>
-                                        <div className="text-muted small">
-                                          Turned in
+                                        <div className="text-muted small mt-1">Loading submissions...</div>
+                                      </div>
+                                    ) : (
+                                      <div className="d-flex justify-content-around mb-3">
+                                        <div>
+                                          <div className="fs-3 fw-bolder text-primary">
+                                            {turnedIn}
+                                          </div>
+                                          <div className="text-muted small">
+                                            Turned in
+                                          </div>
+                                        </div>
+                                        <div className="border-end"></div>
+                                        <div>
+                                          <div className="fs-3 fw-bolder text-dark">
+                                            {assigned}
+                                          </div>
+                                          <div className="text-muted small">
+                                            Assigned
+                                          </div>
+                                        </div>
+                                        <div className="border-end"></div>
+                                        <div>
+                                          <div className="fs-3 fw-bolder text-success">
+                                            {graded}
+                                          </div>
+                                          <div className="text-muted small">
+                                            Graded
+                                          </div>
                                         </div>
                                       </div>
-                                      <div className="border-end"></div>
-                                      <div>
-                                        <div className="fs-3 fw-bolder text-dark">
-                                          {stats.assigned}
-                                        </div>
-                                        <div className="text-muted small">
-                                          Assigned
-                                        </div>
-                                      </div>
-                                      <div className="border-end"></div>
-                                      <div>
-                                        <div className="fs-3 fw-bolder text-success">
-                                          {stats.graded}
-                                        </div>
-                                        <div className="text-muted small">
-                                          Graded
-                                        </div>
-                                      </div>
-                                    </div>
+                                    )}
                                     <button
                                       className="btn btn-sm btn-outline-primary w-100 fw-medium"
                                       onClick={(e) => {
@@ -898,7 +983,7 @@ const ClassworkTab = ({
         </div>
       </div>
 
-      {/* Topic Actions Modal */}
+      {/* Topic Actions Modal (unchanged) */}
       {showTopicActionModal && editingTopicId && (
         <div
           className="modal fade show d-block"
@@ -979,7 +1064,7 @@ const ClassworkTab = ({
         </div>
       )}
 
-      {/* Add Topic Modal */}
+      {/* Add Topic Modal (unchanged) */}
       {showTopicModal && (
         <div
           className="modal fade show d-block"
@@ -1034,7 +1119,7 @@ const ClassworkTab = ({
         </div>
       )}
 
-      {/* Create Coursework Modal */}
+      {/* Create Coursework Modal (unchanged) */}
       {showCreateModal && (
         <div
           className="modal fade show d-block"
