@@ -70,7 +70,9 @@ export const assignmentAPI = {
   gradeSubmission: (submissionId, payload) =>
     apiClient.post(`/submissions/${submissionId}/grade`, payload),
   getStudentAssignmentSubmission: (assignmentId, studentId) =>
-    apiClient.get(`/assignments/${assignmentId}/students/${studentId}/details`), // <-- NEW
+    apiClient.get(`/assignments/${assignmentId}/students/${studentId}/details`),
+sendPrivateComment: (submissionId, data) =>
+  apiClient.post(`/submissions/${submissionId}/private-comment`, data),
 };
 
 export const classAPI = {

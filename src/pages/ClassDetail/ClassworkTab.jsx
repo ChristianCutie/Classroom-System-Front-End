@@ -1,5 +1,5 @@
 // ClassworkTab.jsx
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/context/ToastContext.jsx";
 import apiClient, { assignmentAPI } from "@/api/client.js";
 
@@ -45,9 +45,33 @@ const ClassworkTab = ({
   const [localClasswork, setLocalClasswork] = useState([]);
   const { addToast } = useToast();
 
-  // ---------- NEW: Submissions per coursework ----------
+  // [Student search and dropdown state
+  const [studentSearchTerm, setStudentSearchTerm] = useState("");
+  const [showStudentDropdown, setShowStudentDropdown] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Student assignment states
+  const [cwAssignToAll, setCwAssignToAll] = useState(true);
+  const [cwSelectedStudents, setCwSelectedStudents] = useState([]);
+
+  // ---------- Submissions per coursework ----------
   const [submissionsMap, setSubmissionsMap] = useState({});
   const [loadingSubmissionsMap, setLoadingSubmissionsMap] = useState({});
+
+  // Reset function
+  const resetCreateForm = () => {
+    setCwTitle("");
+    setCwInstructions("");
+    setCwTopic("General");
+    setCwTopicId(null);
+    setCwPoints("100");
+    setCwDueDate("");
+    setCwAttachments([]);
+    setCwSelectedStudents([]);
+    setStudentSearchTerm("");
+    setShowStudentDropdown(false);
+    setIsCreatingNewTopic(false);
+  };
 
   const normalizeTopicValue = (value) => {
     if (typeof value === "string") {
@@ -158,9 +182,10 @@ const ClassworkTab = ({
           cw.userSubmission?.status === "turned_in" ||
           cw.userSubmission?.status === "graded" ||
           cw.status === "submitted" ||
-          (Array.isArray(cw.submissions) && cw.submissions.some((sub) =>
-            ["submitted", "turned_in", "graded"].includes(sub?.status)
-          )),
+          (Array.isArray(cw.submissions) &&
+            cw.submissions.some((sub) =>
+              ["submitted", "turned_in", "graded"].includes(sub?.status),
+            )),
         );
         if (hasSubmission) next[cw.id] = true;
       });
@@ -196,9 +221,9 @@ const ClassworkTab = ({
   const topics = useMemo(() => {
     const topicList = [
       ...customTopics,
-      ...((Array.isArray(cls?.topics) ? cls.topics : [])
+      ...(Array.isArray(cls?.topics) ? cls.topics : [])
         .map((topic) => normalizeTopicValue(topic))
-        .filter(Boolean)),
+        .filter(Boolean),
       ...availableTopics.map((topic) => normalizeTopicValue(topic.name)),
       ...classworkList.map((cw) => normalizeTopicValue(cw.topic) || "General"),
     ];
@@ -238,16 +263,13 @@ const ClassworkTab = ({
   // ---------- Fetch submissions for a specific coursework ----------
   const fetchSubmissionsForCoursework = async (cwId) => {
     if (!cwId || !isTeacher) return;
-    // If already fetched or currently fetching, skip
     if (submissionsMap[cwId] || loadingSubmissionsMap[cwId]) return;
 
-    // Mark as loading
     setLoadingSubmissionsMap((prev) => ({ ...prev, [cwId]: true }));
 
     try {
       const students = cls.students || [];
       if (students.length === 0) {
-        // No students, set empty result
         setSubmissionsMap((prev) => ({
           ...prev,
           [cwId]: { turnedIn: 0, graded: 0, submissions: [] },
@@ -256,21 +278,25 @@ const ClassworkTab = ({
         return;
       }
 
-      // Fetch for each student in parallel
       const promises = students.map(async (st) => {
         try {
-          const res = await assignmentAPI.getStudentAssignmentSubmission(cwId, st.id);
+          const res = await assignmentAPI.getStudentAssignmentSubmission(
+            cwId,
+            st.id,
+          );
           const data = res.data?.data || res.data;
           return { studentId: st.id, data };
         } catch (err) {
-          console.error(`Failed to fetch submission for student ${st.id}:`, err);
+          console.error(
+            `Failed to fetch submission for student ${st.id}:`,
+            err,
+          );
           return { studentId: st.id, data: null };
         }
       });
 
       const results = await Promise.all(promises);
 
-      // Aggregate
       let turnedIn = 0;
       let graded = 0;
       const submissions = [];
@@ -278,7 +304,10 @@ const ClassworkTab = ({
       results.forEach(({ studentId, data }) => {
         if (data && data.submission_status !== "not_submitted") {
           turnedIn++;
-          if (data.submission?.grade !== null && data.submission?.grade !== undefined) {
+          if (
+            data.submission?.grade !== null &&
+            data.submission?.grade !== undefined
+          ) {
             graded++;
           }
           submissions.push({
@@ -294,7 +323,6 @@ const ClassworkTab = ({
       }));
     } catch (err) {
       console.error("Failed to fetch submissions for coursework:", err);
-      // Set empty to avoid retrying
       setSubmissionsMap((prev) => ({
         ...prev,
         [cwId]: { turnedIn: 0, graded: 0, submissions: [] },
@@ -304,7 +332,6 @@ const ClassworkTab = ({
     }
   };
 
-  // When a teacher expands a coursework, fetch submissions if needed
   useEffect(() => {
     if (!isTeacher || !expandedId) return;
     fetchSubmissionsForCoursework(expandedId);
@@ -473,6 +500,34 @@ const ClassworkTab = ({
     }
   };
 
+  // Helper to get avatar URL or generate fallback
+  const getStudentAvatar = (student) => {
+    // Try common field names
+    const avatar =
+      student.avatar ||
+      student.profile_pic ||
+      student.photo ||
+      student.photo_url ||
+      student.picture;
+    if (avatar) return avatar;
+    return null; // fallback will use initials
+  };
+
+  // Generate a consistent color based on name
+  const stringToColor = (str) => {
+    if (!str) return "#6c757d";
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    let color = "#";
+    for (let i = 0; i < 3; i++) {
+      const value = (hash >> (i * 8)) & 0xff;
+      color += ("00" + value.toString(16)).substr(-2);
+    }
+    return color;
+  };
+
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
     if (!cwTitle.trim()) return;
@@ -503,6 +558,30 @@ const ClassworkTab = ({
                   formData.append(`attachments[${index}]`, file);
                 }
               });
+
+              // [NEW] Assign students
+              if (cwAssignToAll) {
+                formData.append("assign_to_all", "true");
+              } else if (cwSelectedStudents.length > 0) {
+                cwSelectedStudents.forEach((studentId) => {
+                  formData.append("student_ids[]", studentId);
+                });
+              }
+              // If not assigned to all and no students selected, fallback to all?
+              // We'll keep as is; maybe backend will treat empty as all.
+              // But we can also default to all if none selected.
+              if (!cwAssignToAll && cwSelectedStudents.length === 0) {
+                // Optionally, we could set assign_to_all true or send empty array.
+                // We'll send assign_to_all false and empty student_ids?
+                // Better to alert user.
+                addToast(
+                  "Please select at least one student or choose 'All students'.",
+                  "warning",
+                );
+                setIsSubmitting(false);
+                return;
+              }
+
               return { type: "assignment", data: formData };
             })()
           : {
@@ -525,6 +604,7 @@ const ClassworkTab = ({
 
       const created = await onCreateCoursework(cls.id, payload);
       if (created !== false) {
+        // Reset form
         setCwTitle("");
         setCwInstructions("");
         setCwTopic("General");
@@ -532,12 +612,43 @@ const ClassworkTab = ({
         setCwPoints("100");
         setCwDueDate("");
         setCwAttachments([]);
+        // [NEW] Reset assignment options
+        setCwAssignToAll(true);
+        setCwSelectedStudents([]);
         setShowCreateModal(false);
       }
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  // Add student to selection
+  const addStudent = (studentId) => {
+    if (!cwSelectedStudents.includes(studentId)) {
+      setCwSelectedStudents((prev) => [...prev, studentId]);
+    }
+  };
+
+  // [NEW] Remove student from selection
+  const removeStudent = (studentId) => {
+    setCwSelectedStudents((prev) => prev.filter((id) => id !== studentId));
+  };
+
+  // [NEW] Filtered students based on search term
+  const filteredStudents = useMemo(() => {
+    if (!studentSearchTerm.trim()) return cls.students || [];
+    const term = studentSearchTerm.toLowerCase().trim();
+    return (cls.students || []).filter((student) => {
+      const name = (
+        student.name ||
+        student.full_name ||
+        student.username ||
+        ""
+      ).toLowerCase();
+      const email = (student.email || "").toLowerCase();
+      return name.includes(term) || email.includes(term);
+    });
+  }, [studentSearchTerm, cls.students]);
 
   const handleStudentTurnIn = async (cw) => {
     if (
@@ -602,7 +713,8 @@ const ClassworkTab = ({
                       setShowCreateModal(true);
                     }}
                   >
-                    <i className="bi bi-clipboard-check text-primary"></i> Assignment
+                    <i className="bi bi-clipboard-check text-primary"></i>{" "}
+                    Assignment
                   </button>
                 </li>
                 <li>
@@ -613,7 +725,8 @@ const ClassworkTab = ({
                       setShowCreateModal(true);
                     }}
                   >
-                    <i className="bi bi-card-checklist text-success"></i> Quiz assignment
+                    <i className="bi bi-card-checklist text-success"></i> Quiz
+                    assignment
                   </button>
                 </li>
                 <li>
@@ -624,7 +737,8 @@ const ClassworkTab = ({
                       setShowCreateModal(true);
                     }}
                   >
-                    <i className="bi bi-question-circle text-warning"></i> Question
+                    <i className="bi bi-question-circle text-warning"></i>{" "}
+                    Question
                   </button>
                 </li>
                 <li>
@@ -665,7 +779,8 @@ const ClassworkTab = ({
             className="btn btn-sm btn-light border rounded-pill px-3 d-flex align-items-center gap-2 text-dark fw-medium py-2"
             onClick={() => window.open("https://drive.google.com", "_blank")}
           >
-            <i className="bi bi-folder2-open text-warning fs-6"></i> Class Drive folder
+            <i className="bi bi-folder2-open text-warning fs-6"></i> Class Drive
+            folder
           </button>
         </div>
       </div>
@@ -734,11 +849,12 @@ const ClassworkTab = ({
                 <div className="d-flex flex-column gap-2">
                   {items.map((cw) => {
                     const isExpanded = expandedId === cw.id;
-                    // Get submission stats from map or fallback
                     const subInfo = submissionsMap[cw.id];
-                    const turnedIn = subInfo?.turnedIn ?? cw.stats?.turnedIn ?? 0;
+                    const turnedIn =
+                      subInfo?.turnedIn ?? cw.stats?.turnedIn ?? 0;
                     const graded = subInfo?.graded ?? cw.stats?.graded ?? 0;
-                    const assigned = cw.stats?.assigned ?? cls.students?.length ?? 0;
+                    const assigned =
+                      cw.stats?.assigned ?? cls.students?.length ?? 0;
                     const isLoading = loadingSubmissionsMap[cw.id];
 
                     return (
@@ -810,9 +926,7 @@ const ClassworkTab = ({
                             <div className="row g-4">
                               <div
                                 className={
-                                  isTeacher
-                                    ? "col-12 col-lg-8"
-                                    : "col-12"
+                                  isTeacher ? "col-12 col-lg-8" : "col-12"
                                 }
                               >
                                 <p
@@ -863,10 +977,17 @@ const ClassworkTab = ({
                                     </h6>
                                     {isLoading ? (
                                       <div className="py-2">
-                                        <div className="spinner-border spinner-border-sm text-primary" role="status">
-                                          <span className="visually-hidden">Loading...</span>
+                                        <div
+                                          className="spinner-border spinner-border-sm text-primary"
+                                          role="status"
+                                        >
+                                          <span className="visually-hidden">
+                                            Loading...
+                                          </span>
                                         </div>
-                                        <div className="text-muted small mt-1">Loading submissions...</div>
+                                        <div className="text-muted small mt-1">
+                                          Loading submissions...
+                                        </div>
                                       </div>
                                     ) : (
                                       <div className="d-flex justify-content-around mb-3">
@@ -925,7 +1046,8 @@ const ClassworkTab = ({
                                       </span>
                                     </div>
                                     <p className="text-muted small mb-3">
-                                      Upload your completed files or mark as done.
+                                      Upload your completed files or mark as
+                                      done.
                                     </p>
                                     <button
                                       className="btn btn-primary btn-sm w-100 fw-medium mb-2 shadow-sm"
@@ -949,7 +1071,8 @@ const ClassworkTab = ({
 
                             <div className="border-top mt-4 pt-3 d-flex justify-content-between align-items-center">
                               <button className="btn btn-link btn-sm p-0 text-decoration-none fw-medium text-secondary">
-                                <i className="bi bi-chat-left-text me-1"></i> Add class comment
+                                <i className="bi bi-chat-left-text me-1"></i>{" "}
+                                Add class comment
                               </button>
                               <button
                                 className="btn btn-link btn-sm p-0 text-decoration-none fw-medium text-primary"
@@ -1119,7 +1242,7 @@ const ClassworkTab = ({
         </div>
       )}
 
-      {/* Create Coursework Modal (unchanged) */}
+      {/* Create Coursework Modal – all fields visible */}
       {showCreateModal && (
         <div
           className="modal fade show d-block"
@@ -1134,12 +1257,16 @@ const ClassworkTab = ({
                 </h5>
                 <button
                   className="btn-close"
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    resetCreateForm();
+                  }}
                 ></button>
               </div>
 
               <form onSubmit={handleCreateSubmit}>
                 <div className="modal-body p-4">
+                  {/* Title */}
                   <div className="form-floating mb-3">
                     <input
                       type="text"
@@ -1154,6 +1281,7 @@ const ClassworkTab = ({
                     <label htmlFor="cwTitle">Title (required)</label>
                   </div>
 
+                  {/* Instructions */}
                   <div className="form-floating mb-3">
                     <textarea
                       className="form-control"
@@ -1166,6 +1294,7 @@ const ClassworkTab = ({
                     <label htmlFor="cwInstr">Instructions (optional)</label>
                   </div>
 
+                  {/* Attachments (only for assignments) */}
                   {createType === "assignment" && (
                     <div className="mb-3">
                       <label className="form-label small fw-bold text-muted">
@@ -1182,50 +1311,42 @@ const ClassworkTab = ({
                     </div>
                   )}
 
+                  {/* Topic, Points, Due Date */}
                   <div className="row g-3 mb-3">
                     <div className="col-12 col-md-4">
                       <label className="form-label small fw-bold text-muted">
                         Topic
                       </label>
-
                       {!isCreatingNewTopic ? (
-                        <>
-                          <select
-                            className="form-select"
-                            value={cwTopicId ? String(cwTopicId) : ""}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (val === "__new__") {
-                                setIsCreatingNewTopic(true);
-                                setCwTopic("");
-                                setCwTopicId(null);
-                                return;
-                              }
-                              const matchedTopic = availableTopics.find(
-                                (topic) => String(topic.id) === val,
-                              );
-                              setCwTopic(matchedTopic?.name || "");
-                              setCwTopicId(matchedTopic?.id ?? null);
-                            }}
-                          >
-                            <option value="">Select a topic</option>
-                            {topicOptions.map((topic) => {
-                              const label =
-                                typeof topic.name === "string"
-                                  ? topic.name
-                                  : "Unnamed topic";
-                              return (
-                                <option
-                                  key={topic.id ?? topic.name}
-                                  value={String(topic.id ?? topic.name)}
-                                >
-                                  {label}
-                                </option>
-                              );
-                            })}
-                            <option value="__new__">+ Create new topic</option>
-                          </select>
-                        </>
+                        <select
+                          className="form-select"
+                          value={cwTopicId ? String(cwTopicId) : ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === "__new__") {
+                              setIsCreatingNewTopic(true);
+                              setCwTopic("");
+                              setCwTopicId(null);
+                              return;
+                            }
+                            const matchedTopic = availableTopics.find(
+                              (topic) => String(topic.id) === val,
+                            );
+                            setCwTopic(matchedTopic?.name || "");
+                            setCwTopicId(matchedTopic?.id ?? null);
+                          }}
+                        >
+                          <option value="">Select a topic</option>
+                          {topicOptions.map((topic) => (
+                            <option
+                              key={topic.id ?? topic.name}
+                              value={String(topic.id ?? topic.name)}
+                            >
+                              {topic.name || "Unnamed topic"}
+                            </option>
+                          ))}
+                          <option value="__new__">+ Create new topic</option>
+                        </select>
                       ) : (
                         <>
                           <input
@@ -1260,12 +1381,6 @@ const ClassworkTab = ({
                           </div>
                         </>
                       )}
-
-                      <small className="form-text text-muted d-block mt-1">
-                        {!isCreatingNewTopic
-                          ? "Pick an existing topic or create a new one"
-                          : "Type a new topic name"}
-                      </small>
                     </div>
 
                     {createType !== "material" && (
@@ -1297,13 +1412,252 @@ const ClassworkTab = ({
                       </>
                     )}
                   </div>
-                </div>
 
+                  {/* ===== STUDENT ASSIGNMENT (always visible) ===== */}
+                  {/* Student assignment – always visible with avatars */}
+                  {createType === "assignment" && (
+                    <div className="mb-3 border-top pt-3">
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <label className="form-label small fw-bold text-muted mb-0">
+                          Assign to students
+                        </label>
+                        <div>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-link text-decoration-none p-0 me-2"
+                            onClick={() => {
+                              const allIds = (cls.students || []).map(
+                                (s) => s.id,
+                              );
+                              setCwSelectedStudents(allIds);
+                              setStudentSearchTerm("");
+                              setShowStudentDropdown(false);
+                            }}
+                          >
+                            Select all
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-link text-decoration-none p-0 text-danger"
+                            onClick={() => {
+                              setCwSelectedStudents([]);
+                              setStudentSearchTerm("");
+                              setShowStudentDropdown(false);
+                            }}
+                          >
+                            Clear all
+                          </button>
+                        </div>
+                      </div>
+
+                      <div ref={dropdownRef}>
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="Type student name or email to add..."
+                          value={studentSearchTerm}
+                          onChange={(e) => {
+                            setStudentSearchTerm(e.target.value);
+                            setShowStudentDropdown(true);
+                          }}
+                          onFocus={() => setShowStudentDropdown(true)}
+                          onBlur={() => {
+                            setTimeout(
+                              () => setShowStudentDropdown(false),
+                              150,
+                            );
+                          }}
+                          autoComplete="off"
+                        />
+
+                        {/* Dropdown with avatars */}
+                        {showStudentDropdown && filteredStudents.length > 0 && (
+                          <ul
+                            className="list-group mt-1 shadow-sm"
+                            style={{
+                              maxHeight: "200px",
+                              overflowY: "auto",
+                              position: "relative",
+                              zIndex: 1050,
+                            }}
+                          >
+                            {filteredStudents.map((student) => {
+                              const isSelected = cwSelectedStudents.includes(
+                                student.id,
+                              );
+                              const displayName =
+                                student.first_name + " " + student.last_name ||
+                                student.full_name ||
+                                student.username ||
+                                "Unnamed";
+                              const displayEmail = student.email || "";
+                              const avatarUrl = getStudentAvatar(student);
+                              const initials = displayName
+                                .split(" ")
+                                .map((word) => word[0])
+                                .join("")
+                                .toUpperCase()
+                                .slice(0, 2);
+                              const bgColor = stringToColor(displayName);
+
+                              return (
+                                <li
+                                  key={student.id}
+                                  className={`list-group-item list-group-item-action d-flex align-items-center gap-3 ${
+                                    isSelected ? "active" : ""
+                                  }`}
+                                  style={{ cursor: "pointer" }}
+                                  onClick={() => {
+                                    if (isSelected) {
+                                      removeStudent(student.id);
+                                    } else {
+                                      addStudent(student.id);
+                                    }
+                                    setStudentSearchTerm("");
+                                    setShowStudentDropdown(false);
+                                  }}
+                                >
+                                  {avatarUrl ? (
+                                    <img
+                                      src={avatarUrl}
+                                      alt={displayName}
+                                      className="rounded-circle"
+                                      style={{
+                                        width: "32px",
+                                        height: "32px",
+                                        objectFit: "cover",
+                                      }}
+                                    />
+                                  ) : (
+                                    <span
+                                      className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
+                                      style={{
+                                        width: "32px",
+                                        height: "32px",
+                                        backgroundColor: bgColor,
+                                        fontSize: "0.75rem",
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      {initials}
+                                    </span>
+                                  )}
+                                  <div className="flex-grow-1">
+                                    <div className="fw-semibold">
+                                      {displayName}
+                                    </div>
+                                    <small
+                                      className={
+                                        isSelected ? "text-light" : "text-muted"
+                                      }
+                                    >
+                                      {displayEmail}
+                                    </small>
+                                  </div>
+                                  {isSelected && (
+                                    <i className="bi bi-check-circle-fill text-light"></i>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+
+                        {/* Selected tags with avatars */}
+                        {cwSelectedStudents.length > 0 && (
+                          <div className="d-flex flex-wrap gap-2 mt-2">
+                            {cwSelectedStudents.map((studentId) => {
+                              const student = cls.students?.find(
+                                (s) => s.id === studentId,
+                              );
+                              if (!student) return null;
+                              const displayName =
+                                student.name ||
+                                student.first_name + " " + student.last_name ||
+                                student.username ||
+                                "Student";
+                              const displayEmail = student.email || "";
+                              const avatarUrl = getStudentAvatar(student);
+                              const initials = displayName
+                                .split(" ")
+                                .map((word) => word[0])
+                                .join("")
+                                .toUpperCase()
+                                .slice(0, 2);
+                              const bgColor = stringToColor(displayName);
+
+                              return (
+                                <span
+                                  key={studentId}
+                                  className="badge bg-light text-dark d-inline-flex align-items-center gap-1 px-2 py-1 rounded-pill border"
+                                  style={{ fontSize: "0.9rem" }}
+                                >
+                                  {avatarUrl ? (
+                                    <img
+                                      src={avatarUrl}
+                                      alt={displayName}
+                                      className="rounded-circle"
+                                      style={{
+                                        width: "20px",
+                                        height: "20px",
+                                        objectFit: "cover",
+                                      }}
+                                    />
+                                  ) : (
+                                    <span
+                                      className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
+                                      style={{
+                                        width: "20px",
+                                        height: "20px",
+                                        backgroundColor: bgColor,
+                                        fontSize: "0.6rem",
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      {initials}
+                                    </span>
+                                  )}
+                                  <span>{displayName}</span>
+                                  {displayEmail && (
+                                    <span
+                                      className="text-muted small"
+                                      style={{ fontSize: "0.7rem" }}
+                                    >
+                                      {displayEmail}
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="btn-close btn-close-sm ms-1"
+                                    aria-label="Remove"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeStudent(studentId);
+                                    }}
+                                  ></button>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {cwSelectedStudents.length === 0 && (
+                          <div className="text-muted small mt-1">
+                            No students selected – assignment will not be
+                            visible to anyone.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <div className="modal-footer border-top px-4 py-3">
                   <button
                     type="button"
                     className="btn btn-light fw-medium px-4"
-                    onClick={() => setShowCreateModal(false)}
+                    onClick={() => {
+                      setShowCreateModal(false);
+                      resetCreateForm();
+                    }}
                   >
                     Cancel
                   </button>
@@ -1311,7 +1665,12 @@ const ClassworkTab = ({
                     type="submit"
                     className="btn text-white fw-medium px-4"
                     style={{ backgroundColor: cls.themeColor || "#1a73e8" }}
-                    disabled={!cwTitle.trim() || isSubmitting}
+                    disabled={
+                      !cwTitle.trim() ||
+                      isSubmitting ||
+                      (createType === "assignment" &&
+                        cwSelectedStudents.length === 0)
+                    }
                   >
                     {isSubmitting
                       ? "Creating..."
