@@ -776,7 +776,7 @@ const ViewInstructionPage = ({
           className="p-4 d-flex align-items-center justify-content-between"
           style={{
             backgroundColor: cls.themeColor || "#1a73e8",
-            minHeight: "120px",
+            minHeight: "80px",
           }}
         >
           <div className="d-flex align-items-center gap-3">
