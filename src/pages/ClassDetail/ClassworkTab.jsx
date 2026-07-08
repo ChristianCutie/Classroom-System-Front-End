@@ -28,7 +28,6 @@ const ClassworkTab = ({
   const [isUpdatingTopic, setIsUpdatingTopic] = useState(false);
   const [isDeletingTopic, setIsDeletingTopic] = useState(false);
 
-  // 'existing' or 'new'
   const [topicMode, setTopicMode] = useState("existing");
   const [isCreatingNewTopic, setIsCreatingNewTopic] = useState(false);
 
@@ -50,9 +49,7 @@ const ClassworkTab = ({
       const trimmed = value.trim();
       return trimmed || "";
     }
-
     if (!value || typeof value !== "object") return "";
-
     const directName =
       value.name ||
       value.topic_name ||
@@ -60,18 +57,15 @@ const ClassworkTab = ({
       value.label ||
       value.title ||
       value.topic;
-
     if (typeof directName === "string") {
       const trimmed = directName.trim();
       return trimmed || "";
     }
-
     return "";
   };
 
   const isTeacher = useMemo(() => {
     if (!user) return false;
-
     if (typeof user.role === "string") {
       const normalized = user.role.toLowerCase();
       return (
@@ -80,7 +74,6 @@ const ClassworkTab = ({
         normalized === "teacher/instructor"
       );
     }
-
     if (user.role && typeof user.role === "object") {
       const roleName =
         user.role.role_name || user.role.name || user.role.value || "";
@@ -91,7 +84,6 @@ const ClassworkTab = ({
         normalized === "teacher/instructor"
       );
     }
-
     return Boolean(user.is_teacher || user.isTeacher);
   }, [user]);
 
@@ -176,14 +168,12 @@ const ClassworkTab = ({
 
     const loadTopics = async () => {
       if (!cls?.id) return;
-
       try {
         const res = await apiClient.get(`/dropdown/topics?class_id=${cls.id}`);
         const topicsFromApi = (res.data?.data || []).map((topic) => ({
           id: topic.id ?? topic.topic_id ?? null,
           name: topic.topic_name || topic.name || topic.topicName || "",
         }));
-
         if (mounted) {
           setAvailableTopics(topicsFromApi.filter((topic) => topic.name));
         }
@@ -198,7 +188,6 @@ const ClassworkTab = ({
     };
   }, [cls?.id]);
 
-  // --- Derive topics from the classwork list ---
   const topics = useMemo(() => {
     const topicList = [
       ...customTopics,
@@ -208,7 +197,6 @@ const ClassworkTab = ({
       ...availableTopics.map((topic) => normalizeTopicValue(topic.name)),
       ...classworkList.map((cw) => normalizeTopicValue(cw.topic) || "General"),
     ];
-
     const uniqueTopics = Array.from(new Set(topicList.filter(Boolean)));
     return ["All topics", ...uniqueTopics];
   }, [classworkList, customTopics, cls?.topics, availableTopics]);
@@ -224,7 +212,6 @@ const ClassworkTab = ({
         name: normalizeTopicValue(topicName),
       })),
     ];
-
     return merged.filter((topic, index, arr) => {
       const firstIndex = arr.findIndex((item) => item.name === topic.name);
       return firstIndex === index;
@@ -236,7 +223,6 @@ const ClassworkTab = ({
       ? classworkList
       : classworkList.filter((cw) => cw.topic === selectedTopic);
 
-  // Group by topic
   const groupedWork = filteredWork.reduce((acc, cw) => {
     const topic = normalizeTopicValue(cw.topic) || "No topic";
     if (!acc[topic]) acc[topic] = [];
@@ -304,7 +290,6 @@ const ClassworkTab = ({
       const res = await apiClient.post(`/update/topics/${topic.id}`, {
         topic_name: trimmedName,
       });
-
       const updatedTopic = res.data?.data;
       const updatedName = updatedTopic?.topic_name || trimmedName;
 
@@ -377,7 +362,6 @@ const ClassworkTab = ({
       const res = await apiClient.post("/create/topics", {
         topic_name: trimmedTopic,
       });
-
       const createdTopic = res.data?.data || {};
       const normalizedTopic = {
         id: createdTopic.id ?? createdTopic.topic_id ?? null,
@@ -511,6 +495,17 @@ const ClassworkTab = ({
     }
   };
 
+  // Helper to get assignment stats (use stats from backend or fallback)
+  const getStats = (cw) => {
+    const stats = cw.stats || { turnedIn: 0, assigned: 0, graded: 0 };
+    const totalStudents = cls.students?.length || 0;
+    return {
+      turnedIn: stats.turnedIn || 0,
+      assigned: stats.assigned || totalStudents,
+      graded: stats.graded || 0,
+    };
+  };
+
   return (
     <div>
       {/* Top Action Bar */}
@@ -536,8 +531,7 @@ const ClassworkTab = ({
                       setShowCreateModal(true);
                     }}
                   >
-                    <i className="bi bi-clipboard-check text-primary"></i>{" "}
-                    Assignment
+                    <i className="bi bi-clipboard-check text-primary"></i> Assignment
                   </button>
                 </li>
                 <li>
@@ -548,8 +542,7 @@ const ClassworkTab = ({
                       setShowCreateModal(true);
                     }}
                   >
-                    <i className="bi bi-card-checklist text-success"></i> Quiz
-                    assignment
+                    <i className="bi bi-card-checklist text-success"></i> Quiz assignment
                   </button>
                 </li>
                 <li>
@@ -560,8 +553,7 @@ const ClassworkTab = ({
                       setShowCreateModal(true);
                     }}
                   >
-                    <i className="bi bi-question-circle text-warning"></i>{" "}
-                    Question
+                    <i className="bi bi-question-circle text-warning"></i> Question
                   </button>
                 </li>
                 <li>
@@ -602,8 +594,7 @@ const ClassworkTab = ({
             className="btn btn-sm btn-light border rounded-pill px-3 d-flex align-items-center gap-2 text-dark fw-medium py-2"
             onClick={() => window.open("https://drive.google.com", "_blank")}
           >
-            <i className="bi bi-folder2-open text-warning fs-6"></i> Class Drive
-            folder
+            <i className="bi bi-folder2-open text-warning fs-6"></i> Class Drive folder
           </button>
         </div>
       </div>
@@ -672,6 +663,8 @@ const ClassworkTab = ({
                 <div className="d-flex flex-column gap-2">
                   {items.map((cw) => {
                     const isExpanded = expandedId === cw.id;
+                    const stats = getStats(cw);
+
                     return (
                       <div
                         key={cw.id}
@@ -741,7 +734,7 @@ const ClassworkTab = ({
                             <div className="row g-4">
                               <div
                                 className={
-                                  cw.stats || isTeacher
+                                  isTeacher
                                     ? "col-12 col-lg-8"
                                     : "col-12"
                                 }
@@ -787,7 +780,7 @@ const ClassworkTab = ({
 
                               {/* Teacher Stats or Student Action Box */}
                               <div className="col-12 col-lg-4 border-start-lg">
-                                {isTeacher && cw.stats ? (
+                                {isTeacher ? (
                                   <div className="p-3 bg-light rounded-3 text-center border">
                                     <h6 className="fw-bold text-muted small text-uppercase mb-3">
                                       Submission Summary
@@ -795,20 +788,7 @@ const ClassworkTab = ({
                                     <div className="d-flex justify-content-around mb-3">
                                       <div>
                                         <div className="fs-3 fw-bolder text-primary">
-                                          {(() => {
-                                            const hasLocalSubmissionSignal = Boolean(
-                                              cw.submitted ||
-                                              cw.userSubmitted ||
-                                              cw.userSubmission?.status ||
-                                              cw.status === "submitted" ||
-                                              cw.status === "turned_in" ||
-                                              cw.status === "graded"
-                                            );
-                                            const actualTurnedIn = hasLocalSubmissionSignal && (Array.isArray(cw.submissions) ? cw.submissions.length : 0) === 0
-                                              ? 1
-                                              : (Array.isArray(cw.submissions) ? cw.submissions.length : 0);
-                                            return actualTurnedIn > (cw.stats.turnedIn || 0) ? actualTurnedIn : (cw.stats.turnedIn || 0);
-                                          })()}
+                                          {stats.turnedIn}
                                         </div>
                                         <div className="text-muted small">
                                           Turned in
@@ -817,28 +797,21 @@ const ClassworkTab = ({
                                       <div className="border-end"></div>
                                       <div>
                                         <div className="fs-3 fw-bolder text-dark">
-                                          {cw.stats.assigned}
+                                          {stats.assigned}
                                         </div>
                                         <div className="text-muted small">
                                           Assigned
                                         </div>
                                       </div>
-                                      {cw.stats.graded !== undefined && (
-                                        <>
-                                          <div className="border-end"></div>
-                                          <div>
-                                            <div className="fs-3 fw-bolder text-success">
-                                              {(() => {
-                                                const actualGraded = (Array.isArray(cw.submissions) ? cw.submissions.filter((s) => s.grade !== null && s.grade !== undefined).length : 0) + (cw.userSubmission?.status === "graded" || cw.status === "graded" ? 1 : 0);
-                                                return actualGraded > (cw.stats.graded || 0) ? actualGraded : (cw.stats.graded || 0);
-                                              })()}
-                                            </div>
-                                            <div className="text-muted small">
-                                              Graded
-                                            </div>
-                                          </div>
-                                        </>
-                                      )}
+                                      <div className="border-end"></div>
+                                      <div>
+                                        <div className="fs-3 fw-bolder text-success">
+                                          {stats.graded}
+                                        </div>
+                                        <div className="text-muted small">
+                                          Graded
+                                        </div>
+                                      </div>
                                     </div>
                                     <button
                                       className="btn btn-sm btn-outline-primary w-100 fw-medium"
@@ -867,8 +840,7 @@ const ClassworkTab = ({
                                       </span>
                                     </div>
                                     <p className="text-muted small mb-3">
-                                      Upload your completed files or mark as
-                                      done.
+                                      Upload your completed files or mark as done.
                                     </p>
                                     <button
                                       className="btn btn-primary btn-sm w-100 fw-medium mb-2 shadow-sm"
@@ -892,8 +864,7 @@ const ClassworkTab = ({
 
                             <div className="border-top mt-4 pt-3 d-flex justify-content-between align-items-center">
                               <button className="btn btn-link btn-sm p-0 text-decoration-none fw-medium text-secondary">
-                                <i className="bi bi-chat-left-text me-1"></i>{" "}
-                                Add class comment
+                                <i className="bi bi-chat-left-text me-1"></i> Add class comment
                               </button>
                               <button
                                 className="btn btn-link btn-sm p-0 text-decoration-none fw-medium text-primary"
@@ -1154,7 +1125,6 @@ const ClassworkTab = ({
                           >
                             <option value="">Select a topic</option>
                             {topicOptions.map((topic) => {
-                              // Ensure the label is a string
                               const label =
                                 typeof topic.name === "string"
                                   ? topic.name
@@ -1190,7 +1160,6 @@ const ClassworkTab = ({
                               className="btn btn-link btn-sm p-0 text-decoration-none"
                               onClick={() => {
                                 setIsCreatingNewTopic(false);
-                                // Reset dropdown to the first available topic or "General"
                                 if (availableTopics.length > 0) {
                                   const first = availableTopics[0];
                                   setCwTopic(first.name);

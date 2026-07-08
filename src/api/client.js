@@ -35,16 +35,14 @@ export const resolveAttachmentUrl = (filePath) => {
   return new URL(normalizedPath.replace(/^\/+/, ""), baseUrl).toString();
 };
 
-// Discussion API methods
 export const discussionAPI = {
   createDiscussion: (data) => {
-    // If data is FormData, send with multipart/form-data
     if (data instanceof FormData) {
       return apiClient.post("/discussions", data, {
         headers: { "Content-Type": "multipart/form-data" },
       });
     }
-    // Otherwise, send as JSON (only links, no files)
+
     return apiClient.post("/discussions", {
       class_id: data.classId,
       user_id: data.userId,
@@ -52,18 +50,76 @@ export const discussionAPI = {
       description: data.description,
       send_to_all: data.sendToAll,
       student_ids: data.sendToAll ? null : data.studentIds,
-      attachments: data.attachments, // only contains link objects (files are sent via FormData)
+      attachments: data.attachments,
     });
   },
 };
 
 export const assignmentAPI = {
   getAssignments: (classId) => apiClient.get(`/classes/${classId}/assignments`),
-  getAssignment: (assignmentId) => apiClient.get(`/assignments/${assignmentId}`),
-  getAssignmentDetails: (assignmentId) => apiClient.get(`/assignments/${assignmentId}/details`),
-  submitAssignment: (assignmentId, formData) => apiClient.post(`/assignments/${assignmentId}/submit`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  getAllSubmissions: (assignmentId) => apiClient.get(`/assignments/${assignmentId}/submissions`),
-  gradeSubmission: (submissionId, payload) => apiClient.post(`/submissions/${submissionId}/grade`, payload),
+  getAssignment: (assignmentId) =>
+    apiClient.get(`/assignments/${assignmentId}`),
+  getAssignmentDetails: (assignmentId) =>
+    apiClient.get(`/assignments/${assignmentId}/details`),
+  submitAssignment: (assignmentId, formData) =>
+    apiClient.post(`/assignments/${assignmentId}/submit`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }),
+  getAllSubmissions: (assignmentId) =>
+    apiClient.get(`/assignments/${assignmentId}/submissions`),
+  gradeSubmission: (submissionId, payload) =>
+    apiClient.post(`/submissions/${submissionId}/grade`, payload),
+  getStudentAssignmentSubmission: (assignmentId, studentId) =>
+    apiClient.get(`/assignments/${assignmentId}/students/${studentId}/details`), // <-- NEW
+};
+
+export const classAPI = {
+  getClasses: () => apiClient.get("/classes"),
+  getClass: (classId) => apiClient.get(`/classes/${classId}`),
+  createClass: (data) => apiClient.post("/classes", data),
+  joinClass: (code) => apiClient.post("/classes/join", { code }),
+  archiveClass: (classId) => apiClient.patch(`/classes/${classId}/archive`),
+  restoreClass: (classId) => apiClient.patch(`/classes/${classId}/restore`),
+  deleteClass: (classId) => apiClient.delete(`/classes/${classId}`),
+  unenrollClass: (classId) => apiClient.delete(`/classes/${classId}/unenroll`),
+  createAnnouncement: (classId, payload) =>
+    apiClient.post(`/classes/${classId}/announcements`, payload),
+  addComment: (classId, annId, text) =>
+    apiClient.post(`/classes/${classId}/announcements/${annId}/comments`, {
+      text,
+    }),
+  createTopic: (topicName) =>
+    apiClient.post("/create/topics", { topic_name: topicName }),
+  createAssignment: (formData) =>
+    apiClient.post("/create/assignments", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }),
+  createCoursework: (classId, payload) =>
+    apiClient.post(`/classes/${classId}/coursework`, payload),
+  submitCoursework: (courseworkId, formData) =>
+    apiClient.post(`/assignments/${courseworkId}/submit`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }),
+  getSubmissionDetails: (courseworkId) =>
+    apiClient.get(`/assignments/${courseworkId}`),
+  getSubmissionDetailsLegacy: (courseworkId) =>
+    apiClient.get(`/assignments/${courseworkId}/details`),
+  gradeSubmission: (submissionId, payload) =>
+    apiClient.post(`/submissions/${submissionId}/grade`, payload),
+  updateClassBanner: (classId, bannerCss, themeColor) =>
+    apiClient.patch(`/classes/${classId}`, {
+      banner: bannerCss,
+      theme_color: themeColor,
+    }),
+  refreshClass: (classId) => apiClient.get(`/classes/${classId}`),
+};
+
+export const userAPI = {
+  toggleRole: (userId, roleId, roleName) =>
+    apiClient.post(`/update/users/${userId}`, {
+      role_id: roleId,
+      role: roleName,
+    }),
 };
 
 export default apiClient;

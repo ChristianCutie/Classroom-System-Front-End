@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext"; // 1. Import Auth
-import apiClient from "@/api/client"; // 2. API client
+import { classAPI, userAPI } from "@/api/client"; // 2. API client
 import { Routes, Route, useNavigate } from "react-router-dom";
 
 // Components
@@ -58,7 +58,7 @@ const App = () => {
   const fetchClasses = async () => {
     setLoadingClasses(true);
     try {
-      const res = await apiClient.get("/classes");
+      const res = await classAPI.getClasses();
       setClasses(res.data.data || []);
     } catch (err) {
       console.error("Failed to fetch classes:", err);
@@ -122,7 +122,7 @@ const App = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
 
     try {
-      const res = await apiClient.get(`/classes/${classId}`);
+      const res = await classAPI.getClass(classId);
       setSelectedClass(res.data?.data || null);
       navigate(`/class/${classId}`);
     } catch (err) {
@@ -147,7 +147,7 @@ const App = () => {
   // ------------------------------------------------------------
   const handleCreateClass = async (data) => {
     try {
-      const res = await apiClient.post("/classes", data);
+      const res = await classAPI.createClass(data);
       const newClass = res.data.data;
       setClasses((prev) => [newClass, ...prev]);
       handleSelectClass(newClass.id);
@@ -159,7 +159,7 @@ const App = () => {
 
   const handleJoinClass = async (code) => {
     try {
-      const res = await apiClient.post("/classes/join", { code });
+      const res = await classAPI.joinClass(code);
       const joinedClass = res.data.data;
       setClasses((prev) => [joinedClass, ...prev]);
       addToast("You joined the class successfully.", "success");
@@ -177,7 +177,7 @@ const App = () => {
 
   const handleArchiveClass = async (classId) => {
     try {
-      await apiClient.patch(`/classes/${classId}/archive`);
+      await classAPI.archiveClass(classId);
       setClasses((prev) =>
         prev.map((c) => (c.id === classId ? { ...c, is_archived: 1 } : c)),
       );
@@ -191,7 +191,7 @@ const App = () => {
 
   const handleRestoreClass = async (classId) => {
     try {
-      await apiClient.patch(`/classes/${classId}/restore`);
+      await classAPI.restoreClass(classId);
       setClasses((prev) =>
         prev.map((c) => (c.id === classId ? { ...c, is_archived: 0 } : c)),
       );
@@ -204,7 +204,7 @@ const App = () => {
 
   const handleDeleteClass = async (classId) => {
     try {
-      await apiClient.delete(`/classes/${classId}`);
+      await classAPI.deleteClass(classId);
       setClasses((prev) => prev.filter((c) => c.id !== classId));
       addToast("Class deleted.", "success");
       navigate("/");
@@ -216,7 +216,7 @@ const App = () => {
 
   const handleUnenrollClass = async (classId) => {
     try {
-      await apiClient.delete(`/classes/${classId}/unenroll`);
+      await classAPI.unenrollClass(classId);
       setClasses((prev) => prev.filter((c) => c.id !== classId));
       addToast("You left the class.", "success");
       navigate("/");
@@ -232,10 +232,7 @@ const App = () => {
   // ------------------------------------------------------------
   const handlePostAnnouncement = async (classId, annData) => {
     try {
-      const res = await apiClient.post(
-        `/classes/${classId}/announcements`,
-        annData,
-      );
+      const res = await classAPI.createAnnouncement(classId, annData);
       const newAnn = res.data.data;
       setClasses((prev) =>
         prev.map((c) =>
@@ -253,10 +250,7 @@ const App = () => {
 
   const handleAddComment = async (classId, annId, text) => {
     try {
-      const res = await apiClient.post(
-        `/classes/${classId}/announcements/${annId}/comments`,
-        { text },
-      );
+      const res = await classAPI.addComment(classId, annId, text);
       const newComment = res.data.data;
       setClasses((prev) =>
         prev.map((c) =>
@@ -284,9 +278,7 @@ const App = () => {
       const trimmedTopic = String(topicName || "").trim();
       if (!trimmedTopic) return false;
 
-      const res = await apiClient.post("/create/topics", {
-        topic_name: trimmedTopic,
-      });
+      const res = await classAPI.createTopic(trimmedTopic);
 
       const createdTopic = res.data?.data;
       const topicLabel = createdTopic?.topic_name || trimmedTopic;
@@ -334,9 +326,7 @@ const App = () => {
         const formData = cwData?.data instanceof FormData ? cwData.data : null;
         if (!formData) throw new Error("Assignment payload is missing");
 
-        const res = await apiClient.post("/create/assignments", formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        const res = await classAPI.createAssignment(formData);
         const newAssignment = res.data?.data;
 
         setClasses((prev) =>
@@ -356,10 +346,7 @@ const App = () => {
         return true;
       }
 
-      const res = await apiClient.post(
-        `/classes/${classId}/coursework`,
-        cwData,
-      );
+      const res = await classAPI.createCoursework(classId, cwData);
       const newCw = res.data.data;
       setClasses((prev) =>
         prev.map((c) =>
@@ -418,13 +405,7 @@ const App = () => {
       formData.append("submitted_at", submittedAt);
       formData.append("status", status);
 
-      const response = await apiClient.post(
-        `/assignments/${courseworkId}/submit`,
-        formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        },
-      );
+      const response = await classAPI.submitCoursework(courseworkId, formData);
 
       if (response.data?.success === false) {
         throw new Error(response.data.message || "Submission failed");
@@ -533,12 +514,12 @@ const App = () => {
 
       // Prefer the new single-assignment endpoint which includes attachments
       // and submission files, fall back to the older /details route if needed.
-      submissionId = await tryFetchDetails(`/assignments/${cwId}`);
+      submissionId = await tryFetchDetails(classAPI.getSubmissionDetails(cwId));
       if (!submissionId)
-        submissionId = await tryFetchDetails(`/assignments/${cwId}/details`);
+        submissionId = await tryFetchDetails(classAPI.getSubmissionDetailsLegacy(cwId));
 
       if (submissionId) {
-        await apiClient.post(`/submissions/${submissionId}/grade`, {
+        await classAPI.gradeSubmission(submissionId, {
           grade: newScore,
           feedback: feedback ?? "",
         });
@@ -562,10 +543,7 @@ const App = () => {
 
   const handleUpdateClassBanner = async (classId, bannerCss, themeColor) => {
     try {
-      await apiClient.patch(`/classes/${classId}`, {
-        banner: bannerCss,
-        theme_color: themeColor,
-      });
+      await classAPI.updateClassBanner(classId, bannerCss, themeColor);
       setClasses((prev) =>
         prev.map((c) =>
           c.id === classId
@@ -582,10 +560,8 @@ const App = () => {
 
   const handleDiscussionCreated = async (classId) => {
     try {
-      // Refetch the selected class to load new discussions
-      const res = await apiClient.get(`/classes/${classId}`);
+      const res = await classAPI.refreshClass(classId);
       setSelectedClass(res.data?.data || null);
-      // Also update the classes list
       setClasses((prev) =>
         prev.map((c) => (c.id === classId ? res.data?.data : c)),
       );
@@ -633,10 +609,7 @@ const App = () => {
     }
 
     try {
-      const res = await apiClient.post(`/update/users/${user.id}`, {
-        role_id: roleId,
-        role: newRole,
-      });
+      const res = await userAPI.toggleRole(user.id, roleId, newRole);
 
       const updatedUser = {
         ...user,
