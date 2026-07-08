@@ -40,6 +40,12 @@ const ClassDetailPage = ({
     setActiveTab('classwork');
   };
 
+  const handleTabChange = (nextTab) => {
+    setActiveTab(nextTab);
+    setSelectedCoursework(null);
+    setInstructionViewTab('instructions');
+  };
+
   const normalizeTopicValue = (value) => {
     if (typeof value === 'string') {
       const trimmed = value.trim();
@@ -235,7 +241,7 @@ const ClassDetailPage = ({
           <li className="nav-item">
             <button
               className={`nav-link ${activeTab === 'stream' ? 'active' : ''}`}
-              onClick={() => setActiveTab('stream')}
+              onClick={() => handleTabChange('stream')}
             >
               Stream
             </button>
@@ -243,7 +249,7 @@ const ClassDetailPage = ({
           <li className="nav-item">
             <button
               className={`nav-link ${activeTab === 'classwork' ? 'active' : ''}`}
-              onClick={() => setActiveTab('classwork')}
+              onClick={() => handleTabChange('classwork')}
             >
               Classwork
             </button>
@@ -251,7 +257,7 @@ const ClassDetailPage = ({
           <li className="nav-item">
             <button
               className={`nav-link ${activeTab === 'people' ? 'active' : ''}`}
-              onClick={() => setActiveTab('people')}
+              onClick={() => handleTabChange('people')}
             >
               People
             </button>
@@ -259,11 +265,11 @@ const ClassDetailPage = ({
           <li className="nav-item">
             <button
               className={`nav-link ${activeTab === 'grades' ? 'active' : ''}`}
-              onClick={() => setActiveTab('grades')}
+              onClick={() => handleTabChange('grades')}
             >
               Grades
             </button>
-          </li>
+            </li>
         </ul>
 
         <div className="d-flex align-items-center gap-2 py-2">

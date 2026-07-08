@@ -676,7 +676,6 @@ const ViewInstructionPage = ({
       // 👇 Set flag that teacher sent comment for this student
       setTeacherSentComment((prev) => ({ ...prev, [studentId]: true }));
       setTeacherPrivateComment((prev) => ({ ...prev, [studentId]: "" }));
-      alert("Private comment sent to student.");
     } catch (err) {
       console.error("Error sending private comment:", err);
       alert("Could not send private comment. Please try again.");
@@ -1053,8 +1052,7 @@ const ViewInstructionPage = ({
                             gradeToShow !== null &&
                             gradeToShow !== undefined &&
                             gradeToShow !== "";
-                          const studentName =
-                            st?.name || st?.full_name || st?.email || "Student";
+                          const studentName = st?.first_name && st?.last_name ? `${st.first_name} ${st.last_name}` : st?.full_name || st?.email || "Student";
                           const studentFirstName =
                             (studentName || "").split(" ")[0] || "Submission";
 
@@ -1231,7 +1229,7 @@ const ViewInstructionPage = ({
                                                 <div className="flex-grow-1">
                                                   <div className="d-flex align-items-center gap-2">
                                                     <span className="fw-semibold text-dark">
-                                                      You (Teacher)
+                                                      You
                                                     </span>
                                                     <span
                                                       className="text-muted"
@@ -1306,7 +1304,7 @@ const ViewInstructionPage = ({
                                                 }}
                                               />
                                               <button
-                                                className="btn btn-primary rounded-pill px-3"
+                                                className="btn btn-lg border-0 px-1"
                                                 onClick={() =>
                                                   handleSendPrivateComment(
                                                     submissionId,
@@ -1578,7 +1576,7 @@ const ViewInstructionPage = ({
                             <div className="flex-grow-1">
                               <div className="d-flex align-items-center gap-2">
                                 <span className="fw-semibold text-dark">
-                                  You (Student)
+                                  You
                                 </span>
                                 <span
                                   className="text-muted"

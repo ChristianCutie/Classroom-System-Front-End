@@ -1,3 +1,5 @@
+import snlBanner from "../images/Snl banner.png";
+
 export const initialUser = {
   id: "u1",
   name: "Dr. Eleanor Vance",
@@ -13,7 +15,13 @@ export const bannerGradients = [
   { id: "teal", name: "Ocean Teal", css: "linear-gradient(135deg, #00897b 0%, #004d40 100%)", color: "#00897b" },
   { id: "purple", name: "Royal Purple", css: "linear-gradient(135deg, #8e24aa 0%, #4a148c 100%)", color: "#8e24aa" },
   { id: "orange", name: "Sunset Orange", css: "linear-gradient(135deg, #e65100 0%, #bf360c 100%)", color: "#e65100" },
-  { id: "dark", name: "Midnight Slate", css: "linear-gradient(135deg, #37474f 0%, #263238 100%)", color: "#37474f" }
+  { id: "dark", name: "Midnight Slate", css: "linear-gradient(135deg, #37474f 0%, #263238 100%)", color: "#37474f" },
+  {
+    id: "snl-banner",
+    name: "SNL Banner",
+    css: `linear-gradient(135deg, rgba(8, 15, 30, 0.7) 0%, rgba(8, 15, 30, 0.45) 100%), url(${snlBanner}) center/cover no-repeat`,
+    color: "#0f172a"
+  }
 ];
 
 export const initialClasses = [

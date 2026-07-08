@@ -10,21 +10,29 @@
   --gc-border-color: #dadce0;
   --gc-hover-bg: #f1f3f4;
   --gc-active-bg: #e8f0fe;
-  --gc-card-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
-  --gc-card-hover-shadow: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15);
+  --gc-card-shadow:
+    0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+  --gc-card-hover-shadow:
+    0 1px 3px 0 rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
 }
 
 body {
   background-color: var(--gc-bg-main);
   color: var(--gc-text-primary);
-  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family:
+    "Roboto",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
   margin: 0;
   padding: 0;
   overflow-x: hidden;
 }
 
 .font-google {
-  font-family: 'Google Sans', 'Roboto', sans-serif;
+  font-family: "Google Sans", "Roboto", sans-serif;
 }
 
 /* Custom scrollbar */
@@ -59,13 +67,17 @@ body {
 }
 
 .gc-class-banner::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(135deg, rgb(26, 115, 232) 0%, rgb(13, 71, 161) 100%);
+  background: linear-gradient(
+    135deg,
+    rgb(26, 115, 232) 0%,
+    rgb(13, 71, 161) 100%
+  );
   pointer-events: none;
 }
 
@@ -79,7 +91,9 @@ body {
   border: 1px solid var(--gc-border-color);
   border-radius: 8px;
   background: white;
-  transition: box-shadow 0.2s ease-in-out, transform 0.15s ease;
+  transition:
+    box-shadow 0.2s ease-in-out,
+    transform 0.15s ease;
   overflow: hidden;
   height: 100%;
   display: flex;
@@ -119,7 +133,7 @@ body {
 
 /* Header detail banner */
 .gc-detail-banner {
-  height: 200px;
+  height: 250px;
   border-radius: 8px;
   background-size: cover;
   background-position: center;
@@ -129,20 +143,28 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3);
+  box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.3);
   margin-bottom: 24px;
-  background: linear-gradient(135deg, rgb(26, 115, 232) 0%, rgb(13, 71, 161) 100%);
+  background-color: #1a73e8;
+  background-image:
+    url("./images/Snl banner.png");
+  background-size: cover, cover;
+  background-position: center, center;
 }
 
 .gc-detail-banner::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
   border-radius: 8px;
-background: linear-gradient(0deg,#0000008c,#0000001a 60%,#0000);
+  background-image:
+    linear-gradient(0deg, rgb(26, 115, 232) 0%, rgba(13, 72, 161, 0.34) 70%),
+    url("./images/Snl banner.png");
+  background-size: cover, cover;
+  background-position: center, center;
 }
 
 .gc-detail-banner > div {
@@ -164,8 +186,8 @@ background: linear-gradient(0deg,#0000008c,#0000001a 60%,#0000);
 
 .gc-nav-tabs .nav-link:hover {
   color: var(--gc-text-primary);
-  background-color: rgba(0,0,0,0.03);
-  border-bottom-color: rgba(0,0,0,0.1);
+  background-color: rgba(0, 0, 0, 0.03);
+  border-bottom-color: rgba(0, 0, 0, 0.1);
 }
 
 .gc-nav-tabs .nav-link.active {
@@ -232,7 +254,9 @@ background: linear-gradient(0deg,#0000008c,#0000001a 60%,#0000);
   border: none;
   background: transparent;
   color: var(--gc-text-secondary);
-  transition: background-color 0.2s, color 0.2s;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
   cursor: pointer;
 }
 
@@ -266,7 +290,7 @@ background: linear-gradient(0deg,#0000008c,#0000001a 60%,#0000);
   border: 1px solid var(--gc-border-color);
   border-radius: 8px;
   background: white;
-  box-shadow: 0 1px 2px 0 rgba(60,64,67,0.1);
+  box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.1);
 }
 
 /* Classwork topic list */
@@ -305,8 +329,8 @@ background: linear-gradient(0deg,#0000008c,#0000001a 60%,#0000);
 
 /* Dropdown styling */
 .dropdown-menu {
-  box-shadow: 0 2px 10px rgba(0,0,0,0.15);
-  border: 1px solid rgba(0,0,0,0.08);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 8px;
 }
 
