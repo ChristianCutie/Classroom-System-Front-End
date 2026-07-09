@@ -1,4 +1,4 @@
-// ViewInstructionPage.jsx
+// ViewInstructionPage.jsx – with file upload fix
 import React, { useState, useEffect, useRef } from "react";
 import { renderAsync } from "docx-preview";
 import Avatar from "../../components/Common/Avatar.jsx";
@@ -240,6 +240,10 @@ const ViewInstructionPage = ({
   const [isMarkingAsDone, setIsMarkingAsDone] = useState(false);
   const autoOpenReviewRef = useRef(false);
 
+  // ---------- Student file upload modal ----------
+  const [showFileUploadModal, setShowFileUploadModal] = useState(false);
+  const [uploadFiles, setUploadFiles] = useState([]);
+
   // ---------- Teacher: all submissions map ----------
   const [submissionsMap, setSubmissionsMap] = useState({});
   const [isLoadingAllSubmissions, setIsLoadingAllSubmissions] = useState(false);
@@ -250,166 +254,56 @@ const ViewInstructionPage = ({
   const [isLoadingStudentSubmission, setIsLoadingStudentSubmission] =
     useState(false);
 
-  // ---------- Teacher private comment input per student ----------
-  const [teacherPrivateComment, setTeacherPrivateComment] = useState({});
-  const [sendingPrivateComment, setSendingPrivateComment] = useState({});
+  // ---------- Teacher comment input ----------
+  const [teacherCommentInput, setTeacherCommentInput] = useState({});
+  const [sendingTeacherComment, setSendingTeacherComment] = useState({});
 
-  // ---------- Student private comment edit states ----------
-  const [isEditingPrivateComment, setIsEditingPrivateComment] = useState(false);
-  const [editPrivateCommentText, setEditPrivateCommentText] = useState("");
+  // ---------- Student comment input ----------
+  const [studentCommentInput, setStudentCommentInput] = useState("");
+  const [isSendingStudentComment, setIsSendingStudentComment] = useState(false);
 
   // ---------- Student resubmit states ----------
   const [isResubmitting, setIsResubmitting] = useState(false);
   const [resubmitFiles, setResubmitFiles] = useState([]);
   const [resubmitComment, setResubmitComment] = useState("");
-  const [teacherSentComment, setTeacherSentComment] = useState({});
 
-  // Student comment send
-  const [studentPrivateCommentInput, setStudentPrivateCommentInput] =
-    useState("");
-  const [isSendingStudentComment, setIsSendingStudentComment] = useState(false);
+  // ---------- Comments map (per submission) ----------
+  const [commentsMap, setCommentsMap] = useState({});
+  const [loadingCommentsMap, setLoadingCommentsMap] = useState({});
 
-  // Turn-in modal
-  const [showTurnInModal, setShowTurnInModal] = useState(false);
-  const [turnInFiles, setTurnInFiles] = useState([]);
-  const [turnInComment, setTurnInComment] = useState("");
-
-  // ---------- Student send private comment ----------
-  const handleSendStudentPrivateComment = async () => {
-    const submissionId = studentSubmission?.submission?.id;
-    const comment = studentPrivateCommentInput.trim();
-    if (!submissionId || !comment) return;
-
-    setIsSendingStudentComment(true);
-    try {
-      await assignmentAPI.sendPrivateComment(submissionId, {
-        private_comment: comment,
-      });
-      // Update local studentSubmission
-      setStudentSubmission((prev) => ({
-        ...prev,
-        submission: {
-          ...prev.submission,
-          private_comment: comment,
-        },
-      }));
-      setStudentPrivateCommentInput("");
-      alert("Private comment sent.");
-    } catch (err) {
-      console.error("Error sending private comment:", err);
-      alert("Could not send private comment. Please try again.");
-    } finally {
-      setIsSendingStudentComment(false);
-    }
-  };
-
-  // ---------- Student update private comment handler ----------
-  const handleStudentUpdatePrivateComment = async () => {
-    const submissionId = studentSubmission?.submission?.id;
-    if (!submissionId || !editPrivateCommentText.trim()) return;
-
-    try {
-      await assignmentAPI.sendPrivateComment(submissionId, {
-        private_comment: editPrivateCommentText.trim(),
-      });
-      // Update local studentSubmission
-      setStudentSubmission((prev) => ({
-        ...prev,
-        submission: {
-          ...prev.submission,
-          private_comment: editPrivateCommentText.trim(),
-        },
-      }));
-      setIsEditingPrivateComment(false);
-      setEditPrivateCommentText("");
-      alert("Private comment updated.");
-    } catch (err) {
-      console.error("Error updating private comment:", err);
-      alert("Could not update private comment.");
-    }
-  };
-
-  // ---------- Student resubmit handler ----------
-  const handleResubmit = async () => {
-    if (!onSubmitWork || isResubmitting) return;
-    // Use the existing submission's private comment if the user didn't update it
-    const comment =
-      resubmitComment.trim() ||
-      studentSubmission?.submission?.private_comment ||
-      "";
-    setIsResubmitting(true);
-    try {
-      const ok = await onSubmitWork(cls.id, coursework.id, resubmitFiles, {
-        private_comment: comment,
-        studentId: user?.id,
-        studentName: user?.name,
-        studentEmail: user?.email,
-        className: cls?.name,
-        assignmentTitle: coursework?.title,
-        submittedAt: new Date().toISOString(),
-        status: "submitted",
-      });
-      if (ok !== false) {
-        setSubmissionState({ submitted: true });
-        setResubmitFiles([]);
-        setResubmitComment("");
-        // Refetch student submission after resubmission
-        const res = await assignmentAPI.getStudentAssignmentSubmission(
-          coursework.id,
-          user.id,
-        );
-        setStudentSubmission(res.data?.data || res.data);
-        alert("Submission updated successfully.");
+  // ---------- Scroll helper ----------
+  const scrollToBottom = (submissionId) => {
+    setTimeout(() => {
+      const container = document.getElementById(`comment-container-${submissionId}`);
+      if (container) {
+        container.scrollTop = container.scrollHeight;
       }
+    }, 150);
+  };
+
+  // ---------- fetchComments ----------
+  const fetchComments = async (submissionId, force = false) => {
+    if (!submissionId) return;
+    if (!force && (commentsMap[submissionId] || loadingCommentsMap[submissionId])) return;
+
+    setLoadingCommentsMap((prev) => ({ ...prev, [submissionId]: true }));
+    try {
+      const res = await assignmentAPI.getSubmissionComments(submissionId);
+      const comments = res.data?.data || [];
+      setCommentsMap((prev) => ({ ...prev, [submissionId]: comments }));
+      scrollToBottom(submissionId);
     } catch (err) {
-      console.error("Error resubmitting:", err);
-      alert("Could not resubmit. Please try again.");
+      console.error("Failed to fetch comments:", err);
+      setCommentsMap((prev) => ({ ...prev, [submissionId]: [] }));
     } finally {
-      setIsResubmitting(false);
+      setLoadingCommentsMap((prev) => ({ ...prev, [submissionId]: false }));
     }
   };
 
-  // Format file display name and date
-  const getFileDisplayInfo = (file, submittedAt) => {
-    // Get the original name (prioritize original_name, fallback to file_name/filename)
-    const originalName =
-      file.original_name ||
-      file.original_filename ||
-      file.original_file_name ||
-      file.file_name ||
-      file.filename ||
-      "file";
-
-    // Split into base and extension
-    const lastDot = originalName.lastIndexOf(".");
-    let baseName = originalName;
-    let ext = "";
-    if (lastDot > 0) {
-      baseName = originalName.substring(0, lastDot);
-      ext = originalName.substring(lastDot); // includes the dot, e.g. ".pdf"
-    }
-
-    // Truncate base if too long (e.g., 20 chars)
-    const maxLen = 20;
-    let displayName = originalName;
-    if (baseName.length > maxLen) {
-      displayName = baseName.substring(0, maxLen) + "..." + ext;
-    }
-
-    // Format submission date
-    let dateStr = "";
-    if (submittedAt) {
-      const date = new Date(submittedAt);
-      if (!isNaN(date)) {
-        dateStr = date.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        });
-      }
-    }
-
-    return { displayName, dateStr, originalName };
+  const refreshComments = async (submissionId) => {
+    if (!submissionId) return;
+    setLoadingCommentsMap((prev) => ({ ...prev, [submissionId]: false }));
+    await fetchComments(submissionId, true);
   };
 
   // ---------- Helper functions ----------
@@ -527,19 +421,34 @@ const ViewInstructionPage = ({
     fetchMySubmission();
   }, [activeTab, coursework?.id, isTeacher, user?.id]);
 
+  // ---------- Fetch comments when needed ----------
+  useEffect(() => {
+    if (!isTeacher || activeTab !== "studentWork" || !selectedStudentId) return;
+    const subData = submissionsMap[selectedStudentId];
+    const submissionId = subData?.submission?.id;
+    if (submissionId) {
+      fetchComments(submissionId);
+    }
+  }, [selectedStudentId, isTeacher, activeTab, submissionsMap]);
+
+  useEffect(() => {
+    if (isTeacher || activeTab !== "yourWork" || !studentSubmission?.submission?.id) return;
+    fetchComments(studentSubmission.submission.id);
+  }, [activeTab, studentSubmission?.submission?.id, isTeacher]);
+
   // ---------- Compute teacher counts ----------
   const studentsWithWork = isTeacher
     ? students.filter((st) => {
-        const data = submissionsMap[st.id];
-        return data && data.submission_status !== "not_submitted";
-      })
+      const data = submissionsMap[st.id];
+      return data && data.submission_status !== "not_submitted";
+    })
     : [];
 
   const studentsWithoutWork = isTeacher
     ? students.filter((st) => {
-        const data = submissionsMap[st.id];
-        return !data || data.submission_status === "not_submitted";
-      })
+      const data = submissionsMap[st.id];
+      return !data || data.submission_status === "not_submitted";
+    })
     : [];
 
   const turnedInCount = studentsWithWork.length;
@@ -657,72 +566,118 @@ const ViewInstructionPage = ({
     }
   };
 
-  const handleSendPrivateComment = async (submissionId, studentId) => {
-    const comment = teacherPrivateComment[studentId]?.trim();
+  // ---------- Teacher sends comment ----------
+  const handleSendTeacherComment = async (submissionId, studentId) => {
+    const comment = teacherCommentInput[studentId]?.trim();
     if (!comment) return;
 
-    setSendingPrivateComment((prev) => ({ ...prev, [studentId]: true }));
+    setSendingTeacherComment((prev) => ({ ...prev, [studentId]: true }));
     try {
-      await assignmentAPI.sendPrivateComment(submissionId, {
-        private_comment: comment,
+      await assignmentAPI.sendComment(submissionId, {
+        comment: comment,
       });
-      setSubmissionsMap((prev) => {
-        const updated = { ...prev };
-        if (updated[studentId]?.submission) {
-          updated[studentId].submission.private_comment = comment;
-        }
-        return updated;
-      });
-      // 👇 Set flag that teacher sent comment for this student
-      setTeacherSentComment((prev) => ({ ...prev, [studentId]: true }));
-      setTeacherPrivateComment((prev) => ({ ...prev, [studentId]: "" }));
+      setTeacherCommentInput((prev) => ({ ...prev, [studentId]: "" }));
+      await refreshComments(submissionId);
     } catch (err) {
-      console.error("Error sending private comment:", err);
-      alert("Could not send private comment. Please try again.");
+      console.error("Error sending comment:", err);
+      alert("Could not send comment. Please try again.");
     } finally {
-      setSendingPrivateComment((prev) => ({ ...prev, [studentId]: false }));
+      setSendingTeacherComment((prev) => ({ ...prev, [studentId]: false }));
     }
   };
 
-  const handleTurnInWork = async () => {
-    if (!turnInFiles.length) {
-      alert("Please select at least one file.");
-      return;
+  // ---------- Student sends comment ----------
+  const handleSendStudentComment = async () => {
+    const submissionId = studentSubmission?.submission?.id;
+    const comment = studentCommentInput.trim();
+    if (!submissionId || !comment) return;
+
+    setIsSendingStudentComment(true);
+    try {
+      await assignmentAPI.sendComment(submissionId, {
+        comment: comment,
+      });
+      setStudentCommentInput("");
+      await refreshComments(submissionId);
+    } catch (err) {
+      console.error("Error sending comment:", err);
+      alert("Could not send comment. Please try again.");
+    } finally {
+      setIsSendingStudentComment(false);
     }
+  };
+
+  // ---------- Student upload & turn in (FIXED) ----------
+  const handleUploadAndTurnIn = () => {
+    // Pass files directly to handleTurnInWork
+    handleTurnInWork(uploadFiles, submissionMessage);
+    setShowFileUploadModal(false);
+    setUploadFiles([]);
+  };
+
+  // ---------- Student turn in (now accepts files and comment) ----------
+  const handleTurnInWork = async (files = [], comment = "") => {
+    if (!onSubmitWork || submissionState.submitted || isSubmitting) return;
+    const submissionFiles = files.length > 0 ? files : selectedSubmissionFiles;
+    const submissionComment = comment || submissionMessage;
+
+    console.log("📤 Submitting with files:", submissionFiles); // Debug
+
     setIsSubmitting(true);
     try {
-      const formData = new FormData();
-      turnInFiles.forEach((file) => {
-        formData.append("files[]", file);
-      });
-      if (turnInComment.trim()) {
-        formData.append("private_comment", turnInComment.trim());
-      }
-
-      const response = await assignmentAPI.submitAssignment(
+      const result = await onSubmitWork(
+        cls.id,
         coursework.id,
-        formData,
+        submissionFiles,
+        {
+          private_comment: submissionComment.trim(),
+          studentId: user?.id,
+          studentName: user?.name,
+          studentEmail: user?.email,
+          className: cls?.name,
+          assignmentTitle: coursework?.title,
+          submittedAt: new Date().toISOString(),
+          status: "submitted",
+        },
       );
-      if (response.status === 200 || response.status === 201) {
-        // Update local state
+
+      console.log("📥 onSubmitWork result:", result);
+
+      // Check if submission was successful
+      const isSuccess = result !== false && result !== undefined;
+      if (isSuccess) {
         setSubmissionState({ submitted: true });
-        // Refetch student submission to get updated data
-        const res = await assignmentAPI.getStudentAssignmentSubmission(
-          coursework.id,
-          user.id,
-        );
-        setStudentSubmission(res.data?.data || res.data);
-        // Close modal and reset
-        setShowTurnInModal(false);
-        setTurnInFiles([]);
-        setTurnInComment("");
-        // Optionally call onSubmitWork for parent side effects (without redirect)
-        // but we'll skip to avoid navigation.
+        setSelectedSubmissionFiles([]);
+        setSubmissionMessage("");
+
+        // If the result contains submission data, use it directly
+        if (result?.data) {
+          const submissionData = result.data;
+          setStudentSubmission((prev) => ({
+            ...prev,
+            submission: {
+              ...prev?.submission,
+              id: submissionData.id,
+              files: submissionData.files || [],
+              submitted_at: submissionData.submitted_at,
+              status: submissionData.status,
+              private_comment: submissionData.private_comment,
+            },
+            submission_status: "submitted",
+          }));
+        } else {
+          // Fallback: refetch fresh data
+          const res = await assignmentAPI.getStudentAssignmentSubmission(
+            coursework.id,
+            user.id,
+          );
+          setStudentSubmission(res.data?.data || res.data);
+        }
       } else {
-        alert("Submission failed. Please try again.");
+        console.warn("Submission failed or returned false:", result);
       }
-    } catch (error) {
-      console.error("Error submitting:", error);
+    } catch (err) {
+      console.error("Error in handleTurnInWork:", err);
       alert("Could not submit. Please try again.");
     } finally {
       setIsSubmitting(false);
@@ -758,6 +713,44 @@ const ViewInstructionPage = ({
       }
     } finally {
       setIsMarkingAsDone(false);
+    }
+  };
+
+  // ---------- Student resubmit ----------
+  const handleResubmit = async () => {
+    if (!onSubmitWork || isResubmitting) return;
+    const comment =
+      resubmitComment.trim() ||
+      studentSubmission?.submission?.private_comment ||
+      "";
+    setIsResubmitting(true);
+    try {
+      const ok = await onSubmitWork(cls.id, coursework.id, resubmitFiles, {
+        private_comment: comment,
+        studentId: user?.id,
+        studentName: user?.name,
+        studentEmail: user?.email,
+        className: cls?.name,
+        assignmentTitle: coursework?.title,
+        submittedAt: new Date().toISOString(),
+        status: "submitted",
+      });
+      if (ok !== false) {
+        setSubmissionState({ submitted: true });
+        setResubmitFiles([]);
+        setResubmitComment("");
+        const res = await assignmentAPI.getStudentAssignmentSubmission(
+          coursework.id,
+          user.id,
+        );
+        setStudentSubmission(res.data?.data || res.data);
+        alert("Submission updated successfully.");
+      }
+    } catch (err) {
+      console.error("Error resubmitting:", err);
+      alert("Could not resubmit. Please try again.");
+    } finally {
+      setIsResubmitting(false);
     }
   };
 
@@ -869,6 +862,7 @@ const ViewInstructionPage = ({
           {/* ---------- INSTRUCTIONS TAB ---------- */}
           {activeTab === "instructions" && (
             <div>
+              {/* ... same as before ... */}
               <div className="row g-3 mb-4 pb-4 border-bottom">
                 <div className="col-6 col-md-3">
                   <div
@@ -879,7 +873,7 @@ const ViewInstructionPage = ({
                   </div>
                   <div className="fw-bold text-dark">
                     {coursework.points !== null &&
-                    coursework.points !== undefined
+                      coursework.points !== undefined
                       ? coursework.points
                       : "Ungraded"}
                   </div>
@@ -977,9 +971,9 @@ const ViewInstructionPage = ({
             </div>
           )}
 
-          {/* ---------- TEACHER: STUDENT WORK TAB ---------- */}
+          {/* ---------- TEACHER: STUDENT WORK TAB (unchanged) ---------- */}
           {activeTab === "studentWork" && isTeacher && (
-            // ... (unchanged, same as before) ...
+            // ... (same as before, omitted for brevity) ...
             <div>
               {isLoadingAllSubmissions ? (
                 <div className="text-center py-5">
@@ -1030,6 +1024,7 @@ const ViewInstructionPage = ({
                       </div>
                     </div>
                   </div>
+
                   <div className="mb-4">
                     <h6 className="fw-bold text-dark mb-3 d-flex align-items-center gap-2">
                       <i className="bi bi-clipboard-check-fill text-primary"></i>{" "}
@@ -1052,7 +1047,10 @@ const ViewInstructionPage = ({
                             gradeToShow !== null &&
                             gradeToShow !== undefined &&
                             gradeToShow !== "";
-                          const studentName = st?.first_name && st?.last_name ? `${st.first_name} ${st.last_name}` : st?.full_name || st?.email || "Student";
+                          const studentName =
+                            st?.first_name && st?.last_name
+                              ? `${st.first_name} ${st.last_name}`
+                              : st?.full_name || st?.email || "Student";
                           const studentFirstName =
                             (studentName || "").split(" ")[0] || "Submission";
 
@@ -1062,20 +1060,20 @@ const ViewInstructionPage = ({
                           const previewFiles =
                             submissionFiles.length > 0
                               ? submissionFiles.map((f, idx) => ({
-                                  id: `${st.id}-${idx}`,
-                                  name:
-                                    f.file_name || f.filename || `file_${idx}`,
-                                  type: f.file_type || f.type || "pdf",
-                                  url: f.file_url || f.url || "#",
-                                }))
+                                id: `${st.id}-${idx}`,
+                                name:
+                                  f.file_name || f.filename || `file_${idx}`,
+                                type: f.file_type || f.type || "pdf",
+                                url: f.file_url || f.url || "#",
+                              }))
                               : [
-                                  {
-                                    id: `${st.id}-sample`,
-                                    name: `${studentFirstName}_work.pdf`,
-                                    type: "pdf",
-                                    url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-                                  },
-                                ];
+                                {
+                                  id: `${st.id}-sample`,
+                                  name: `${studentFirstName}_work.pdf`,
+                                  type: "pdf",
+                                  url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+                                },
+                              ];
                           const selectedAttachment =
                             selectedAttachmentByStudent[st.id] ||
                             previewFiles[0];
@@ -1086,20 +1084,14 @@ const ViewInstructionPage = ({
                             gradeToShow !== undefined &&
                             gradeToShow !== "";
                           const submissionId = subData?.submission?.id;
-                          const currentPrivateComment =
-                            subData?.submission?.private_comment || "";
 
-                          // Determine if the teacher sent the current comment (heuristic)
-                          // We'll use a local flag: if teacherSentComment[st.id] is true, show as "You (Teacher)".
-                          const isTeacherComment =
-                            teacherSentComment[st.id] || false;
+                          const comments = commentsMap[submissionId] || [];
 
                           return (
                             <div
                               key={st.id}
                               className="border rounded-4 p-4 bg-white shadow-sm"
                             >
-                              {/* Header row: student name, grade badge, review button */}
                               <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                                 <div className="d-flex align-items-center gap-3">
                                   <Avatar
@@ -1141,14 +1133,11 @@ const ViewInstructionPage = ({
                                 </div>
                               </div>
 
-                              {/* Expanded review panel */}
                               {isSelected && (
                                 <div className="border-top mt-3 pt-3">
                                   {subData?.submission ? (
                                     <div className="row g-4">
-                                      {/* LEFT COLUMN: Preview + Comment Thread */}
                                       <div className="col-12 col-lg-8">
-                                        {/* File preview */}
                                         <div className="border rounded-3 overflow-hidden bg-light">
                                           <div className="px-3 py-2 border-bottom bg-white d-flex justify-content-between align-items-center">
                                             <div>
@@ -1169,104 +1158,56 @@ const ViewInstructionPage = ({
                                           />
                                         </div>
 
-                                        {/* ----- COMMENT THREAD (under preview) ----- */}
                                         <div className="mt-4">
                                           <h6 className="fw-bold text-muted small text-uppercase mb-3">
-                                            <i className="bi bi-chat-left-text me-1"></i>{" "}
-                                            Private Comments
+                                            <i className="bi bi-chat-left-text me-1"></i> Private Comments
                                           </h6>
 
-                                          {/* Student's comment (if any) */}
-                                          {currentPrivateComment && (
-                                            <div className="d-flex gap-3 mb-3">
-                                              <Avatar
-                                                name={studentName}
-                                                size={36}
-                                                color="#00897b"
-                                              />
-                                              <div className="flex-grow-1">
-                                                <div className="d-flex align-items-center gap-2">
-                                                  <span className="fw-semibold text-dark">
-                                                    {studentName}
-                                                  </span>
-                                                  <span
-                                                    className="text-muted"
-                                                    style={{
-                                                      fontSize: "0.75rem",
-                                                    }}
+                                          <div id={`comment-container-${submissionId}`} style={{ maxHeight: "462px", height: "462px", overflowY: "auto" }} className="mb-3">
+                                            {comments.length > 0 ? (
+                                              comments.map((cm) => {
+                                                const senderName =
+                                                  cm.user?.first_name && cm.user?.last_name
+                                                    ? `${cm.user.first_name} ${cm.user.last_name}`
+                                                    : cm.user?.name || "Unknown";
+                                                const date = cm.created_at
+                                                  ? new Date(cm.created_at).toLocaleString()
+                                                  : "Just now";
+                                                const isTeacherComment = cm.user_id !== st.id;
+                                                return (
+                                                  <div
+                                                    key={`comment-${cm.id}-${cm.user_id || '0'}`}
+                                                    className="d-flex gap-3 mb-3"
                                                   >
-                                                    {subData?.submission
-                                                      ?.submitted_at
-                                                      ? new Date(
-                                                          subData.submission
-                                                            .submitted_at,
-                                                        ).toLocaleString()
-                                                      : "Just now"}
-                                                  </span>
-                                                </div>
-                                                <p
-                                                  className="mb-0 text-dark"
-                                                  style={{
-                                                    fontSize: "0.95rem",
-                                                    lineHeight: "1.5",
-                                                  }}
-                                                >
-                                                  {currentPrivateComment}
-                                                </p>
-                                              </div>
-                                            </div>
-                                          )}
-
-                                          {/* Teacher's comment (if any) – shown only if teacherSentComment flag is true */}
-                                          {isTeacherComment &&
-                                            currentPrivateComment && (
-                                              <div className="d-flex gap-3 mb-3">
-                                                <Avatar
-                                                  name={user.name}
-                                                  size={36}
-                                                  color="#1a73e8"
-                                                />
-                                                <div className="flex-grow-1">
-                                                  <div className="d-flex align-items-center gap-2">
-                                                    <span className="fw-semibold text-dark">
-                                                      You
-                                                    </span>
-                                                    <span
-                                                      className="text-muted"
-                                                      style={{
-                                                        fontSize: "0.75rem",
-                                                      }}
-                                                    >
-                                                      Just now
-                                                    </span>
+                                                    <Avatar
+                                                      name={senderName}
+                                                      size={36}
+                                                      color={isTeacherComment ? "#1a73e8" : "#00897b"}
+                                                    />
+                                                    <div className="flex-grow-1">
+                                                      <div className="d-flex align-items-center gap-2">
+                                                        <span className="fw-semibold text-dark">
+                                                          {senderName}
+                                                          {isTeacherComment}
+                                                        </span>
+                                                        <span className="text-muted" style={{ fontSize: "0.75rem" }}>
+                                                          {date}
+                                                        </span>
+                                                      </div>
+                                                      <p className="mb-0 text-dark" style={{ fontSize: "0.95rem", lineHeight: "1.5", borderBottom: "1px solid #e9ecef", marginRight: "20px", paddingBottom: "0.5rem" }}>
+                                                        {cm.comment}
+                                                      </p>
+                                                    </div>
                                                   </div>
-                                                  <p
-                                                    className="mb-0 text-dark"
-                                                    style={{
-                                                      fontSize: "0.95rem",
-                                                      lineHeight: "1.5",
-                                                    }}
-                                                  >
-                                                    {currentPrivateComment}
-                                                  </p>
-                                                </div>
-                                              </div>
+                                                );
+                                              })
+                                            ) : (
+                                              <p className="text-muted small fst-italic">No private comments yet.</p>
                                             )}
+                                          </div>
 
-                                          {/* If no comments yet */}
-                                          {!currentPrivateComment && (
-                                            <p className="text-muted small fst-italic">
-                                              No private comments yet.
-                                            </p>
-                                          )}
-
-                                          {/* Teacher's comment input – appears at the bottom of the thread */}
-                                          <div className="d-flex gap-2 align-items-start mt-3">
-                                            <Avatar
-                                              name={user.name}
-                                              size={36}
-                                              color={user.color}
-                                            />
+                                          <div className="d-flex gap-2 align-items-start">
+                                            <Avatar name={user.first_name + " " + user.last_name} size={36} color={user.color} />
                                             <div className="flex-grow-1 d-flex gap-2">
                                               <input
                                                 type="text"
@@ -1276,58 +1217,29 @@ const ViewInstructionPage = ({
                                                   backgroundColor: "#f1f3f4",
                                                 }}
                                                 placeholder="Write a private comment to this student..."
-                                                value={
-                                                  teacherPrivateComment[
-                                                    st.id
-                                                  ] || ""
-                                                }
+                                                value={teacherCommentInput[st.id] || ""}
                                                 onChange={(e) =>
-                                                  setTeacherPrivateComment(
-                                                    (prev) => ({
-                                                      ...prev,
-                                                      [st.id]: e.target.value,
-                                                    }),
-                                                  )
+                                                  setTeacherCommentInput((prev) => ({
+                                                    ...prev,
+                                                    [st.id]: e.target.value,
+                                                  }))
                                                 }
                                                 onKeyDown={(e) => {
-                                                  if (
-                                                    e.key === "Enter" &&
-                                                    teacherPrivateComment[
-                                                      st.id
-                                                    ]?.trim()
-                                                  ) {
-                                                    handleSendPrivateComment(
-                                                      submissionId,
-                                                      st.id,
-                                                    );
+                                                  if (e.key === "Enter" && teacherCommentInput[st.id]?.trim()) {
+                                                    handleSendTeacherComment(submissionId, st.id);
                                                   }
                                                 }}
                                               />
                                               <button
                                                 className="btn btn-lg border-0 px-1"
-                                                onClick={() =>
-                                                  handleSendPrivateComment(
-                                                    submissionId,
-                                                    st.id,
-                                                  )
-                                                }
+                                                onClick={() => handleSendTeacherComment(submissionId, st.id)}
                                                 disabled={
-                                                  sendingPrivateComment[
-                                                    st.id
-                                                  ] ||
-                                                  !teacherPrivateComment[
-                                                    st.id
-                                                  ]?.trim()
+                                                  sendingTeacherComment[st.id] ||
+                                                  !teacherCommentInput[st.id]?.trim()
                                                 }
                                               >
-                                                {sendingPrivateComment[
-                                                  st.id
-                                                ] ? (
-                                                  <span
-                                                    className="spinner-border spinner-border-sm"
-                                                    role="status"
-                                                    aria-hidden="true"
-                                                  ></span>
+                                                {sendingTeacherComment[st.id] ? (
+                                                  <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                                                 ) : (
                                                   <i className="bi bi-send-fill"></i>
                                                 )}
@@ -1337,7 +1249,6 @@ const ViewInstructionPage = ({
                                         </div>
                                       </div>
 
-                                      {/* RIGHT COLUMN: Grade, Feedback, Files, Actions */}
                                       <div className="col-12 col-lg-4">
                                         <div className="border rounded-3 p-3 bg-white shadow-sm">
                                           <div className="mb-3">
@@ -1540,11 +1451,10 @@ const ViewInstructionPage = ({
                 </div>
               ) : (
                 <>
-                  {/* Header with status */}
                   <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
                     <h5 className="fw-bold text-dark mb-0">Your Submission</h5>
                     {studentSubmission?.submission_status ===
-                    "not_submitted" ? (
+                      "not_submitted" ? (
                       <span className="badge bg-warning text-dark">
                         Not submitted
                       </span>
@@ -1557,64 +1467,63 @@ const ViewInstructionPage = ({
                   </div>
 
                   <div className="row g-4">
-                    {/* ---------- LEFT COLUMN: Private Comment ---------- */}
                     <div className="col-12 col-md-8">
                       <div className="bg-light border rounded-3 p-3 h-100">
                         <div className="fw-semibold text-dark mb-2">
-                          <i className="bi bi-chat-left-text me-1"></i> Private
-                          Comment
+                          <i className="bi bi-chat-left-text me-1"></i> Private Comments
                         </div>
 
-                        {/* Existing comment (if any) */}
-                        {studentSubmission?.submission?.private_comment && (
-                          <div className="d-flex gap-3 mb-3">
-                            <Avatar
-                              name={user.name}
-                              size={36}
-                              color="#00897b"
-                            />
-                            <div className="flex-grow-1">
-                              <div className="d-flex align-items-center gap-2">
-                                <span className="fw-semibold text-dark">
-                                  You
-                                </span>
-                                <span
-                                  className="text-muted"
-                                  style={{ fontSize: "0.75rem" }}
-                                >
-                                  {studentSubmission?.submission?.submitted_at
-                                    ? new Date(
-                                        studentSubmission.submission
-                                          .submitted_at,
-                                      ).toLocaleString()
-                                    : "Just now"}
-                                </span>
-                              </div>
-                              <p
-                                className="mb-0 text-dark"
-                                style={{
-                                  fontSize: "0.95rem",
-                                  lineHeight: "1.5",
-                                }}
-                              >
-                                {studentSubmission.submission.private_comment}
-                              </p>
-                            </div>
-                          </div>
-                        )}
+                        {/* Scrollable comment list */}
+                        <div id={studentSubmission?.submission?.id ? `comment-container-${studentSubmission.submission.id}` : undefined} style={{ maxHeight: "462px", height: "462px", overflowY: "auto"}} className="mb-3">
+                          {(() => {
+                            const submissionId = studentSubmission?.submission?.id;
+                            const comments = submissionId ? commentsMap[submissionId] || [] : [];
+                            return comments.length > 0 ? (
+                              comments.map((cm) => {
+                                const senderName =
+                                  cm.user?.first_name && cm.user?.last_name
+                                    ? `${cm.user.first_name} ${cm.user.last_name}`
+                                    : cm.user?.name || "Unknown";
+                                const date = cm.created_at
+                                  ? new Date(cm.created_at).toLocaleString()
+                                  : "Just now";
+                                const isTeacherComment = cm.user_id !== user.id;
+                                return (
+                                  <div
+                                    key={`comment-${cm.id}-${cm.user_id || '0'}`}
+                                    className="d-flex gap-3 mb-3"
+                                  >
+                                    <Avatar
+                                      name={senderName}
+                                      size={36}
+                                      color={isTeacherComment ? "#1a73e8" : "#00897b"}
+                                    />
+                                    <div className="flex-grow-1">
+                                      <div className="d-flex align-items-center gap-2">
+                                        <span className="fw-semibold text-dark">
+                                          {senderName}
+                                          {isTeacherComment && " (Teacher)"}
+                                        </span>
+                                        <span className="text-muted" style={{ fontSize: "0.75rem" }}>
+                                          {date}
+                                        </span>
+                                      </div>
+                                      <p className="mb-0 text-dark" style={{ fontSize: "0.95rem", lineHeight: "1.5", borderBottom: "1px solid #e0e0e0", marginRight: "20px", paddingBottom: "0.5rem"  }}>
+                                        {cm.comment}
+                                      </p>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <p className="text-muted small fst-italic">No private comments yet.</p>
+                            );
+                          })()}
+                        </div>
 
-                        {/* Teacher's reply (if any) - we don't have separate teacher comment; it's stored in the same field? 
-                  Actually the API returns a single private_comment. We'll just show the current one. */}
-                        {/* If no comment yet */}
-                        {!studentSubmission?.submission?.private_comment && (
-                          <p className="text-muted small fst-italic">
-                            No private comments yet.
-                          </p>
-                        )}
-
-                        {/* Input to add/update comment */}
-                        <div className="d-flex gap-2 align-items-start mt-3">
-                          <Avatar name={user.name} size={36} color="#00897b" />
+                        {/* Fixed input – outside the scrollable area */}
+                        <div className="d-flex gap-2 align-items-start">
+                          <Avatar name={user.first_name + " " + user.last_name} size={36} color="#00897b" />
                           <div className="flex-grow-1 d-flex gap-2">
                             <input
                               type="text"
@@ -1624,27 +1533,25 @@ const ViewInstructionPage = ({
                                 backgroundColor: "#f1f3f4",
                               }}
                               placeholder="Write a private comment to the teacher..."
-                              value={studentPrivateCommentInput}
-                              onChange={(e) =>
-                                setStudentPrivateCommentInput(e.target.value)
-                              }
+                              value={studentCommentInput}
+                              onChange={(e) => setStudentCommentInput(e.target.value)}
                               onKeyDown={(e) => {
-                                if (
-                                  e.key === "Enter" &&
-                                  studentPrivateCommentInput.trim()
-                                ) {
-                                  handleSendStudentPrivateComment();
+                                if (e.key === "Enter" && studentCommentInput.trim()) {
+                                  handleSendStudentComment();
                                 }
                               }}
-                              disabled={isSendingStudentComment} // Only disabled while sending
+                              disabled={
+                                !studentSubmission?.submission?.id ||
+                                isSendingStudentComment
+                              }
                             />
                             <button
                               className="btn btn-lg border-0 px-1"
-                              onClick={handleSendStudentPrivateComment}
+                              onClick={handleSendStudentComment}
                               disabled={
-                                !studentSubmission?.submission?.id || // Requires a submission ID
+                                !studentSubmission?.submission?.id ||
                                 isSendingStudentComment ||
-                                !studentPrivateCommentInput.trim()
+                                !studentCommentInput.trim()
                               }
                               title={
                                 !studentSubmission?.submission?.id
@@ -1653,34 +1560,20 @@ const ViewInstructionPage = ({
                               }
                             >
                               {isSendingStudentComment ? (
-                                <span
-                                  className="spinner-border spinner-border-sm"
-                                  role="status"
-                                  aria-hidden="true"
-                                ></span>
+                                <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                               ) : (
                                 <i className="bi bi-send-fill"></i>
                               )}
                             </button>
                           </div>
                         </div>
-                        {!studentSubmission?.submission?.id &&
-                          studentPrivateCommentInput.trim() && (
-                            <div className="text-muted small mt-2">
-                              <i className="bi bi-info-circle me-1"></i>
-                              This comment will be included when you turn in the
-                              assignment.
-                            </div>
-                          )}
                       </div>
                     </div>
 
-                    {/* ---------- RIGHT COLUMN: Turn In / Submitted Files ---------- */}
                     <div className="col-12 col-md-4">
                       <div className="bg-light border rounded-3 p-3 h-100">
                         {studentSubmission?.submission_status ===
-                        "not_submitted" ? (
-                          // --- Not submitted: show Turn In & Mark as Done buttons ---
+                          "not_submitted" ? (
                           <>
                             <div className="text-center py-4">
                               <i className="bi bi-inbox text-muted fs-1 mb-2"></i>
@@ -1689,12 +1582,13 @@ const ViewInstructionPage = ({
                               </p>
                             </div>
                             <div className="d-flex gap-2 flex-wrap justify-content-center">
+                              {/* Turn In button – opens modal */}
                               <button
                                 className="btn btn-primary fw-medium shadow-sm"
-                                onClick={() => setShowTurnInModal(true)}
+                                onClick={() => setShowFileUploadModal(true)}
                               >
-                                <i className="bi bi-plus-circle me-1"></i> Add
-                                or Create & Turn In
+                                <i className="bi bi-plus-circle me-1"></i>{" "}
+                                Add or Create & Turn In
                               </button>
                               <button
                                 className="btn btn-outline-secondary fw-medium"
@@ -1705,9 +1599,7 @@ const ViewInstructionPage = ({
                             </div>
                           </>
                         ) : (
-                          // --- Submitted: show files and Resubmit button ---
                           <>
-                            {/* Submitted files */}
                             {studentSubmission?.submission?.files &&
                               studentSubmission.submission.files.length > 0 && (
                                 <div className="mb-3">
@@ -1715,72 +1607,33 @@ const ViewInstructionPage = ({
                                     Your submitted files
                                   </div>
                                   <div className="d-flex flex-wrap gap-2">
-                                    {studentSubmission.submission.files.map(
-                                      (file, idx) => {
-                                        const fileObj = {
-                                          id: `sub-${idx}`,
-                                          name:
-                                            file.file_name ||
-                                            file.filename ||
-                                            "file",
-                                          type: file.file_type || "pdf",
-                                          url: file.file_url || file.url || "#",
-                                          originalName:
-                                            file.original_name ||
-                                            file.original_filename ||
-                                            file.file_name ||
-                                            file.filename,
-                                        };
-
-                                        const { displayName, dateStr } =
-                                          getFileDisplayInfo(
-                                            file,
-                                            studentSubmission.submission
-                                              .submitted_at,
-                                          );
-
-                                        return (
-                                          <div
-                                            key={idx}
-                                            className="border rounded p-2 px-3 d-flex flex-column align-items-start text-decoration-none text-dark bg-white shadow-sm w-100"
-                                            style={{ minWidth: "120px" }}
-                                          >
-                                            <a
-                                              href={fileObj.url}
-                                              target="_blank"
-                                              rel="noreferrer"
-                                              className="d-flex align-items-center gap-2 text-decoration-none text-dark w-100"
-                                            >
-                                              <i
-                                                className={`bi ${getPreviewIcon(fileObj)} fs-5`}
-                                              ></i>
-                                              <span className="small fw-medium">
-                                                {displayName}
-                                              </span>
-                                            </a>
-                                            {dateStr && (
-                                              <span
-                                                className="text-muted small"
-                                                style={{
-                                                  fontSize: "0.7rem",
-                                                  marginLeft: "2rem",
-                                                }}
-                                              >
-                                                {dateStr}
-                                              </span>
-                                            )}
-                                          </div>
-                                        );
-                                      },
-                                    )}
+                                    {studentSubmission.submission.files.map((file, idx) => {
+                                      const fileObj = {
+                                        id: `sub-${idx}`,
+                                        name: file.file_name || file.filename || "file",
+                                        type: file.file_type || "pdf",
+                                        url: file.file_url || file.url || "#",
+                                      };
+                                      return (
+                                        <a
+                                          key={idx}
+                                          href={fileObj.url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="border rounded p-2 px-3 d-flex align-items-center gap-2 text-decoration-none text-dark bg-white shadow-sm"
+                                        >
+                                          <i className={`bi ${getPreviewIcon(fileObj)} fs-5`}></i>
+                                          <span className="small fw-medium">{fileObj.name}</span>
+                                        </a>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               )}
 
-                            {/* Grade & Feedback (if graded) */}
                             {studentSubmission?.submission?.grade !== null &&
                               studentSubmission?.submission?.grade !==
-                                undefined && (
+                              undefined && (
                                 <div className="mb-3">
                                   <div className="fw-semibold text-dark mb-1">
                                     Grade & Feedback
@@ -1807,19 +1660,18 @@ const ViewInstructionPage = ({
 
                             {studentSubmission?.submission?.status ===
                               "returned" && (
-                              <div className="alert alert-info mb-3">
-                                This work has been returned to you by your
-                                teacher.
-                              </div>
-                            )}
+                                <div className="alert alert-info mb-3">
+                                  This work has been returned to you by your
+                                  teacher.
+                                </div>
+                              )}
 
                             <div className="border-top pt-3">
                               <button
                                 className="btn btn-outline-primary w-100"
-                                onClick={() => setShowTurnInModal(true)}
+                                onClick={() => setShowFileUploadModal(true)}
                               >
-                                <i className="bi bi-arrow-repeat me-1"></i>{" "}
-                                Resubmit
+                                <i className="bi bi-arrow-repeat me-1"></i> Resubmit
                               </button>
                             </div>
                           </>
@@ -1919,8 +1771,9 @@ const ViewInstructionPage = ({
           </div>
         </div>
       )}
-      {/* Turn In Modal */}
-      {showTurnInModal && (
+
+      {/* ----- NEW: File Upload Modal (student) ----- */}
+      {showFileUploadModal && (
         <div
           className="modal fade show d-block"
           style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
@@ -1937,17 +1790,16 @@ const ViewInstructionPage = ({
                 <button
                   className="btn-close"
                   onClick={() => {
-                    setShowTurnInModal(false);
-                    setTurnInFiles([]);
-                    setTurnInComment("");
+                    setShowFileUploadModal(false);
+                    setUploadFiles([]);
                   }}
                 ></button>
               </div>
               <div className="modal-body p-4">
                 <p className="text-muted mb-3">
                   {studentSubmission?.submission_status === "not_submitted"
-                    ? "Upload your completed files and submit your work."
-                    : "Upload new files to replace your previous submission."}
+                    ? "Select files to submit your work."
+                    : "Select new files to replace your previous submission."}
                 </p>
                 <div className="mb-4">
                   <label className="form-label small fw-bold text-muted">
@@ -1958,22 +1810,22 @@ const ViewInstructionPage = ({
                     className="form-control"
                     multiple
                     onChange={(e) =>
-                      setTurnInFiles(Array.from(e.target.files || []))
+                      setUploadFiles(Array.from(e.target.files || []))
                     }
                   />
                   <small className="form-text text-muted d-block mt-2">
-                    Select one or more files for your submission.
+                    Choose one or more files.
                   </small>
                 </div>
-                {turnInFiles.length > 0 && (
+                {uploadFiles.length > 0 && (
                   <div className="mb-4">
                     <div className="fw-semibold small text-dark mb-2">
-                      Selected files ({turnInFiles.length})
+                      Selected files ({uploadFiles.length})
                     </div>
                     <div className="d-flex flex-wrap gap-2">
-                      {turnInFiles.map((file, index) => (
+                      {uploadFiles.map((file, index) => (
                         <span
-                          key={`${file.name}-${index}`}
+                          key={`upload-${file.name}-${index}`}
                           className="badge bg-white text-dark border"
                         >
                           {file.name}
@@ -1982,27 +1834,14 @@ const ViewInstructionPage = ({
                     </div>
                   </div>
                 )}
-                <div className="mb-3">
-                  <label className="form-label small fw-bold text-muted">
-                    Private comment (optional)
-                  </label>
-                  <textarea
-                    className="form-control"
-                    rows="2"
-                    placeholder="Add a private note for the teacher..."
-                    value={turnInComment}
-                    onChange={(e) => setTurnInComment(e.target.value)}
-                  />
-                </div>
               </div>
               <div className="modal-footer border-top px-4 py-3">
                 <button
                   type="button"
                   className="btn btn-light fw-medium px-4"
                   onClick={() => {
-                    setShowTurnInModal(false);
-                    setTurnInFiles([]);
-                    setTurnInComment("");
+                    setShowFileUploadModal(false);
+                    setUploadFiles([]);
                   }}
                 >
                   Cancel
@@ -2010,10 +1849,10 @@ const ViewInstructionPage = ({
                 <button
                   type="button"
                   className="btn btn-primary fw-medium px-4"
-                  onClick={handleTurnInWork}
-                  disabled={isSubmitting || turnInFiles.length === 0}
+                  onClick={handleUploadAndTurnIn}
+                  disabled={isSubmitting || uploadFiles.length === 0}
                 >
-                  {isSubmitting ? "Submitting..." : "Submit"}
+                  {isSubmitting ? "Submitting..." : "Upload & Turn In"}
                 </button>
               </div>
             </div>

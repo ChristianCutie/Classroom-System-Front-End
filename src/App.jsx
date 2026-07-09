@@ -364,119 +364,109 @@ const App = () => {
     }
   };
 
-  const handleSubmitCoursework = async (
-    classId,
-    courseworkId,
-    files = [],
-    submissionData = {},
-  ) => {
-    try {
-      const formData = new FormData();
-      const normalizedFiles = Array.isArray(files) ? files : [];
+ const handleSubmitCoursework = async (
+  classId,
+  courseworkId,
+  files = [],
+  submissionData = {},
+) => {
+  try {
+    const formData = new FormData();
+    const normalizedFiles = Array.isArray(files) ? files : [];
 
-      if (normalizedFiles.length > 0) {
-        normalizedFiles.forEach((file) => {
-          formData.append("files[]", file);
-          formData.append("files", file);
-        });
-      }
+    console.log("Submitting files:", normalizedFiles); // Debug
 
-      // Use private_comment from submissionData
-      const privateComment =
-        submissionData.private_comment ||
-        submissionData.message ||
-        submissionData.student_message ||
-        submissionData.studentComment ||
-        submissionData.comment ||
-        "";
-      const note =
-        typeof privateComment === "string" ? privateComment.trim() : "";
-      const submittedAt =
-        submissionData.submittedAt || new Date().toISOString();
-      const status = submissionData.status || "submitted";
+    // Append files – ONLY as "files[]" (not duplicate "files")
+    normalizedFiles.forEach((file) => {
+      formData.append("files[]", file);
+    });
 
-      formData.append("private_comment", note);
-      formData.append("student_id", submissionData.studentId ?? user?.id ?? "");
-      formData.append(
-        "student_name",
-        submissionData.studentName ?? user?.name ?? "",
-      );
-      formData.append(
-        "student_email",
-        submissionData.studentEmail ?? user?.email ?? "",
-      );
-      formData.append("class_id", classId);
-      formData.append("assignment_id", courseworkId);
-      formData.append("coursework_id", courseworkId);
-      formData.append(
-        "class_name",
-        submissionData.className ?? selectedClass?.name ?? "",
-      );
-      formData.append("assignment_title", submissionData.assignmentTitle ?? "");
-      formData.append("submitted_at", submittedAt);
-      formData.append("status", status);
+    const privateComment =
+      submissionData.private_comment ||
+      submissionData.message ||
+      submissionData.student_message ||
+      "";
+    const note = typeof privateComment === "string" ? privateComment.trim() : "";
+    const submittedAt = submissionData.submittedAt || new Date().toISOString();
+    const status = submissionData.status || "submitted";
 
-      const response = await classAPI.submitCoursework(courseworkId, formData);
+    formData.append("private_comment", note);
+    formData.append("student_id", submissionData.studentId ?? user?.id ?? "");
+    formData.append("student_name", submissionData.studentName ?? user?.name ?? "");
+    formData.append("student_email", submissionData.studentEmail ?? user?.email ?? "");
+    formData.append("class_id", classId);
+    formData.append("assignment_id", courseworkId);
+    formData.append("coursework_id", courseworkId);
+    formData.append("class_name", submissionData.className ?? selectedClass?.name ?? "");
+    formData.append("assignment_title", submissionData.assignmentTitle ?? "");
+    formData.append("submitted_at", submittedAt);
+    formData.append("status", status);
 
-      // --- Update local state to mark as submitted ---
-      const markSubmitted = (items = []) =>
-        items.map((item) =>
-          item.id === courseworkId
-            ? {
-                ...item,
-                submitted: true,
-                userSubmitted: true,
-                userSubmission: {
-                  status,
-                  message: note,
-                  studentName: submissionData.studentName ?? user?.name ?? "",
-                  studentEmail:
-                    submissionData.studentEmail ?? user?.email ?? "",
-                  submittedAt,
-                  fileCount: normalizedFiles.length,
-                },
-                status,
-              }
-            : item,
-        );
+    // Log FormData entries for debugging
+    for (let [key, value] of formData.entries()) {
+      console.log(key, value instanceof File ? `File: ${value.name}` : value);
+    }
 
-      setSelectedClass((prev) =>
-        prev?.id === classId
+    const response = await classAPI.submitCoursework(courseworkId, formData);
+
+    // Mark local state as submitted (same as before)
+    const markSubmitted = (items = []) =>
+      items.map((item) =>
+        item.id === courseworkId
           ? {
-              ...prev,
-              classwork: markSubmitted(prev.classwork || []),
-              assignments: markSubmitted(prev.assignments || []),
+              ...item,
+              submitted: true,
+              userSubmitted: true,
+              userSubmission: {
+                status,
+                message: note,
+                studentName: submissionData.studentName ?? user?.name ?? "",
+                studentEmail: submissionData.studentEmail ?? user?.email ?? "",
+                submittedAt,
+                fileCount: normalizedFiles.length,
+              },
+              status,
+            }
+          : item,
+      );
+
+    setSelectedClass((prev) =>
+      prev?.id === classId
+        ? {
+            ...prev,
+            classwork: markSubmitted(prev.classwork || []),
+            assignments: markSubmitted(prev.assignments || []),
+            submissionVersion: Date.now(),
+          }
+        : prev,
+    );
+
+    setClasses((prev) =>
+      prev.map((clsItem) =>
+        clsItem.id === classId
+          ? {
+              ...clsItem,
+              classwork: markSubmitted(clsItem.classwork || []),
+              assignments: markSubmitted(clsItem.assignments || []),
               submissionVersion: Date.now(),
             }
-          : prev,
-      );
+          : clsItem,
+      ),
+    );
 
-      setClasses((prev) =>
-        prev.map((clsItem) =>
-          clsItem.id === classId
-            ? {
-                ...clsItem,
-                classwork: markSubmitted(clsItem.classwork || []),
-                assignments: markSubmitted(clsItem.assignments || []),
-                submissionVersion: Date.now(),
-              }
-            : clsItem,
-        ),
-      );
-
-      await fetchClasses();
-      addToast("Submission turned in successfully.", "success");
-      return true;
-    } catch (err) {
-      console.error("Submit coursework error:", err);
-      addToast(
-        err.response?.data?.message ||
-          "Could not submit the coursework. Please try again.",
-        "error",
-      );
-      return false;
-    }
-  };
+    await fetchClasses();
+    addToast("Submission turned in successfully.", "success");
+    return response.data; // Return the full response data
+  } catch (err) {
+    console.error("Submit coursework error:", err);
+    addToast(
+      err.response?.data?.message ||
+        "Could not submit the coursework. Please try again.",
+      "error",
+    );
+    return false;
+  }
+};
 
    const handleUpdateGrade = async (
     classId,

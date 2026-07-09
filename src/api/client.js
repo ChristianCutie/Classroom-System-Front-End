@@ -71,8 +71,12 @@ export const assignmentAPI = {
     apiClient.post(`/submissions/${submissionId}/grade`, payload),
   getStudentAssignmentSubmission: (assignmentId, studentId) =>
     apiClient.get(`/assignments/${assignmentId}/students/${studentId}/details`),
-sendPrivateComment: (submissionId, data) =>
-  apiClient.post(`/submissions/${submissionId}/private-comment`, data),
+  sendPrivateComment: (submissionId, data) =>
+    apiClient.post(`/submissions/${submissionId}/private-comment`, data),
+  sendComment: (submissionId, data) =>
+    apiClient.post(`/submissions/${submissionId}/comments`, data),
+  getSubmissionComments: (submissionId) =>
+    apiClient.get(`/getsubmissions/${submissionId}/comments`),
 };
 
 export const classAPI = {
