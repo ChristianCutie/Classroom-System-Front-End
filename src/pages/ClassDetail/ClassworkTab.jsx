@@ -57,6 +57,8 @@ const ClassworkTab = ({
   // ---------- Submissions per coursework ----------
   const [submissionsMap, setSubmissionsMap] = useState({});
   const [loadingSubmissionsMap, setLoadingSubmissionsMap] = useState({});
+  const [previewAttachment, setPreviewAttachment] = useState(null);
+  const [previewMode, setPreviewMode] = useState(null);
 
   // Reset function
   const resetCreateForm = () => {
@@ -380,6 +382,58 @@ const ClassworkTab = ({
   }, [expandedId, isTeacher]);
 
   // ---------- Handlers ----------
+  const getAttachmentPreviewMode = (att) => {
+    if (!att) return null;
+
+    const name = String(att.name || att.file_name || att.filename || att.fileName || "").toLowerCase();
+    const type = String(att.type || "").toLowerCase();
+    const extension = name.includes(".") ? name.split(".").pop() : type;
+
+    const imageExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"];
+    const pdfExtensions = ["pdf"];
+    const documentExtensions = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"];
+
+    if (imageExtensions.includes(extension)) return "image";
+    if (pdfExtensions.includes(extension)) return "pdf";
+    if (documentExtensions.includes(extension)) return "document";
+    return null;
+  };
+
+  const getAttachmentPreviewUrl = (att) => {
+    if (!att?.url || att.url === "#") return null;
+
+    const mode = getAttachmentPreviewMode(att);
+    const url = att.url;
+
+    if (mode === "pdf") {
+      return `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(url)}`;
+    }
+
+    if (mode === "document") {
+      return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
+    }
+
+    return url;
+  };
+
+  const openAttachmentPreview = (att) => {
+    const mode = getAttachmentPreviewMode(att);
+    if (!mode) {
+      if (att?.url && att.url !== "#") {
+        window.open(att.url, "_blank", "noopener,noreferrer");
+      }
+      return;
+    }
+
+    setPreviewAttachment(att);
+    setPreviewMode(mode);
+  };
+
+  const closeAttachmentPreview = () => {
+    setPreviewAttachment(null);
+    setPreviewMode(null);
+  };
+
   const handleAddTopic = async (e) => {
     e.preventDefault();
     const trimmedTopic = topicName.trim();
@@ -1002,18 +1056,20 @@ const ClassworkTab = ({
                                         }
 
                                         return (
-                                          <a
+                                          <button
                                             key={idx}
-                                            href={att.url}
-                                            target="_blank"
-                                            rel="noreferrer"
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              openAttachmentPreview(att);
+                                            }}
                                             className="border rounded p-2 px-3 d-flex align-items-center gap-2 text-decoration-none text-dark bg-light hover-bg-white shadow-sm"
                                           >
                                             <i className={`bi ${iconClass} fs-5`}></i>
                                             <span className="small fw-medium">
                                               {att.name}
                                             </span>
-                                          </a>
+                                          </button>
                                         );
                                       })}
                                     </div>
@@ -1158,6 +1214,73 @@ const ClassworkTab = ({
           )}
         </div>
       </div>
+
+      {previewAttachment && (
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.65)", zIndex: 1050 }}
+          tabIndex="-1"
+          onClick={closeAttachmentPreview}
+        >
+          <div
+            className="modal-dialog modal-dialog-centered modal-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+              <div className="modal-header border-bottom px-4 py-3">
+                <h5 className="modal-title fw-bold text-dark">
+                  {previewAttachment.name || "Attachment preview"}
+                </h5>
+                <div className="d-flex align-items-center gap-2">
+                  {previewAttachment.url && previewAttachment.url !== "#" && (
+                    <a
+                      href={previewAttachment.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-outline-secondary btn-sm"
+                    >
+                      Open file
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={closeAttachmentPreview}
+                  ></button>
+                </div>
+              </div>
+              <div className="modal-body p-0" style={{ minHeight: "70vh" }}>
+                {previewMode === "image" && previewAttachment.url ? (
+                  <img
+                    src={previewAttachment.url}
+                    alt={previewAttachment.name || "Attachment preview"}
+                    className="w-100"
+                    style={{ maxHeight: "75vh", objectFit: "contain" }}
+                  />
+                ) : null}
+
+                {previewMode === "pdf" && getAttachmentPreviewUrl(previewAttachment) ? (
+                  <iframe
+                    src={getAttachmentPreviewUrl(previewAttachment)}
+                    title={previewAttachment.name || "PDF preview"}
+                    className="w-100"
+                    style={{ minHeight: "70vh", border: "none" }}
+                  />
+                ) : null}
+
+                {previewMode === "document" && getAttachmentPreviewUrl(previewAttachment) ? (
+                  <iframe
+                    src={getAttachmentPreviewUrl(previewAttachment)}
+                    title={previewAttachment.name || "Document preview"}
+                    className="w-100"
+                    style={{ minHeight: "70vh", border: "none" }}
+                  />
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Topic Actions Modal (unchanged) */}
       {showTopicActionModal && editingTopicId && (
