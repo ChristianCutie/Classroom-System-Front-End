@@ -1055,6 +1055,14 @@ const ViewInstructionPage = ({
                             (studentName || "").split(" ")[0] || "Submission";
 
                           const isSelected = selectedStudentId === st.id;
+                          const normalizeName = (value) => {
+                            if (!value) return null;
+                            const text = String(value).trim();
+                            if (!text) return null;
+                            const parts = text.replace(/\\/g, "/").split("/");
+                            return parts[parts.length - 1] || null;
+                          };
+
                           const submissionFiles =
                             subData?.submission?.files || [];
                           const previewFiles =
@@ -1062,7 +1070,12 @@ const ViewInstructionPage = ({
                               ? submissionFiles.map((f, idx) => ({
                                 id: `${st.id}-${idx}`,
                                 name:
-                                  f.file_name || f.filename || `file_${idx}`,
+                                  normalizeName(f.file_name) ||
+                                  normalizeName(f.filename) ||
+                                  normalizeName(f.name) ||
+                                  (f.file_path
+                                    ? normalizeName(f.file_path)
+                                    : `file_${idx}`),
                                 type: f.file_type || f.type || "pdf",
                                 url: f.file_url || f.url || "#",
                               }))
@@ -1608,9 +1621,23 @@ const ViewInstructionPage = ({
                                   </div>
                                   <div className="d-flex flex-wrap gap-2">
                                     {studentSubmission.submission.files.map((file, idx) => {
+                                      const normalizeName = (value) => {
+                                        if (!value) return null;
+                                        const text = String(value).trim();
+                                        if (!text) return null;
+                                        const parts = text.replace(/\\/g, "/").split("/");
+                                        return parts[parts.length - 1] || null;
+                                      };
+
                                       const fileObj = {
                                         id: `sub-${idx}`,
-                                        name: file.file_name || file.filename || "file",
+                                        name:
+                                          normalizeName(file.file_name) ||
+                                          normalizeName(file.filename) ||
+                                          normalizeName(file.name) ||
+                                          (file.file_path
+                                            ? file.file_path.split("/").pop()
+                                            : "file"),
                                         type: file.file_type || "pdf",
                                         url: file.file_url || file.url || "#",
                                       };

@@ -1,7 +1,7 @@
 // ClassworkTab.jsx
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/context/ToastContext.jsx";
-import apiClient, { assignmentAPI } from "@/api/client.js";
+import apiClient, { assignmentAPI, resolveAttachmentUrl } from "@/api/client.js";
 
 const ClassworkTab = ({
   cls,
@@ -93,6 +93,36 @@ const ClassworkTab = ({
     return "";
   };
 
+  const getAttachmentDisplayName = (att) => {
+    if (!att) return "Unnamed";
+
+    const candidates = [
+      att.file_name,
+      att.filename,
+      att.fileName,
+      att.original_name,
+      att.originalName,
+      att.display_name,
+      att.displayName,
+      att.name,
+      att.title,
+      att.label,
+      att.topic,
+    ];
+
+    const name = candidates.find((value) => typeof value === "string" && value.trim());
+    if (name) {
+      return name.trim();
+    }
+
+    const path = att.file_path || att.url || att.fileUrl || att.path || att.link;
+    if (typeof path === "string" && path.trim()) {
+      const parts = path.replace(/\\/g, "/").split("/");
+      return parts[parts.length - 1] || "Unnamed";
+    }
+    return "Unnamed";
+  };
+
   const isTeacher = useMemo(() => {
     if (!user) return false;
     if (typeof user.role === "string") {
@@ -135,6 +165,11 @@ const ClassworkTab = ({
       return sourceWork.map((item) => ({
         ...item,
         topic: normalizeTopicValue(item.topic) || "General",
+        attachments: (item.attachments || []).map((att) => ({
+          name: getAttachmentDisplayName(att),
+          url: att.file_path ? resolveAttachmentUrl(att.file_path) : '#',
+          type: att.file_type || 'file',
+        })),
       }));
     }
 
@@ -146,7 +181,11 @@ const ClassworkTab = ({
       type: "assignment",
       topic: normalizeTopicValue(a.topic) || "General",
       instructions: a.instructions || "No instructions provided.",
-      attachments: a.attachments || [],
+      attachments: (a.attachments || []).map((att) => ({
+        name: getAttachmentDisplayName(att),
+        url: att.file_path ? resolveAttachmentUrl(att.file_path) : '#',
+        type: att.file_type || 'file',
+      })),
       postedDate: a.created_at
         ? new Date(a.created_at).toLocaleDateString()
         : "recently",
@@ -161,13 +200,16 @@ const ClassworkTab = ({
       type: "quiz",
       topic: normalizeTopicValue(q.topic) || "General",
       instructions: q.instructions || "No instructions provided.",
-      attachments: q.attachments || [],
+      attachments: (q.attachments || []).map((att) => ({
+        name: getAttachmentDisplayName(att),
+        url: att.file_path ? resolveAttachmentUrl(att.file_path) : '#',
+        type: att.file_type || 'file',
+      })),
       postedDate: q.created_at
         ? new Date(q.created_at).toLocaleDateString()
         : "recently",
       stats: q.stats || null,
     }));
-
     return [...assignments, ...quizzes];
   }, [localClasswork, classwork, cls.assignments, cls.quizzes]);
 
@@ -350,13 +392,13 @@ const ClassworkTab = ({
         const normalizedTopic =
           created && typeof created === "object"
             ? {
-                id: created.id ?? created.topic_id ?? null,
-                name:
-                  created.name ||
-                  created.topic_name ||
-                  created.topicName ||
-                  trimmedTopic,
-              }
+              id: created.id ?? created.topic_id ?? null,
+              name:
+                created.name ||
+                created.topic_name ||
+                created.topicName ||
+                trimmedTopic,
+            }
             : { id: null, name: trimmedTopic };
 
         setCustomTopics((prev) =>
@@ -369,10 +411,10 @@ const ClassworkTab = ({
             const exists = prev.some((item) => item.id === normalizedTopic.id);
             return exists
               ? prev.map((item) =>
-                  item.id === normalizedTopic.id
-                    ? { ...item, name: normalizedTopic.name }
-                    : item,
-                )
+                item.id === normalizedTopic.id
+                  ? { ...item, name: normalizedTopic.name }
+                  : item,
+              )
               : [...prev, normalizedTopic];
           });
         }
@@ -480,8 +522,8 @@ const ClassworkTab = ({
         const exists = prev.some((item) => item.id === normalizedTopic.id);
         return exists
           ? prev.map((item) =>
-              item.id === normalizedTopic.id ? normalizedTopic : item,
-            )
+            item.id === normalizedTopic.id ? normalizedTopic : item,
+          )
           : [...prev, normalizedTopic];
       });
       setCustomTopics((prev) =>
@@ -543,64 +585,62 @@ const ClassworkTab = ({
       const payload =
         createType === "assignment"
           ? (() => {
-              const formData = new FormData();
-              formData.append("class_id", cls.id);
-              formData.append("title", cwTitle.trim());
-              formData.append("instructions", cwInstructions.trim());
-              formData.append("max_points", Number(cwPoints) || 100);
-              formData.append("topic", finalTopicName);
-              if (finalTopicId) {
-                formData.append("topic_id", finalTopicId);
+            const formData = new FormData();
+            formData.append("class_id", cls.id);
+            formData.append("title", cwTitle.trim());
+            formData.append("instructions", cwInstructions.trim());
+            formData.append("max_points", Number(cwPoints) || 100);
+            formData.append("topic", finalTopicName);
+            if (finalTopicId) {
+              formData.append("topic_id", finalTopicId);
+            }
+            if (cwDueDate) formData.append("due_date", cwDueDate);
+
+            // --- Send attachments and raw filenames ---
+            cwAttachments.forEach((file) => {
+              if (file instanceof File) {
+                formData.append("attachments[]", file);
+                formData.append("file_name", file.name);
+                formData.append("file_names[]", file.name);
               }
-              if (cwDueDate) formData.append("due_date", cwDueDate);
-              cwAttachments.forEach((file, index) => {
-                if (file instanceof File) {
-                  formData.append(`attachments[${index}]`, file);
-                }
+            });
+
+            // Assign students
+            if (cwAssignToAll) {
+              formData.append("assign_to_all", "true");
+            } else if (cwSelectedStudents.length > 0) {
+              cwSelectedStudents.forEach((studentId) => {
+                formData.append("student_ids[]", studentId);
               });
+            }
+            if (!cwAssignToAll && cwSelectedStudents.length === 0) {
+              addToast(
+                "Please select at least one student or choose 'All students'.",
+                "warning",
+              );
+              setIsSubmitting(false);
+              return;
+            }
 
-              // [NEW] Assign students
-              if (cwAssignToAll) {
-                formData.append("assign_to_all", "true");
-              } else if (cwSelectedStudents.length > 0) {
-                cwSelectedStudents.forEach((studentId) => {
-                  formData.append("student_ids[]", studentId);
-                });
-              }
-              // If not assigned to all and no students selected, fallback to all?
-              // We'll keep as is; maybe backend will treat empty as all.
-              // But we can also default to all if none selected.
-              if (!cwAssignToAll && cwSelectedStudents.length === 0) {
-                // Optionally, we could set assign_to_all true or send empty array.
-                // We'll send assign_to_all false and empty student_ids?
-                // Better to alert user.
-                addToast(
-                  "Please select at least one student or choose 'All students'.",
-                  "warning",
-                );
-                setIsSubmitting(false);
-                return;
-              }
-
-              return { type: "assignment", data: formData };
-            })()
+            return { type: "assignment", data: formData };
+          })()
           : {
-              title: cwTitle.trim(),
-              type: createType,
-              topic: finalTopicName,
-              dueDate: createType === "material" ? null : cwDueDate,
-              points:
-                createType === "material" ? null : Number(cwPoints) || 100,
-              instructions: cwInstructions.trim(),
-              attachments: [
-                {
-                  type: "pdf",
-                  name: `${cwTitle.replace(/\s+/g, "_")}_Docs.pdf`,
-                  url: "#",
-                },
-              ],
-              postedDate: "Today",
-            };
+            title: cwTitle.trim(),
+            type: createType,
+            topic: finalTopicName,
+            dueDate: createType === "material" ? null : cwDueDate,
+            points:
+              createType === "material" ? null : Number(cwPoints) || 100,
+            instructions: cwInstructions.trim(),
+            attachments: [
+              {
+                type: "pdf",
+                name: `${cwTitle.replace(/\s+/g, "_")}_Docs.pdf`,
+                url: "#",
+              },
+            ],
+            postedDate: "Today",
+          };
 
       const created = await onCreateCoursework(cls.id, payload);
       if (created !== false) {
@@ -612,7 +652,6 @@ const ClassworkTab = ({
         setCwPoints("100");
         setCwDueDate("");
         setCwAttachments([]);
-        // [NEW] Reset assignment options
         setCwAssignToAll(true);
         setCwSelectedStudents([]);
         setShowCreateModal(false);
@@ -940,14 +979,29 @@ const ClassworkTab = ({
                                     "No instructions provided."}
                                 </p>
 
-                                {cw.attachments &&
-                                  cw.attachments.length > 0 && (
-                                    <div>
-                                      <h6 className="fw-semibold small text-muted text-uppercase mb-2">
-                                        Attachments
-                                      </h6>
-                                      <div className="d-flex flex-wrap gap-2">
-                                        {cw.attachments.map((att, idx) => (
+                                {cw.attachments && cw.attachments.length > 0 && (
+                                  <div>
+                                    <h6 className="fw-semibold small text-muted text-uppercase mb-2">
+                                      Attachments
+                                    </h6>
+                                    <div className="d-flex flex-wrap gap-2">
+                                      {cw.attachments.map((att, idx) => {
+                                        // Determine icon based on file type
+                                        let iconClass = 'bi-file-earmark-text-fill text-secondary';
+                                        if (att.type === 'pdf') iconClass = 'bi-file-earmark-pdf-fill text-danger';
+                                        else if (['jpg', 'jpeg', 'png', 'gif', 'svg'].includes(att.type?.toLowerCase())) {
+                                          iconClass = 'bi-file-earmark-image-fill text-info';
+                                        } else if (att.type === 'doc' || att.type === 'docx') {
+                                          iconClass = 'bi-file-earmark-word-fill text-primary';
+                                        } else if (att.type === 'xls' || att.type === 'xlsx') {
+                                          iconClass = 'bi-file-earmark-excel-fill text-success';
+                                        } else if (att.type === 'ppt' || att.type === 'pptx') {
+                                          iconClass = 'bi-file-earmark-slides-fill text-warning';
+                                        } else if (att.type === 'zip' || att.type === 'rar') {
+                                          iconClass = 'bi-file-earmark-zip-fill text-muted';
+                                        }
+
+                                        return (
                                           <a
                                             key={idx}
                                             href={att.url}
@@ -955,17 +1009,16 @@ const ClassworkTab = ({
                                             rel="noreferrer"
                                             className="border rounded p-2 px-3 d-flex align-items-center gap-2 text-decoration-none text-dark bg-light hover-bg-white shadow-sm"
                                           >
-                                            <i
-                                              className={`bi ${att.type === "pdf" ? "bi-file-earmark-pdf-fill text-danger" : att.type === "form" ? "bi-file-earmark-check-fill text-purple" : "bi-file-earmark-word-fill text-primary"} fs-5`}
-                                            ></i>
+                                            <i className={`bi ${iconClass} fs-5`}></i>
                                             <span className="small fw-medium">
                                               {att.name}
                                             </span>
                                           </a>
-                                        ))}
-                                      </div>
+                                        );
+                                      })}
                                     </div>
-                                  )}
+                                  </div>
+                                )}
                               </div>
 
                               {/* Teacher Stats or Student Action Box */}
@@ -1242,7 +1295,7 @@ const ClassworkTab = ({
         </div>
       )}
 
-      {/* Create Coursework Modal – all fields visible */}
+      {/* Create Assignment Modal */}
       {showCreateModal && (
         <div
           className="modal fade show d-block"
@@ -1304,10 +1357,23 @@ const ClassworkTab = ({
                         type="file"
                         className="form-control"
                         multiple
-                        onChange={(e) =>
-                          setCwAttachments(Array.from(e.target.files || []))
-                        }
+                        onChange={(e) => setCwAttachments(Array.from(e.target.files || []))}
                       />
+                      {/* Display selected file names */}
+                      {cwAttachments.length > 0 && (
+                        <div className="mt-2">
+                          <small className="text-muted">Selected files:</small>
+                          <ul className="list-unstyled small mb-0">
+                            {cwAttachments.map((file, idx) => (
+                              <li key={idx} className="d-flex align-items-center gap-2">
+                                <i className="bi bi-file-earmark-text"></i>
+                                <span>{file.name}</span>
+                                <span className="text-muted">({(file.size / 1024).toFixed(1)} KB)</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1503,9 +1569,8 @@ const ClassworkTab = ({
                               return (
                                 <li
                                   key={student.id}
-                                  className={`list-group-item list-group-item-action d-flex align-items-center gap-3 ${
-                                    isSelected ? "active" : ""
-                                  }`}
+                                  className={`list-group-item list-group-item-action d-flex align-items-center gap-3 ${isSelected ? "active" : ""
+                                    }`}
                                   style={{ cursor: "pointer" }}
                                   onClick={() => {
                                     if (isSelected) {

@@ -200,12 +200,25 @@ const ClassDetailPage = ({
             type: 'assignment',
             topic: normalizeTopicValue(a.topic) || 'General',
             instructions: a.instructions || a.description || 'No instructions provided.',
-            attachments: (a.attachments || []).map(att => ({
-              id: att.id,
-              name: att.file_path?.split('/').pop() || 'Attachment',
-              type: att.file_type || 'file',
-              url: att.file_path ? resolveAttachmentUrl(att.file_path) : att.url || null
-            })),
+            attachments: (a.attachments || []).map(att => {
+              const attachmentName = [
+                att.file_name,
+                att.filename,
+                att.fileName,
+                att.original_name,
+                att.originalName,
+                att.display_name,
+                att.displayName,
+                att.name,
+              ].find(value => typeof value === 'string' && value.trim());
+
+              return {
+                id: att.id,
+                name: attachmentName || att.file_path?.split('/').pop() || 'Attachment',
+                type: att.file_type || 'file',
+                url: att.file_path ? resolveAttachmentUrl(att.file_path) : att.url || null
+              };
+            }),
             postedDate: a.created_at ? new Date(a.created_at).toLocaleDateString() : 'recently',
             submitted: hasLocalSubmissionSignal || normalizedSubmissions.length > 0,
             userSubmission: a.userSubmission || a.user_submission || null,
