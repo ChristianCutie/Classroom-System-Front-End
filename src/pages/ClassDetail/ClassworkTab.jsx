@@ -1,5 +1,7 @@
 // ClassworkTab.jsx
 import React, { useState, useMemo, useEffect, useRef } from "react";
+import DocViewer, { DocViewerRenderers } from "@iamjariwala/react-doc-viewer";
+import "@iamjariwala/react-doc-viewer/dist/index.css";
 import { useToast } from "@/context/ToastContext.jsx";
 import apiClient, { assignmentAPI, resolveAttachmentUrl } from "@/api/client.js";
 
@@ -57,8 +59,12 @@ const ClassworkTab = ({
   // ---------- Submissions per coursework ----------
   const [submissionsMap, setSubmissionsMap] = useState({});
   const [loadingSubmissionsMap, setLoadingSubmissionsMap] = useState({});
+  const [courseworkDetailsMap, setCourseworkDetailsMap] = useState({});
   const [previewAttachment, setPreviewAttachment] = useState(null);
   const [previewMode, setPreviewMode] = useState(null);
+  const [viewerError, setViewerError] = useState("");
+  const [docViewerDocs, setDocViewerDocs] = useState([]);
+  const [isPreparingPreview, setIsPreparingPreview] = useState(false);
 
   // Reset function
   const resetCreateForm = () => {
@@ -164,15 +170,23 @@ const ClassworkTab = ({
           : null;
 
     if (sourceWork) {
-      return sourceWork.map((item) => ({
-        ...item,
-        topic: normalizeTopicValue(item.topic) || "General",
-        attachments: (item.attachments || []).map((att) => ({
+      return sourceWork.map((item) => {
+        const detail = courseworkDetailsMap[item.id] || {};
+        const attachments = (detail.attachments || item.attachments || []).map((att) => ({
           name: getAttachmentDisplayName(att),
-          url: att.file_path ? resolveAttachmentUrl(att.file_path) : '#',
-          type: att.file_type || 'file',
-        })),
-      }));
+          url: att.file_path
+            ? resolveAttachmentUrl(att.file_path)
+            : att.url || att.fileUrl || '#',
+          type: att.file_type || att.type || getAttachmentPreviewMode(att) || 'file',
+        }));
+
+        return {
+          ...item,
+          topic: normalizeTopicValue(item.topic) || 'General',
+          instructions: detail.instructions || item.instructions || item.description || 'No instructions provided.',
+          attachments,
+        };
+      });
     }
 
     const assignments = (cls.assignments || []).map((a) => ({
@@ -213,7 +227,44 @@ const ClassworkTab = ({
       stats: q.stats || null,
     }));
     return [...assignments, ...quizzes];
-  }, [localClasswork, classwork, cls.assignments, cls.quizzes]);
+  }, [localClasswork, classwork, cls.assignments, cls.quizzes, courseworkDetailsMap]);
+
+  const fetchCourseworkDetails = async (courseworkId) => {
+    if (!courseworkId) return;
+    if (courseworkDetailsMap[courseworkId]) return;
+
+    const coursework = classworkList.find((item) => item.id === courseworkId);
+    if (!coursework || coursework.type !== 'assignment') return;
+
+    try {
+      const res = await assignmentAPI.getAssignmentDetails(courseworkId);
+      const data = res.data?.data || res.data || {};
+      const parsedAttachments = (data.attachments || []).map((att) => ({
+        ...att,
+        name: getAttachmentDisplayName(att),
+        url: att.file_path
+          ? resolveAttachmentUrl(att.file_path)
+          : att.url || att.fileUrl || '#',
+        type: att.file_type || att.type || 'file',
+      }));
+
+      setCourseworkDetailsMap((prev) => ({
+        ...prev,
+        [courseworkId]: {
+          instructions: data.instructions || data.description || coursework.instructions,
+          attachments: parsedAttachments,
+        },
+      }));
+    } catch (error) {
+      console.error('Failed to load coursework details:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (!isTeacher || !expandedId) return;
+    fetchCourseworkDetails(expandedId);
+    fetchSubmissionsForCoursework(expandedId);
+  }, [expandedId, isTeacher]);
 
   useEffect(() => {
     setSubmissionStatus((prev) => {
@@ -401,19 +452,29 @@ const ClassworkTab = ({
 
   const getAttachmentPreviewUrl = (att) => {
     if (!att?.url || att.url === "#") return null;
+    return att.url;
+  };
 
-    const mode = getAttachmentPreviewMode(att);
-    const url = att.url;
+  const getAttachmentUrlCandidates = (url) => {
+    if (!url || url === "#") return [];
 
-    if (mode === "pdf") {
-      return `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(url)}`;
+    const normalized = String(url).trim();
+    const candidates = [normalized];
+
+    if (normalized.includes("/public/api/lms_files/")) {
+      candidates.push(normalized.replace(/\/public\/api\/lms_files\//i, "/lms_files/"));
+      candidates.push(normalized.replace(/\/public\/api\/lms_files\//i, "/public/lms_files/"));
     }
 
-    if (mode === "document") {
-      return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
+    if (normalized.includes("/public/lms_files/")) {
+      candidates.push(normalized.replace(/\/public\/lms_files\//i, "/lms_files/"));
     }
 
-    return url;
+    if (normalized.startsWith("/")) {
+      candidates.push(`${window.location.origin}${normalized}`);
+    }
+
+    return Array.from(new Set(candidates.filter(Boolean)));
   };
 
   const openAttachmentPreview = (att) => {
@@ -432,7 +493,118 @@ const ClassworkTab = ({
   const closeAttachmentPreview = () => {
     setPreviewAttachment(null);
     setPreviewMode(null);
+    setViewerError("");
+    setDocViewerDocs([]);
+    setIsPreparingPreview(false);
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const preparePreview = async () => {
+      if (!previewAttachment || !previewMode) {
+        setDocViewerDocs([]);
+        setViewerError("");
+        setIsPreparingPreview(false);
+        return;
+      }
+
+      const previewUrl = getAttachmentPreviewUrl(previewAttachment);
+      if (!previewUrl) {
+        if (!cancelled) {
+          setViewerError("The attachment URL is not available.");
+          setDocViewerDocs([]);
+          setIsPreparingPreview(false);
+        }
+        return;
+      }
+
+      const shouldUseViewer = previewMode === "pdf" || previewMode === "document" || previewMode === "image";
+      if (!shouldUseViewer) {
+        if (!cancelled) {
+          setDocViewerDocs([]);
+          setViewerError("");
+          setIsPreparingPreview(false);
+        }
+        return;
+      }
+
+      if (!cancelled) {
+        setIsPreparingPreview(true);
+        setViewerError("");
+      }
+
+      if (previewMode === "image") {
+        if (!cancelled) {
+          setDocViewerDocs([]);
+          setIsPreparingPreview(false);
+        }
+        return;
+      }
+
+      try {
+        let resolvedUrl = previewUrl;
+        const candidates = getAttachmentUrlCandidates(previewUrl);
+
+        for (const candidate of candidates) {
+          try {
+            const response = await fetch(candidate, {
+              method: "HEAD",
+              mode: "cors",
+            });
+
+            if (!cancelled && response.ok) {
+              resolvedUrl = candidate;
+              break;
+            }
+          } catch (candidateError) {
+            continue;
+          }
+        }
+
+        if (cancelled) return;
+
+        if (!resolvedUrl) {
+          setViewerError("This attachment could not be loaded because the file is unavailable.");
+          setDocViewerDocs([]);
+          setIsPreparingPreview(false);
+          return;
+        }
+
+        const finalResponse = await fetch(resolvedUrl, {
+          method: "HEAD",
+          mode: "cors",
+        });
+
+        if (cancelled) return;
+
+        if (!finalResponse.ok) {
+          setViewerError("This attachment could not be loaded because the file is unavailable.");
+          setDocViewerDocs([]);
+          setIsPreparingPreview(false);
+          return;
+        }
+
+        setDocViewerDocs([{ uri: resolvedUrl, fileName: previewAttachment.name || "attachment" }]);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Failed to prepare attachment preview:", error);
+          setViewerError("This attachment could not be loaded because the file is unavailable.");
+          setDocViewerDocs([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsPreparingPreview(false);
+        }
+      }
+    };
+
+    preparePreview();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [previewAttachment?.url, previewAttachment?.name, previewMode]);
 
   const handleAddTopic = async (e) => {
     e.preventDefault();
@@ -1259,22 +1431,47 @@ const ClassworkTab = ({
                   />
                 ) : null}
 
-                {previewMode === "pdf" && getAttachmentPreviewUrl(previewAttachment) ? (
-                  <iframe
-                    src={getAttachmentPreviewUrl(previewAttachment)}
-                    title={previewAttachment.name || "PDF preview"}
-                    className="w-100"
-                    style={{ minHeight: "70vh", border: "none" }}
-                  />
-                ) : null}
-
-                {previewMode === "document" && getAttachmentPreviewUrl(previewAttachment) ? (
-                  <iframe
-                    src={getAttachmentPreviewUrl(previewAttachment)}
-                    title={previewAttachment.name || "Document preview"}
-                    className="w-100"
-                    style={{ minHeight: "70vh", border: "none" }}
-                  />
+                {(previewMode === "pdf" || previewMode === "document") && getAttachmentPreviewUrl(previewAttachment) ? (
+                  <div className="w-100 h-100" style={{ minHeight: "70vh" }}>
+                    {viewerError ? (
+                      <div className="d-flex flex-column justify-content-center align-items-center text-center p-5 h-100">
+                        <i className="bi bi-exclamation-triangle-fill fs-1 text-warning mb-3"></i>
+                        <h6 className="fw-semibold text-dark">Preview unavailable</h6>
+                        <p className="text-muted small mb-3">{viewerError}</p>
+                        <a
+                          href={getAttachmentPreviewUrl(previewAttachment)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-outline-primary btn-sm"
+                        >
+                          Open file directly
+                        </a>
+                      </div>
+                    ) : (
+                      <div style={{ height: "70vh", width: "100%" }}>
+                        {isPreparingPreview ? (
+                          <div className="d-flex justify-content-center align-items-center h-100 text-muted">
+                            <div className="text-center">
+                              <div className="spinner-border mb-2" role="status" />
+                              <div>Preparing preview...</div>
+                            </div>
+                          </div>
+                        ) : (
+                          <DocViewer
+                            documents={docViewerDocs}
+                            pluginRenderers={DocViewerRenderers}
+                            config={{
+                              header: {
+                                disableHeader: false,
+                              },
+                              pdfVerticalScrollByDefault: true,
+                            }}
+                            style={{ height: "100%", width: "100%" }}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
                 ) : null}
               </div>
             </div>

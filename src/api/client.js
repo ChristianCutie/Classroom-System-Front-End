@@ -25,9 +25,16 @@ export const resolveAttachmentUrl = (filePath) => {
   if (!filePath) return null;
   if (/^https?:\/\//i.test(filePath)) return filePath;
 
-  const normalizedPath = String(filePath).replace(/\\/g, "/");
-  const baseUrl = new URL(getApiBaseUrl(), window.location.origin);
+  let normalizedPath = String(filePath).replace(/\\/g, "/").trim();
+  const apiBaseUrl = getApiBaseUrl();
+  const apiRootUrl = apiBaseUrl.replace(/\/public\/api\/?$/i, "/").replace(/\/api\/?$/i, "/");
 
+  if (/^\/?(public\/api|public|api)\/(lms_files\/.*)$/i.test(normalizedPath)) {
+    normalizedPath = normalizedPath.replace(/^\/?(public\/api|public|api)\//i, "");
+    return new URL(`/${normalizedPath}`, apiRootUrl).toString();
+  }
+
+  const baseUrl = new URL(apiBaseUrl, window.location.origin);
   if (normalizedPath.startsWith("/")) {
     return new URL(normalizedPath, baseUrl).toString();
   }
