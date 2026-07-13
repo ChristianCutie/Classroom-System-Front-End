@@ -1,5 +1,5 @@
-// ViewInstructionPage.jsx – with fixed preview URLs, DOCX rendering, and cleanup
-import React, { useState, useEffect, useRef } from "react";
+// ViewInstructionPage.jsx – with memoized SubmissionFilePreview (no reload on comment typing)
+import React, { useState, useEffect, useRef, memo } from "react";
 import { renderAsync } from "docx-preview";
 import DocViewer, { DocViewerRenderers } from "@iamjariwala/react-doc-viewer";
 import "@iamjariwala/react-doc-viewer/dist/index.css";
@@ -90,243 +90,261 @@ const getPreviewIcon = (file) => {
   }
 };
 
-// ---------- SubmissionFilePreview (with cleanup for DOCX) ----------
-const SubmissionFilePreview = ({ file }) => {
-  const [viewerError, setViewerError] = useState("");
-  const [docViewerDocs, setDocViewerDocs] = useState([]);
-  const [isPreparingPreview, setIsPreparingPreview] = useState(false);
-  const previewMode = getPreviewMode(file);
-  const previewUrl = getPreviewUrl(file);
+// ---------- SubmissionFilePreview (memoized) ----------
+const SubmissionFilePreview = memo(
+  ({ file }) => {
+    const [viewerError, setViewerError] = useState("");
+    const [docViewerDocs, setDocViewerDocs] = useState([]);
+    const [isPreparingPreview, setIsPreparingPreview] = useState(false);
+    const previewMode = getPreviewMode(file);
+    const previewUrl = getPreviewUrl(file);
 
-  // DOCX states
-  const [docxContent, setDocxContent] = useState(null);
-  const [docxError, setDocxError] = useState("");
-  const docxContainerRef = useRef(null);
+    // DOCX states
+    const [docxContent, setDocxContent] = useState(null);
+    const [docxError, setDocxError] = useState("");
+    const docxContainerRef = useRef(null);
 
-  // --- NEW: Clean up DOCX when previewMode is not "docx" ---
-  useEffect(() => {
-    if (previewMode !== "docx") {
-      setDocxContent(null);
-      setDocxError("");
-      if (docxContainerRef.current) {
-        docxContainerRef.current.innerHTML = "";
+    // Clean up DOCX when previewMode is not "docx"
+    useEffect(() => {
+      if (previewMode !== "docx") {
+        setDocxContent(null);
+        setDocxError("");
+        if (docxContainerRef.current) {
+          docxContainerRef.current.innerHTML = "";
+        }
       }
+    }, [previewMode]);
+
+    // DOCX fetch (omit credentials to avoid CORS wildcard issue)
+    useEffect(() => {
+      if (previewMode !== "docx" || !previewUrl) return;
+      let cancelled = false;
+      const loadDocx = async () => {
+        setDocxError("");
+        setDocxContent(null);
+        try {
+          const response = await fetch(previewUrl, { credentials: "omit" });
+          if (!response.ok)
+            throw new Error(`Failed to fetch DOCX (${response.status})`);
+          const blob = await response.blob();
+          if (!cancelled) setDocxContent(blob);
+        } catch (err) {
+          if (!cancelled) setDocxError(err.message);
+        }
+      };
+      loadDocx();
+      return () => {
+        cancelled = true;
+      };
+    }, [previewUrl, previewMode]);
+
+    // DOCX render using docx-preview
+    useEffect(() => {
+      if (!docxContent || !docxContainerRef.current) return;
+      let cancelled = false;
+      renderAsync(docxContent, docxContainerRef.current).catch((err) => {
+        if (!cancelled) setDocxError("Failed to render DOCX preview");
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [docxContent]);
+
+    // Prepare PDF/document preview
+    useEffect(() => {
+      let cancelled = false;
+      const preparePreview = () => {
+        if (!previewUrl) {
+          setDocViewerDocs([]);
+          setViewerError("No file URL available.");
+          setIsPreparingPreview(false);
+          return;
+        }
+        if (previewMode === "image") {
+          setDocViewerDocs([]);
+          setViewerError("");
+          setIsPreparingPreview(false);
+          return;
+        }
+        if (previewMode === "docx") {
+          // handled separately
+          setDocViewerDocs([]);
+          setViewerError("");
+          setIsPreparingPreview(false);
+          return;
+        }
+        if (!["pdf", "document"].includes(previewMode)) {
+          setDocViewerDocs([]);
+          setViewerError("Unsupported file type.");
+          setIsPreparingPreview(false);
+          return;
+        }
+        // PDF/document
+        setIsPreparingPreview(true);
+        setViewerError("");
+        try {
+          setDocViewerDocs([
+            {
+              uri: previewUrl,
+              fileName: file?.name || "attachment",
+            },
+          ]);
+        } catch (err) {
+          console.error("Failed to prepare preview:", err);
+          setViewerError("Could not load the file for preview.");
+          setDocViewerDocs([]);
+        } finally {
+          if (!cancelled) setIsPreparingPreview(false);
+        }
+      };
+      preparePreview();
+      return () => {
+        cancelled = true;
+      };
+    }, [
+      // Only depend on stable values, not the whole file object
+      file?.id,
+      file?.name,
+      file?.url,
+      file?.file_url,
+      file?.file_path,
+      previewMode,
+      previewUrl,
+    ]);
+
+    // --- Render ---
+    if (previewMode === "image" && previewUrl) {
+      return (
+        <div
+          className="d-flex justify-content-center align-items-center p-3 bg-white"
+          style={{ minHeight: "100vh" }}
+        >
+          <img
+            src={previewUrl}
+            alt={file?.name || "Preview"}
+            style={{ maxWidth: "100%", maxHeight: "400px", objectFit: "contain" }}
+          />
+        </div>
+      );
     }
-  }, [previewMode]);
 
-  // --- DOCX fetch (omit credentials to avoid CORS wildcard issue) ---
-  useEffect(() => {
-    if (previewMode !== "docx" || !previewUrl) return;
-    let cancelled = false;
-    const loadDocx = async () => {
-      setDocxError("");
-      setDocxContent(null);
-      try {
-        const response = await fetch(previewUrl, { credentials: "omit" });
-        if (!response.ok)
-          throw new Error(`Failed to fetch DOCX (${response.status})`);
-        const blob = await response.blob();
-        if (!cancelled) setDocxContent(blob);
-      } catch (err) {
-        if (!cancelled) setDocxError(err.message);
-      }
-    };
-    loadDocx();
-    return () => {
-      cancelled = true;
-    };
-  }, [previewUrl, previewMode]);
+    if (["pdf", "document"].includes(previewMode) && previewUrl) {
+      return (
+        <div className="w-100" style={{ minHeight: "100vh" }}>
+          {viewerError ? (
+            <div className="d-flex flex-column justify-content-center align-items-center text-center p-5 h-100">
+              <i className="bi bi-exclamation-triangle-fill fs-1 text-warning mb-3"></i>
+              <h6 className="fw-semibold text-dark">Preview unavailable</h6>
+              <p className="text-muted small mb-3">{viewerError}</p>
+              <a
+                href={previewUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-outline-primary btn-sm"
+              >
+                Open file directly
+              </a>
+            </div>
+          ) : (
+            <div style={{ height: "100vh", width: "100%" }}>
+              {isPreparingPreview ? (
+                <div className="d-flex justify-content-center align-items-center h-100 text-muted">
+                  <div className="text-center">
+                    <div className="spinner-border mb-2" role="status" />
+                    <div>Preparing preview...</div>
+                  </div>
+                </div>
+              ) : (
+                <DocViewer
+                  documents={docViewerDocs}
+                  pluginRenderers={DocViewerRenderers}
+                  config={{
+                    header: { disableHeader: false },
+                    pdfVerticalScrollByDefault: true,
+                  }}
+                  style={{ height: "100%", width: "100%" }}
+                />
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
 
-  // --- DOCX render using docx-preview ---
-  useEffect(() => {
-    if (!docxContent || !docxContainerRef.current) return;
-    let cancelled = false;
-    renderAsync(docxContent, docxContainerRef.current).catch((err) => {
-      if (!cancelled) setDocxError("Failed to render DOCX preview");
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [docxContent]);
+    if (previewMode === "docx" && previewUrl) {
+      return (
+        <div className="p-3 bg-white" style={{ minHeight: "100vh" }}>
+          {docxError ? (
+            <div className="d-flex flex-column justify-content-center align-items-center text-center p-5 h-100">
+              <i className="bi bi-exclamation-triangle-fill fs-1 text-warning mb-3"></i>
+              <h6 className="fw-semibold text-dark">Preview unavailable</h6>
+              <p className="text-muted small mb-3">{docxError}</p>
+              <a
+                href={previewUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-outline-primary btn-sm"
+              >
+                Open file directly
+              </a>
+            </div>
+          ) : docxContent ? (
+            <div
+              ref={docxContainerRef}
+              style={{ height: "100vh", overflow: "auto" }}
+            />
+          ) : (
+            <div
+              className="d-flex justify-content-center align-items-center h-100"
+              style={{ minHeight: "100vh" }}
+            >
+              <div className="spinner-border" role="status" />
+            </div>
+          )}
+        </div>
+      );
+    }
 
-  // --- Prepare PDF/document preview ---
-  useEffect(() => {
-    let cancelled = false;
-    const preparePreview = () => {
-      if (!previewUrl) {
-        setDocViewerDocs([]);
-        setViewerError("No file URL available.");
-        setIsPreparingPreview(false);
-        return;
-      }
-      if (previewMode === "image") {
-        setDocViewerDocs([]);
-        setViewerError("");
-        setIsPreparingPreview(false);
-        return;
-      }
-      if (previewMode === "docx") {
-        // handled separately
-        setDocViewerDocs([]);
-        setViewerError("");
-        setIsPreparingPreview(false);
-        return;
-      }
-      if (!["pdf", "document"].includes(previewMode)) {
-        setDocViewerDocs([]);
-        setViewerError("Unsupported file type.");
-        setIsPreparingPreview(false);
-        return;
-      }
-      // PDF/document
-      setIsPreparingPreview(true);
-      setViewerError("");
-      try {
-        setDocViewerDocs([
-          {
-            uri: previewUrl,
-            fileName: file?.name || "attachment",
-          },
-        ]);
-      } catch (err) {
-        console.error("Failed to prepare preview:", err);
-        setViewerError("Could not load the file for preview.");
-        setDocViewerDocs([]);
-      } finally {
-        if (!cancelled) setIsPreparingPreview(false);
-      }
-    };
-    preparePreview();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    file?.id,
-    file?.name,
-    file?.url,
-    file?.file_url,
-    file?.file_path,
-    previewMode,
-    previewUrl,
-  ]);
-
-  // --- Render ---
-  if (previewMode === "image" && previewUrl) {
+    // Fallback for unsupported
     return (
       <div
-        className="d-flex justify-content-center align-items-center p-3 bg-white"
-        style={{ minHeight: "420px" }}
+        className="d-flex flex-column justify-content-center align-items-center text-center p-5"
+        style={{ minHeight: "100vh" }}
       >
-        <img
-          src={previewUrl}
-          alt={file?.name || "Preview"}
-          style={{ maxWidth: "100%", maxHeight: "400px", objectFit: "contain" }}
-        />
-      </div>
-    );
-  }
-
-  if (["pdf", "document"].includes(previewMode) && previewUrl) {
-    return (
-      <div className="w-100" style={{ minHeight: "100vh" }}>
-        {viewerError ? (
-          <div className="d-flex flex-column justify-content-center align-items-center text-center p-5 h-100">
-            <i className="bi bi-exclamation-triangle-fill fs-1 text-warning mb-3"></i>
-            <h6 className="fw-semibold text-dark">Preview unavailable</h6>
-            <p className="text-muted small mb-3">{viewerError}</p>
-            <a
-              href={previewUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-outline-primary btn-sm"
-            >
-              Open file directly
-            </a>
-          </div>
-        ) : (
-          <div style={{ height: "100vh", width: "100%" }}>
-            {isPreparingPreview ? (
-              <div className="d-flex justify-content-center align-items-center h-100 text-muted">
-                <div className="text-center">
-                  <div className="spinner-border mb-2" role="status" />
-                  <div>Preparing preview...</div>
-                </div>
-              </div>
-            ) : (
-              <DocViewer
-                documents={docViewerDocs}
-                pluginRenderers={DocViewerRenderers}
-                config={{
-                  header: { disableHeader: false },
-                  pdfVerticalScrollByDefault: true,
-                }}
-                style={{ height: "100%", width: "100%" }}
-              />
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (previewMode === "docx" && previewUrl) {
-    return (
-      <div className="p-3 bg-white" style={{ minHeight: "100vh" }}>
-        {docxError ? (
-          <div className="d-flex flex-column justify-content-center align-items-center text-center p-5 h-100">
-            <i className="bi bi-exclamation-triangle-fill fs-1 text-warning mb-3"></i>
-            <h6 className="fw-semibold text-dark">Preview unavailable</h6>
-            <p className="text-muted small mb-3">{docxError}</p>
-            <a
-              href={previewUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-outline-primary btn-sm"
-            >
-              Open file directly
-            </a>
-          </div>
-        ) : docxContent ? (
-          <div
-            ref={docxContainerRef}
-            style={{ height: "100vh", overflow: "auto" }}
-          />
-        ) : (
-          <div
-            className="d-flex justify-content-center align-items-center h-100"
-            style={{ minHeight: "100vh" }}
+        <i className="bi bi-file-earmark-text fs-1 text-muted mb-3"></i>
+        <h6 className="fw-semibold text-dark">Preview unavailable</h6>
+        <p className="text-muted small mb-0">
+          This file type cannot be previewed directly in the browser.
+        </p>
+        {previewUrl && (
+          <a
+            href={previewUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-outline-primary btn-sm mt-3"
           >
-            <div className="spinner-border" role="status" />
-          </div>
+            Open file
+          </a>
         )}
       </div>
     );
+  },
+  // Custom comparator: only re-render if the actual file data changes
+  (prevProps, nextProps) => {
+    const prev = prevProps.file;
+    const next = nextProps.file;
+    if (prev === next) return true;
+    if (!prev || !next) return false;
+    return (
+      prev.id === next.id &&
+      prev.name === next.name &&
+      prev.url === next.url &&
+      prev.file_url === next.file_url &&
+      prev.file_path === next.file_path &&
+      prev.type === next.type
+    );
   }
-
-  // Fallback for unsupported
-  return (
-    <div
-      className="d-flex flex-column justify-content-center align-items-center text-center p-5"
-      style={{ minHeight: "100vh" }}
-    >
-      <i className="bi bi-file-earmark-text fs-1 text-muted mb-3"></i>
-      <h6 className="fw-semibold text-dark">Preview unavailable</h6>
-      <p className="text-muted small mb-0">
-        This file type cannot be previewed directly in the browser.
-      </p>
-      {previewUrl && (
-        <a
-          href={previewUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="btn btn-outline-primary btn-sm mt-3"
-        >
-          Open file
-        </a>
-      )}
-    </div>
-  );
-};
+);
 
 // ---------- MAIN COMPONENT ----------
 const ViewInstructionPage = ({
