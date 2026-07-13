@@ -1,7 +1,8 @@
-// ClassworkTab.jsx
+// ClassworkTab.jsx – fixed attachment preview (no gview, no HEAD checks)
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import DocViewer, { DocViewerRenderers } from "@iamjariwala/react-doc-viewer";
 import "@iamjariwala/react-doc-viewer/dist/index.css";
+import { renderAsync } from "docx-preview"; // <-- for local DOCX rendering
 import { useToast } from "@/context/ToastContext.jsx";
 import apiClient, {
   assignmentAPI,
@@ -50,7 +51,7 @@ const ClassworkTab = ({
   const [localClasswork, setLocalClasswork] = useState([]);
   const { addToast } = useToast();
 
-  // [Student search and dropdown state
+  // Student search and dropdown state
   const [studentSearchTerm, setStudentSearchTerm] = useState("");
   const [showStudentDropdown, setShowStudentDropdown] = useState(false);
   const dropdownRef = useRef(null);
@@ -68,8 +69,11 @@ const ClassworkTab = ({
   const [viewerError, setViewerError] = useState("");
   const [docViewerDocs, setDocViewerDocs] = useState([]);
   const [previewImageUrl, setPreviewImageUrl] = useState(null);
-  const [docxPreviewError, setDocxPreviewError] = useState("");
-  const docxPreviewRef = useRef(null);
+
+  // DOCX preview states (local render)
+  const [docxContent, setDocxContent] = useState(null);
+  const [docxError, setDocxError] = useState("");
+  const docxContainerRef = useRef(null);
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
 
   // Reset function
@@ -254,50 +258,8 @@ const ClassworkTab = ({
     courseworkDetailsMap,
   ]);
 
-  // const fetchCourseworkDetails = async (courseworkId) => {
-  //   if (!courseworkId) return;
-  //   if (courseworkDetailsMap[courseworkId]) return;
-
-  //   const coursework = classworkList.find((item) => item.id === courseworkId);
-  //   if (!coursework || coursework.type !== "assignment") return;
-
-  //   try {
-  //     let res;
-  //     try {
-  //       res = await assignmentAPI.getAssignmentDetails(courseworkId);
-  //     } catch (error) {
-  //       if (error?.response?.status === 404) {
-  //         res = await assignmentAPI.getAssignment(courseworkId);
-  //       } else {
-  //         throw error;
-  //       }
-  //     }
-  //     const data = res.data?.data || res.data || {};
-  //     const parsedAttachments = (data.attachments || []).map((att) => ({
-  //       ...att,
-  //       name: getAttachmentDisplayName(att),
-  //       url: att.file_path
-  //         ? resolveAttachmentUrl(att.file_path)
-  //         : att.url || att.fileUrl || "#",
-  //       type: att.file_type || att.type || "file",
-  //     }));
-
-  //     setCourseworkDetailsMap((prev) => ({
-  //       ...prev,
-  //       [courseworkId]: {
-  //         instructions:
-  //           data.instructions || data.description || coursework.instructions,
-  //         attachments: parsedAttachments,
-  //       },
-  //     }));
-  //   } catch (error) {
-  //     console.error("Failed to load coursework details:", error);
-  //   }
-  // };
-
   useEffect(() => {
     if (!isTeacher || !expandedId) return;
-    // fetchCourseworkDetails(expandedId);
     fetchSubmissionsForCoursework(expandedId);
   }, [expandedId, isTeacher]);
 
@@ -488,40 +450,18 @@ const ClassworkTab = ({
     return null;
   };
 
+  // FIX: remove /storage/ prefix
   const getAttachmentPreviewUrl = (att) => {
     if (!att) return null;
-    const url =
+    const rawUrl =
       att.url || att.file_path || att.fileUrl || att.path || att.link;
-    if (!url || url === "#") return null;
+    if (!rawUrl || rawUrl === "#") return null;
+    let url = String(rawUrl);
+    // Remove /storage/ segment
+    url = url.replace(/\/storage\//, "/");
+    if (/^https?:\/\//i.test(url)) return url;
+    if (url.startsWith("/")) return resolveAttachmentUrl(url);
     return resolveAttachmentUrl(url);
-  };
-
-  const getAttachmentUrlCandidates = (url) => {
-    if (!url || url === "#") return [];
-
-    const normalized = String(url).trim();
-    const candidates = [normalized];
-
-    if (normalized.includes("/public/api/lms_files/")) {
-      candidates.push(
-        normalized.replace(/\/public\/api\/lms_files\//i, "/lms_files/"),
-      );
-      candidates.push(
-        normalized.replace(/\/public\/api\/lms_files\//i, "/public/lms_files/"),
-      );
-    }
-
-    if (normalized.includes("/public/lms_files/")) {
-      candidates.push(
-        normalized.replace(/\/public\/lms_files\//i, "/lms_files/"),
-      );
-    }
-
-    if (normalized.startsWith("/")) {
-      candidates.push(`${window.location.origin}${normalized}`);
-    }
-
-    return Array.from(new Set(candidates.filter(Boolean)));
   };
 
   const openAttachmentPreview = (att) => {
@@ -542,149 +482,125 @@ const ClassworkTab = ({
     setPreviewMode(null);
     setPreviewImageUrl(null);
     setViewerError("");
-    setDocxPreviewError("");
+    setDocxError("");
     setDocViewerDocs([]);
+    setDocxContent(null);
     setIsPreparingPreview(false);
-    if (docxPreviewRef.current) docxPreviewRef.current.innerHTML = "";
+    if (docxContainerRef.current) docxContainerRef.current.innerHTML = "";
   };
 
+  // --- NEW: DOCX fetch with credentials: 'omit' ---
   useEffect(() => {
+    if (!previewAttachment || previewMode !== "docx") {
+      setDocxContent(null);
+      setDocxError("");
+      return;
+    }
     let cancelled = false;
-
-    const preparePreview = async () => {
-      if (!previewAttachment || !previewMode) {
-        setPreviewImageUrl(null);
-        setDocViewerDocs([]);
-        setViewerError("");
-        setIsPreparingPreview(false);
-        return;
-      }
-
-      const previewUrl = getAttachmentPreviewUrl(previewAttachment);
-      if (!previewUrl) {
-        if (!cancelled) {
-          setViewerError("The attachment URL is not available.");
-          setDocViewerDocs([]);
-          setIsPreparingPreview(false);
-        }
-        return;
-      }
-
-      const shouldUseViewer =
-        previewMode === "pdf" ||
-        previewMode === "document" ||
-        previewMode === "image" ||
-        previewMode === "docx";
-      if (!shouldUseViewer) {
-        if (!cancelled) {
-          setDocViewerDocs([]);
-          setViewerError("");
-          setDocxPreviewError("");
-          setIsPreparingPreview(false);
-        }
-        return;
-      }
-
-      if (!cancelled) {
-        setIsPreparingPreview(true);
-        setViewerError("");
-      }
-
-      if (previewMode === "image") {
-        if (!cancelled) {
-          setPreviewImageUrl(previewUrl);
-          setDocViewerDocs([]);
-          setViewerError("");
-          setDocxPreviewError("");
-          setIsPreparingPreview(false);
-        }
-        return;
-      }
-
-      if (previewMode === "docx") {
-        if (!cancelled) {
-          setDocViewerDocs([]);
-          setViewerError("");
-          setDocxPreviewError("");
-          setIsPreparingPreview(false);
-        }
-        return;
-      }
-
+    const url = getAttachmentPreviewUrl(previewAttachment);
+    if (!url) {
+      setDocxError("No file URL available.");
+      return;
+    }
+    const loadDocx = async () => {
+      setDocxError("");
+      setDocxContent(null);
+      setIsPreparingPreview(true);
       try {
-        let resolvedUrl = previewUrl;
-        const candidates = getAttachmentUrlCandidates(previewUrl);
+        const response = await fetch(url, { credentials: "omit" });
+        if (!response.ok) throw new Error(`Failed to fetch DOCX (${response.status})`);
+        const blob = await response.blob();
+        if (!cancelled) setDocxContent(blob);
+      } catch (err) {
+        if (!cancelled) setDocxError(err.message);
+      } finally {
+        if (!cancelled) setIsPreparingPreview(false);
+      }
+    };
+    loadDocx();
+    return () => { cancelled = true; };
+  }, [previewAttachment, previewMode]);
 
-        for (const candidate of candidates) {
-          try {
-            const response = await fetch(candidate, {
-              method: "HEAD",
-              mode: "cors",
-            });
+  // --- Render DOCX with docx-preview ---
+  useEffect(() => {
+    if (!docxContent || !docxContainerRef.current) return;
+    let cancelled = false;
+    renderAsync(docxContent, docxContainerRef.current).catch((err) => {
+      if (!cancelled) setDocxError("Failed to render DOCX preview");
+    });
+    return () => { cancelled = true; };
+  }, [docxContent]);
 
-            if (!cancelled && response.ok) {
-              resolvedUrl = candidate;
-              break;
-            }
-          } catch (candidateError) {
-            continue;
-          }
-        }
+  // --- Prepare PDF/document preview (simplified, no HEAD checks) ---
+  useEffect(() => {
+    if (!previewAttachment || !previewMode) {
+      setDocViewerDocs([]);
+      setViewerError("");
+      setPreviewImageUrl(null);
+      setIsPreparingPreview(false);
+      return;
+    }
 
-        if (cancelled) return;
+    const previewUrl = getAttachmentPreviewUrl(previewAttachment);
+    if (!previewUrl) {
+      setViewerError("The attachment URL is not available.");
+      setDocViewerDocs([]);
+      setIsPreparingPreview(false);
+      return;
+    }
 
-        if (!resolvedUrl) {
-          setViewerError(
-            "This attachment could not be loaded because the file is unavailable.",
-          );
-          setDocViewerDocs([]);
-          setIsPreparingPreview(false);
-          return;
-        }
+    const shouldUseViewer =
+      previewMode === "pdf" ||
+      previewMode === "document" ||
+      previewMode === "image" ||
+      previewMode === "docx";
 
-        const finalResponse = await fetch(resolvedUrl, {
-          method: "HEAD",
-          mode: "cors",
-        });
+    if (!shouldUseViewer) {
+      setDocViewerDocs([]);
+      setViewerError("");
+      setDocxError("");
+      setIsPreparingPreview(false);
+      return;
+    }
 
-        if (cancelled) return;
+    // Image: handled separately in render
+    if (previewMode === "image") {
+      setPreviewImageUrl(previewUrl);
+      setDocViewerDocs([]);
+      setViewerError("");
+      setDocxError("");
+      setIsPreparingPreview(false);
+      return;
+    }
 
-        if (!finalResponse.ok) {
-          setViewerError(
-            "This attachment could not be loaded because the file is unavailable.",
-          );
-          setDocViewerDocs([]);
-          setIsPreparingPreview(false);
-          return;
-        }
+    // DOCX: handled separately with docx-preview
+    if (previewMode === "docx") {
+      setDocViewerDocs([]);
+      setViewerError("");
+      setIsPreparingPreview(false);
+      return;
+    }
 
+    // PDF / document: use DocViewer directly
+    if (previewMode === "pdf" || previewMode === "document") {
+      setIsPreparingPreview(true);
+      setViewerError("");
+      try {
         setDocViewerDocs([
           {
-            uri: resolvedUrl,
+            uri: previewUrl,
             fileName: previewAttachment.name || "attachment",
           },
         ]);
-      } catch (error) {
-        if (!cancelled) {
-          console.error("Failed to prepare attachment preview:", error);
-          setViewerError(
-            "This attachment could not be loaded because the file is unavailable.",
-          );
-          setDocViewerDocs([]);
-        }
+      } catch (err) {
+        console.error("Failed to prepare preview:", err);
+        setViewerError("Could not load the file for preview.");
+        setDocViewerDocs([]);
       } finally {
-        if (!cancelled) {
-          setIsPreparingPreview(false);
-        }
+        setIsPreparingPreview(false);
       }
-    };
-
-    preparePreview();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [previewAttachment?.url, previewAttachment?.name, previewMode]);
+    }
+  }, [previewAttachment, previewMode]);
 
   const handleAddTopic = async (e) => {
     e.preventDefault();
@@ -850,7 +766,6 @@ const ClassworkTab = ({
 
   // Helper to get avatar URL or generate fallback
   const getStudentAvatar = (student) => {
-    // Try common field names
     const avatar =
       student.avatar ||
       student.profile_pic ||
@@ -858,10 +773,9 @@ const ClassworkTab = ({
       student.photo_url ||
       student.picture;
     if (avatar) return avatar;
-    return null; // fallback will use initials
+    return null;
   };
 
-  // Generate a consistent color based on name
   const stringToColor = (str) => {
     if (!str) return "#6c757d";
     let hash = 0;
@@ -902,7 +816,6 @@ const ClassworkTab = ({
               }
               if (cwDueDate) formData.append("due_date", cwDueDate);
 
-              // --- Send attachments and raw filenames ---
               cwAttachments.forEach((file) => {
                 if (file instanceof File) {
                   formData.append("attachments[]", file);
@@ -911,7 +824,6 @@ const ClassworkTab = ({
                 }
               });
 
-              // Assign students
               if (cwAssignToAll) {
                 formData.append("assign_to_all", "true");
               } else if (cwSelectedStudents.length > 0) {
@@ -950,7 +862,6 @@ const ClassworkTab = ({
 
       const created = await onCreateCoursework(cls.id, payload);
       if (created !== false) {
-        // Reset form
         setCwTitle("");
         setCwInstructions("");
         setCwTopic("General");
@@ -967,19 +878,16 @@ const ClassworkTab = ({
     }
   };
 
-  // Add student to selection
   const addStudent = (studentId) => {
     if (!cwSelectedStudents.includes(studentId)) {
       setCwSelectedStudents((prev) => [...prev, studentId]);
     }
   };
 
-  // [NEW] Remove student from selection
   const removeStudent = (studentId) => {
     setCwSelectedStudents((prev) => prev.filter((id) => id !== studentId));
   };
 
-  // [NEW] Filtered students based on search term
   const filteredStudents = useMemo(() => {
     if (!studentSearchTerm.trim()) return cls.students || [];
     const term = studentSearchTerm.toLowerCase().trim();
@@ -1035,7 +943,7 @@ const ClassworkTab = ({
   // ---------- Render ----------
   return (
     <div>
-      {/* Top Action Bar (unchanged) */}
+      {/* Top Action Bar */}
       <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 pb-3 border-bottom gap-3">
         <div className="d-flex align-items-center gap-2">
           {isTeacher && (
@@ -1131,7 +1039,7 @@ const ClassworkTab = ({
       </div>
 
       <div className="row g-4">
-        {/* Left Topic Sidebar Pills (unchanged) */}
+        {/* Left Topic Sidebar Pills */}
         <div className="col-12 col-md-3">
           <h6 className="fw-bold text-muted small text-uppercase mb-3 px-1">
             Topics
@@ -1207,7 +1115,7 @@ const ClassworkTab = ({
                         key={cw.id}
                         className="card border shadow-sm rounded-3 overflow-hidden"
                       >
-                        {/* Header Row (unchanged) */}
+                        {/* Header Row */}
                         <div
                           className={`p-3 d-flex align-items-center justify-content-between ${isExpanded ? "bg-light border-bottom" : "bg-white"}`}
                           style={{
@@ -1293,7 +1201,6 @@ const ClassworkTab = ({
                                       </h6>
                                       <div className="d-flex flex-wrap gap-2">
                                         {cw.attachments.map((att, idx) => {
-                                          // Determine icon based on file type
                                           let iconClass =
                                             "bi-file-earmark-text-fill text-secondary";
                                           if (att.type === "pdf")
@@ -1498,6 +1405,7 @@ const ClassworkTab = ({
         </div>
       </div>
 
+      {/* ===== ATTACHMENT PREVIEW MODAL (fixed) ===== */}
       {previewAttachment && (
         <div
           className="modal fade show d-block"
@@ -1511,25 +1419,20 @@ const ClassworkTab = ({
           >
             <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
               <div className="modal-header border-bottom px-4 py-3">
-                <div className="d-flex align-items-center">
-                  {/* Group: title + eye icon */}
-                  {previewAttachment.url && previewAttachment.url !== "#" && (
-                    <div className="d-flex align-items-center gap-2">
-                      <h5 className="modal-title fw-bold text-dark">
-                        {previewAttachment.name || "Attachment preview"}
-                      </h5>
-                      <a
-                        href={previewAttachment.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-muted"
-                      >
-                        <i className="bi bi-eye"></i>
-                      </a>
-                    </div>
-                  )}
-
-                  {/* Close button pushed to the right */}
+                <div className="d-flex align-items-center w-100">
+                  <div className="d-flex align-items-center gap-2">
+                    <h5 className="modal-title fw-bold text-dark">
+                      {previewAttachment.name || "Attachment preview"}
+                    </h5>
+                    <a
+                      href={previewAttachment.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-muted"
+                    >
+                      <i className="bi bi-eye"></i>
+                    </a>
+                  </div>
                   <button
                     type="button"
                     className="btn-close ms-auto"
@@ -1539,7 +1442,8 @@ const ClassworkTab = ({
                 </div>
               </div>
               <div className="modal-body p-0" style={{ minHeight: "70vh" }}>
-                {previewMode === "image" ? (
+                {/* IMAGE preview */}
+                {previewMode === "image" && (
                   <div className="position-relative w-100" style={{ minHeight: "70vh" }}>
                     {isPreparingPreview ? (
                       <div className="d-flex justify-content-center align-items-center h-100 text-muted">
@@ -1571,18 +1475,63 @@ const ClassworkTab = ({
                       </div>
                     ) : null}
                   </div>
-                ) : null}
+                )}
 
-                {(previewMode === "pdf" || previewMode === "document" || previewMode === "docx") &&
-                getAttachmentPreviewUrl(previewAttachment) ? (
-                  <div className="w-100 h-100" style={{ minHeight: "70vh" }}>
-                    {viewerError ? (
+                {/* PDF / DOCUMENT preview with DocViewer */}
+                {(previewMode === "pdf" || previewMode === "document") &&
+                  getAttachmentPreviewUrl(previewAttachment) && (
+                    <div className="w-100 h-100" style={{ minHeight: "70vh" }}>
+                      {viewerError ? (
+                        <div className="d-flex flex-column justify-content-center align-items-center text-center p-5 h-100">
+                          <i className="bi bi-exclamation-triangle-fill fs-1 text-warning mb-3"></i>
+                          <h6 className="fw-semibold text-dark">
+                            Preview unavailable
+                          </h6>
+                          <p className="text-muted small mb-3">{viewerError}</p>
+                          <a
+                            href={getAttachmentPreviewUrl(previewAttachment)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn btn-outline-primary btn-sm"
+                          >
+                            Open file directly
+                          </a>
+                        </div>
+                      ) : (
+                        <div style={{ height: "70vh", width: "100%" }}>
+                          {isPreparingPreview ? (
+                            <div className="d-flex justify-content-center align-items-center h-100 text-muted">
+                              <div className="text-center">
+                                <div className="spinner-border mb-2" role="status" />
+                                <div>Preparing preview...</div>
+                              </div>
+                            </div>
+                          ) : (
+                            <DocViewer
+                              documents={docViewerDocs}
+                              pluginRenderers={DocViewerRenderers}
+                              config={{
+                                header: {
+                                  disableHeader: false,
+                                },
+                                pdfVerticalScrollByDefault: true,
+                              }}
+                              style={{ height: "100%", width: "100%" }}
+                            />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                {/* DOCX preview with docx-preview (no gview) */}
+                {previewMode === "docx" && getAttachmentPreviewUrl(previewAttachment) && (
+                  <div className="p-3 bg-white" style={{ minHeight: "70vh" }}>
+                    {docxError ? (
                       <div className="d-flex flex-column justify-content-center align-items-center text-center p-5 h-100">
                         <i className="bi bi-exclamation-triangle-fill fs-1 text-warning mb-3"></i>
-                        <h6 className="fw-semibold text-dark">
-                          Preview unavailable
-                        </h6>
-                        <p className="text-muted small mb-3">{viewerError}</p>
+                        <h6 className="fw-semibold text-dark">Preview unavailable</h6>
+                        <p className="text-muted small mb-3">{docxError}</p>
                         <a
                           href={getAttachmentPreviewUrl(previewAttachment)}
                           target="_blank"
@@ -1592,62 +1541,22 @@ const ClassworkTab = ({
                           Open file directly
                         </a>
                       </div>
+                    ) : docxContent ? (
+                      <div ref={docxContainerRef} style={{ height: "65vh", overflow: "auto" }} />
                     ) : (
-                      <div style={{ height: "70vh", width: "100%" }}>
-                        {previewMode === "docx" ? (
-                          <div className="p-3 bg-white h-100" style={{ minHeight: "70vh" }}>
-                            <iframe
-                              title="Word preview"
-                              src={`https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(getAttachmentPreviewUrl(previewAttachment))}`}
-                              className="w-100 h-100"
-                              style={{ border: 0, minHeight: "70vh" }}
-                            />
-                            <div className="mt-2 text-center">
-                              <a
-                                href={getAttachmentPreviewUrl(previewAttachment)}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="btn btn-outline-primary btn-sm"
-                              >
-                                Open file directly
-                              </a>
-                            </div>
-                          </div>
-                        ) : (
-                          <div style={{ height: "70vh", width: "100%" }}>
-                            {isPreparingPreview ? (
-                              <div className="d-flex justify-content-center align-items-center h-100 text-muted">
-                                <div className="text-center">
-                                  <div className="spinner-border mb-2" role="status" />
-                                  <div>Preparing preview...</div>
-                                </div>
-                              </div>
-                            ) : (
-                              <DocViewer
-                                documents={docViewerDocs}
-                                pluginRenderers={DocViewerRenderers}
-                                config={{
-                                  header: {
-                                    disableHeader: false,
-                                  },
-                                  pdfVerticalScrollByDefault: true,
-                                }}
-                                style={{ height: "100%", width: "100%" }}
-                              />
-                            )}
-                          </div>
-                        )}
+                      <div className="d-flex justify-content-center align-items-center h-100" style={{ minHeight: "65vh" }}>
+                        <div className="spinner-border" role="status" />
                       </div>
                     )}
                   </div>
-                ) : null}
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Topic Actions Modal (unchanged) */}
+      {/* Topic Actions Modal */}
       {showTopicActionModal && editingTopicId && (
         <div
           className="modal fade show d-block"
@@ -1728,7 +1637,7 @@ const ClassworkTab = ({
         </div>
       )}
 
-      {/* Add Topic Modal (unchanged) */}
+      {/* Add Topic Modal */}
       {showTopicModal && (
         <div
           className="modal fade show d-block"
@@ -1849,7 +1758,6 @@ const ClassworkTab = ({
                           setCwAttachments(Array.from(e.target.files || []))
                         }
                       />
-                      {/* Display selected file names */}
                       {cwAttachments.length > 0 && (
                         <div className="mt-2">
                           <small className="text-muted">Selected files:</small>
@@ -1975,7 +1883,6 @@ const ClassworkTab = ({
                   </div>
 
                   {/* ===== STUDENT ASSIGNMENT (always visible) ===== */}
-                  {/* Student assignment – always visible with avatars */}
                   {createType === "assignment" && (
                     <div className="mb-3 border-top pt-3">
                       <div className="d-flex justify-content-between align-items-center mb-2">
@@ -2031,7 +1938,6 @@ const ClassworkTab = ({
                           autoComplete="off"
                         />
 
-                        {/* Dropdown with avatars */}
                         {showStudentDropdown && filteredStudents.length > 0 && (
                           <ul
                             className="list-group mt-1 shadow-sm"
@@ -2124,7 +2030,6 @@ const ClassworkTab = ({
                           </ul>
                         )}
 
-                        {/* Selected tags with avatars */}
                         {cwSelectedStudents.length > 0 && (
                           <div className="d-flex flex-wrap gap-2 mt-2">
                             {cwSelectedStudents.map((studentId) => {

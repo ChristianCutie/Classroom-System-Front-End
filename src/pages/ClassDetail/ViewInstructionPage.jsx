@@ -1,10 +1,13 @@
-// ViewInstructionPage.jsx – with fixed preview URLs and DOCX rendering
+// ViewInstructionPage.jsx – with fixed preview URLs, DOCX rendering, and cleanup
 import React, { useState, useEffect, useRef } from "react";
 import { renderAsync } from "docx-preview";
 import DocViewer, { DocViewerRenderers } from "@iamjariwala/react-doc-viewer";
 import "@iamjariwala/react-doc-viewer/dist/index.css";
 import Avatar from "../../components/Common/Avatar.jsx";
-import apiClient, { assignmentAPI, resolveAttachmentUrl } from "@/api/client.js";
+import apiClient, {
+  assignmentAPI,
+  resolveAttachmentUrl,
+} from "@/api/client.js";
 
 // ---------- helpers ----------
 const getFileExtension = (file) => {
@@ -58,7 +61,8 @@ const getPreviewMode = (file) => {
 
 // FIX: remove "/storage/" prefix so that /public/storage/lms_files/... becomes /public/lms_files/...
 const getPreviewUrl = (file) => {
-  const rawUrl = file?.url || file?.file_url || file?.fileUrl || file?.file_path || null;
+  const rawUrl =
+    file?.url || file?.file_url || file?.fileUrl || file?.file_path || null;
   if (!rawUrl || rawUrl === "#") return null;
 
   let url = String(rawUrl);
@@ -86,7 +90,7 @@ const getPreviewIcon = (file) => {
   }
 };
 
-// ---------- SubmissionFilePreview (no HEAD checks, fixed URLs, DOCX with docx-preview) ----------
+// ---------- SubmissionFilePreview (with cleanup for DOCX) ----------
 const SubmissionFilePreview = ({ file }) => {
   const [viewerError, setViewerError] = useState("");
   const [docViewerDocs, setDocViewerDocs] = useState([]);
@@ -99,6 +103,17 @@ const SubmissionFilePreview = ({ file }) => {
   const [docxError, setDocxError] = useState("");
   const docxContainerRef = useRef(null);
 
+  // --- NEW: Clean up DOCX when previewMode is not "docx" ---
+  useEffect(() => {
+    if (previewMode !== "docx") {
+      setDocxContent(null);
+      setDocxError("");
+      if (docxContainerRef.current) {
+        docxContainerRef.current.innerHTML = "";
+      }
+    }
+  }, [previewMode]);
+
   // --- DOCX fetch (omit credentials to avoid CORS wildcard issue) ---
   useEffect(() => {
     if (previewMode !== "docx" || !previewUrl) return;
@@ -107,8 +122,9 @@ const SubmissionFilePreview = ({ file }) => {
       setDocxError("");
       setDocxContent(null);
       try {
-        const response = await fetch(previewUrl, { credentials: "omit" }); // <-- FIX: omit credentials
-        if (!response.ok) throw new Error(`Failed to fetch DOCX (${response.status})`);
+        const response = await fetch(previewUrl, { credentials: "omit" });
+        if (!response.ok)
+          throw new Error(`Failed to fetch DOCX (${response.status})`);
         const blob = await response.blob();
         if (!cancelled) setDocxContent(blob);
       } catch (err) {
@@ -116,7 +132,9 @@ const SubmissionFilePreview = ({ file }) => {
       }
     };
     loadDocx();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [previewUrl, previewMode]);
 
   // --- DOCX render using docx-preview ---
@@ -126,7 +144,9 @@ const SubmissionFilePreview = ({ file }) => {
     renderAsync(docxContent, docxContainerRef.current).catch((err) => {
       if (!cancelled) setDocxError("Failed to render DOCX preview");
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [docxContent]);
 
   // --- Prepare PDF/document preview ---
@@ -177,8 +197,18 @@ const SubmissionFilePreview = ({ file }) => {
       }
     };
     preparePreview();
-    return () => { cancelled = true; };
-  }, [file?.id, file?.name, file?.url, file?.file_url, file?.file_path, previewMode, previewUrl]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    file?.id,
+    file?.name,
+    file?.url,
+    file?.file_url,
+    file?.file_path,
+    previewMode,
+    previewUrl,
+  ]);
 
   // --- Render ---
   if (previewMode === "image" && previewUrl) {
@@ -198,18 +228,23 @@ const SubmissionFilePreview = ({ file }) => {
 
   if (["pdf", "document"].includes(previewMode) && previewUrl) {
     return (
-      <div className="w-100" style={{ minHeight: "420px" }}>
+      <div className="w-100" style={{ minHeight: "100vh" }}>
         {viewerError ? (
           <div className="d-flex flex-column justify-content-center align-items-center text-center p-5 h-100">
             <i className="bi bi-exclamation-triangle-fill fs-1 text-warning mb-3"></i>
             <h6 className="fw-semibold text-dark">Preview unavailable</h6>
             <p className="text-muted small mb-3">{viewerError}</p>
-            <a href={previewUrl} target="_blank" rel="noreferrer" className="btn btn-outline-primary btn-sm">
+            <a
+              href={previewUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-outline-primary btn-sm"
+            >
               Open file directly
             </a>
           </div>
         ) : (
-          <div style={{ height: "420px", width: "100%" }}>
+          <div style={{ height: "100vh", width: "100%" }}>
             {isPreparingPreview ? (
               <div className="d-flex justify-content-center align-items-center h-100 text-muted">
                 <div className="text-center">
@@ -221,7 +256,10 @@ const SubmissionFilePreview = ({ file }) => {
               <DocViewer
                 documents={docViewerDocs}
                 pluginRenderers={DocViewerRenderers}
-                config={{ header: { disableHeader: false }, pdfVerticalScrollByDefault: true }}
+                config={{
+                  header: { disableHeader: false },
+                  pdfVerticalScrollByDefault: true,
+                }}
                 style={{ height: "100%", width: "100%" }}
               />
             )}
@@ -233,20 +271,31 @@ const SubmissionFilePreview = ({ file }) => {
 
   if (previewMode === "docx" && previewUrl) {
     return (
-      <div className="p-3 bg-white" style={{ minHeight: "420px" }}>
+      <div className="p-3 bg-white" style={{ minHeight: "100vh" }}>
         {docxError ? (
           <div className="d-flex flex-column justify-content-center align-items-center text-center p-5 h-100">
             <i className="bi bi-exclamation-triangle-fill fs-1 text-warning mb-3"></i>
             <h6 className="fw-semibold text-dark">Preview unavailable</h6>
             <p className="text-muted small mb-3">{docxError}</p>
-            <a href={previewUrl} target="_blank" rel="noreferrer" className="btn btn-outline-primary btn-sm">
+            <a
+              href={previewUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-outline-primary btn-sm"
+            >
               Open file directly
             </a>
           </div>
         ) : docxContent ? (
-          <div ref={docxContainerRef} style={{ height: "380px", overflow: "auto" }} />
+          <div
+            ref={docxContainerRef}
+            style={{ height: "100vh", overflow: "auto" }}
+          />
         ) : (
-          <div className="d-flex justify-content-center align-items-center h-100" style={{ minHeight: "380px" }}>
+          <div
+            className="d-flex justify-content-center align-items-center h-100"
+            style={{ minHeight: "100vh" }}
+          >
             <div className="spinner-border" role="status" />
           </div>
         )}
@@ -258,7 +307,7 @@ const SubmissionFilePreview = ({ file }) => {
   return (
     <div
       className="d-flex flex-column justify-content-center align-items-center text-center p-5"
-      style={{ minHeight: "420px" }}
+      style={{ minHeight: "100vh" }}
     >
       <i className="bi bi-file-earmark-text fs-1 text-muted mb-3"></i>
       <h6 className="fw-semibold text-dark">Preview unavailable</h6>
@@ -279,10 +328,7 @@ const SubmissionFilePreview = ({ file }) => {
   );
 };
 
-// ---------- MAIN COMPONENT (unchanged except for import and rendering) ----------
-// The rest of your component remains exactly as it was in your original file.
-// I'm including it below for completeness, but it's unchanged.
-
+// ---------- MAIN COMPONENT ----------
 const ViewInstructionPage = ({
   cls,
   coursework,
@@ -324,7 +370,8 @@ const ViewInstructionPage = ({
   const [fetchError, setFetchError] = useState(null);
 
   const [studentSubmission, setStudentSubmission] = useState(null);
-  const [isLoadingStudentSubmission, setIsLoadingStudentSubmission] = useState(false);
+  const [isLoadingStudentSubmission, setIsLoadingStudentSubmission] =
+    useState(false);
 
   const [teacherCommentInput, setTeacherCommentInput] = useState({});
   const [sendingTeacherComment, setSendingTeacherComment] = useState({});
@@ -341,7 +388,9 @@ const ViewInstructionPage = ({
 
   const scrollToBottom = (submissionId) => {
     setTimeout(() => {
-      const container = document.getElementById(`comment-container-${submissionId}`);
+      const container = document.getElementById(
+        `comment-container-${submissionId}`,
+      );
       if (container) {
         container.scrollTop = container.scrollHeight;
       }
@@ -350,7 +399,11 @@ const ViewInstructionPage = ({
 
   const fetchComments = async (submissionId, force = false) => {
     if (!submissionId) return;
-    if (!force && (commentsMap[submissionId] || loadingCommentsMap[submissionId])) return;
+    if (
+      !force &&
+      (commentsMap[submissionId] || loadingCommentsMap[submissionId])
+    )
+      return;
 
     setLoadingCommentsMap((prev) => ({ ...prev, [submissionId]: true }));
     try {
@@ -494,7 +547,12 @@ const ViewInstructionPage = ({
   }, [selectedStudentId, isTeacher, activeTab, submissionsMap]);
 
   useEffect(() => {
-    if (isTeacher || activeTab !== "yourWork" || !studentSubmission?.submission?.id) return;
+    if (
+      isTeacher ||
+      activeTab !== "yourWork" ||
+      !studentSubmission?.submission?.id
+    )
+      return;
     fetchComments(studentSubmission.submission.id);
   }, [activeTab, studentSubmission?.submission?.id, isTeacher]);
 
@@ -543,13 +601,13 @@ const ViewInstructionPage = ({
   useEffect(() => {
     const submitted = Boolean(
       coursework?.submitted ||
-        coursework?.userSubmission?.status === "submitted" ||
-        coursework?.userSubmission?.status === "turned_in" ||
-        coursework?.userSubmission?.status === "graded" ||
-        coursework?.status === "submitted" ||
-        coursework?.submissions?.some((sub) =>
-          ["submitted", "turned_in", "graded"].includes(sub?.status),
-        ),
+      coursework?.userSubmission?.status === "submitted" ||
+      coursework?.userSubmission?.status === "turned_in" ||
+      coursework?.userSubmission?.status === "graded" ||
+      coursework?.status === "submitted" ||
+      coursework?.submissions?.some((sub) =>
+        ["submitted", "turned_in", "graded"].includes(sub?.status),
+      ),
     );
     setSubmissionState({ submitted });
   }, [
@@ -666,7 +724,7 @@ const ViewInstructionPage = ({
   const handleUploadAndTurnIn = async () => {
     const isResubmission = Boolean(
       studentSubmission?.submission?.id &&
-        studentSubmission?.submission_status !== "not_submitted",
+      studentSubmission?.submission_status !== "not_submitted",
     );
 
     if (isResubmission) {
@@ -783,7 +841,10 @@ const ViewInstructionPage = ({
     if (!onSubmitWork || isResubmitting) return;
     const submissionFiles = files.length > 0 ? files : resubmitFiles;
     const submissionComment =
-      comment || resubmitComment.trim() || studentSubmission?.submission?.private_comment || "";
+      comment ||
+      resubmitComment.trim() ||
+      studentSubmission?.submission?.private_comment ||
+      "";
 
     setIsResubmitting(true);
     try {
@@ -932,7 +993,7 @@ const ViewInstructionPage = ({
                   </div>
                   <div className="fw-bold text-dark">
                     {coursework.points !== null &&
-                      coursework.points !== undefined
+                    coursework.points !== undefined
                       ? coursework.points
                       : "Ungraded"}
                   </div>
@@ -1231,99 +1292,174 @@ const ViewInstructionPage = ({
                                             file={selectedAttachment}
                                           />
                                         </div>
-
-                                        <div className="mt-4">
-                                          <h6 className="fw-bold text-muted small text-uppercase mb-3">
-                                            <i className="bi bi-chat-left-text me-1"></i> Private Comments
-                                          </h6>
-
-                                          <div id={`comment-container-${submissionId}`} style={{ maxHeight: "462px", height: "462px", overflowY: "auto" }} className="mb-3">
-                                            {comments.length > 0 ? (
-                                              comments.map((cm) => {
-                                                const senderName =
-                                                  cm.user?.first_name && cm.user?.last_name
-                                                    ? `${cm.user.first_name} ${cm.user.last_name}`
-                                                    : cm.user?.name || "Unknown";
-                                                const date = cm.created_at
-                                                  ? new Date(cm.created_at).toLocaleString()
-                                                  : "Just now";
-                                                const isTeacherComment = cm.user_id !== st.id;
-                                                return (
-                                                  <div
-                                                    key={`comment-${cm.id}-${cm.user_id || '0'}`}
-                                                    className="d-flex gap-3 mb-3"
-                                                  >
-                                                    <Avatar
-                                                      name={senderName}
-                                                      size={36}
-                                                      color={isTeacherComment ? "#1a73e8" : "#00897b"}
-                                                    />
-                                                    <div className="flex-grow-1">
-                                                      <div className="d-flex align-items-center gap-2">
-                                                        <span className="fw-semibold text-dark">
-                                                          {senderName}
-                                                          {isTeacherComment}
-                                                        </span>
-                                                        <span className="text-muted" style={{ fontSize: "0.75rem" }}>
-                                                          {date}
-                                                        </span>
-                                                      </div>
-                                                      <p className="mb-0 text-dark" style={{ fontSize: "0.95rem", lineHeight: "1.5", borderBottom: "1px solid #e9ecef", marginRight: "20px", paddingBottom: "0.5rem" }}>
-                                                        {cm.comment}
-                                                      </p>
-                                                    </div>
-                                                  </div>
-                                                );
-                                              })
-                                            ) : (
-                                              <p className="text-muted small fst-italic">No private comments yet.</p>
-                                            )}
-                                          </div>
-
-                                          <div className="d-flex gap-2 align-items-start">
-                                            <Avatar name={user.first_name + " " + user.last_name} size={36} color={user.color} />
-                                            <div className="flex-grow-1 d-flex gap-2">
-                                              <input
-                                                type="text"
-                                                className="form-control rounded-pill px-3 py-2 shadow-none"
-                                                style={{
-                                                  border: "1px solid #dadce0",
-                                                  backgroundColor: "#f1f3f4",
-                                                }}
-                                                placeholder="Write a private comment to this student..."
-                                                value={teacherCommentInput[st.id] || ""}
-                                                onChange={(e) =>
-                                                  setTeacherCommentInput((prev) => ({
-                                                    ...prev,
-                                                    [st.id]: e.target.value,
-                                                  }))
-                                                }
-                                                onKeyDown={(e) => {
-                                                  if (e.key === "Enter" && teacherCommentInput[st.id]?.trim()) {
-                                                    handleSendTeacherComment(submissionId, st.id);
-                                                  }
-                                                }}
-                                              />
-                                              <button
-                                                className="btn btn-lg border-0 px-1"
-                                                onClick={() => handleSendTeacherComment(submissionId, st.id)}
-                                                disabled={
-                                                  sendingTeacherComment[st.id] ||
-                                                  !teacherCommentInput[st.id]?.trim()
-                                                }
-                                              >
-                                                {sendingTeacherComment[st.id] ? (
-                                                  <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                                ) : (
-                                                  <i className="bi bi-send-fill"></i>
-                                                )}
-                                              </button>
-                                            </div>
-                                          </div>
-                                        </div>
                                       </div>
 
                                       <div className="col-12 col-lg-4">
+                                        <div className="border rounded-3 p-3 bg-white shadow-sm mb-3">
+                                          <div className="mt-0">
+                                            <h6 className="fw-bold text-muted small text-uppercase mb-3">
+                                              <i className="bi bi-chat-left-text me-1"></i>{" "}
+                                              Private Comments
+                                            </h6>
+
+                                            <div
+                                              id={`comment-container-${submissionId}`}
+                                              style={{
+                                                maxHeight: "370px",
+                                                height: "370px",
+                                                overflowY: "auto",
+                                              }}
+                                              className="mb-3"
+                                            >
+                                              {comments.length > 0 ? (
+                                                comments.map((cm) => {
+                                                  const senderName =
+                                                    cm.user?.first_name &&
+                                                    cm.user?.last_name
+                                                      ? `${cm.user.first_name} ${cm.user.last_name}`
+                                                      : cm.user?.name ||
+                                                        "Unknown";
+                                                  const date = cm.created_at
+                                                    ? new Date(
+                                                        cm.created_at,
+                                                      ).toLocaleString()
+                                                    : "Just now";
+                                                  const isTeacherComment =
+                                                    cm.user_id !== st.id;
+                                                  return (
+                                                    <div
+                                                      key={`comment-${cm.id}-${cm.user_id || "0"}`}
+                                                      className="d-flex gap-3 mb-3"
+                                                    >
+                                                      <Avatar
+                                                        name={senderName}
+                                                        size={36}
+                                                        color={
+                                                          isTeacherComment
+                                                            ? "#1a73e8"
+                                                            : "#00897b"
+                                                        }
+                                                      />
+                                                      <div className="flex-grow-1">
+                                                        <div className="d-flex align-items-center gap-2">
+                                                          <span className="fw-semibold text-dark">
+                                                            {senderName}
+                                                            {isTeacherComment}
+                                                          </span>
+                                                          <span
+                                                            className="text-muted"
+                                                            style={{
+                                                              fontSize:
+                                                                "0.75rem",
+                                                            }}
+                                                          >
+                                                            {date}
+                                                          </span>
+                                                        </div>
+                                                        <p
+                                                          className="mb-0 text-dark"
+                                                          style={{
+                                                            fontSize: "0.95rem",
+                                                            lineHeight: "1.5",
+                                                            borderBottom:
+                                                              "1px solid #e9ecef",
+                                                            marginRight: "20px",
+                                                            paddingBottom:
+                                                              "0.5rem",
+                                                          }}
+                                                        >
+                                                          {cm.comment}
+                                                        </p>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                })
+                                              ) : (
+                                                <p className="text-muted small fst-italic">
+                                                  No private comments yet.
+                                                </p>
+                                              )}
+                                            </div>
+
+                                            <div className="d-flex gap-2 align-items-start">
+                                              <Avatar
+                                                name={
+                                                  user.first_name +
+                                                  " " +
+                                                  user.last_name
+                                                }
+                                                size={36}
+                                                color={user.color}
+                                              />
+                                              <div className="flex-grow-1 d-flex gap-2">
+                                                <input
+                                                  type="text"
+                                                  className="form-control rounded-pill px-3 py-2 shadow-none"
+                                                  style={{
+                                                    border: "1px solid #dadce0",
+                                                    backgroundColor: "#f1f3f4",
+                                                  }}
+                                                  placeholder="Write a private comment to this student..."
+                                                  value={
+                                                    teacherCommentInput[
+                                                      st.id
+                                                    ] || ""
+                                                  }
+                                                  onChange={(e) =>
+                                                    setTeacherCommentInput(
+                                                      (prev) => ({
+                                                        ...prev,
+                                                        [st.id]: e.target.value,
+                                                      }),
+                                                    )
+                                                  }
+                                                  onKeyDown={(e) => {
+                                                    if (
+                                                      e.key === "Enter" &&
+                                                      teacherCommentInput[
+                                                        st.id
+                                                      ]?.trim()
+                                                    ) {
+                                                      handleSendTeacherComment(
+                                                        submissionId,
+                                                        st.id,
+                                                      );
+                                                    }
+                                                  }}
+                                                />
+                                                <button
+                                                  className="btn btn-lg border-0 px-1"
+                                                  onClick={() =>
+                                                    handleSendTeacherComment(
+                                                      submissionId,
+                                                      st.id,
+                                                    )
+                                                  }
+                                                  disabled={
+                                                    sendingTeacherComment[
+                                                      st.id
+                                                    ] ||
+                                                    !teacherCommentInput[
+                                                      st.id
+                                                    ]?.trim()
+                                                  }
+                                                >
+                                                  {sendingTeacherComment[
+                                                    st.id
+                                                  ] ? (
+                                                    <span
+                                                      className="spinner-border spinner-border-sm"
+                                                      role="status"
+                                                      aria-hidden="true"
+                                                    ></span>
+                                                  ) : (
+                                                    <i className="bi bi-send-fill"></i>
+                                                  )}
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
                                         <div className="border rounded-3 p-3 bg-white shadow-sm">
                                           <div className="mb-3">
                                             <div className="fw-semibold text-dark mb-2">
@@ -1527,7 +1663,7 @@ const ViewInstructionPage = ({
                   <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
                     <h5 className="fw-bold text-dark mb-0">Your Submission</h5>
                     {studentSubmission?.submission_status ===
-                      "not_submitted" ? (
+                    "not_submitted" ? (
                       <span className="badge bg-warning text-dark">
                         Not submitted
                       </span>
@@ -1543,13 +1679,29 @@ const ViewInstructionPage = ({
                     <div className="col-12 col-md-8">
                       <div className="bg-light border rounded-3 p-3 h-100">
                         <div className="fw-semibold text-dark mb-2">
-                          <i className="bi bi-chat-left-text me-1"></i> Private Comments
+                          <i className="bi bi-chat-left-text me-1"></i> Private
+                          Comments
                         </div>
 
-                        <div id={studentSubmission?.submission?.id ? `comment-container-${studentSubmission.submission.id}` : undefined} style={{ maxHeight: "462px", height: "462px", overflowY: "auto"}} className="mb-3">
+                        <div
+                          id={
+                            studentSubmission?.submission?.id
+                              ? `comment-container-${studentSubmission.submission.id}`
+                              : undefined
+                          }
+                          style={{
+                            maxHeight: "462px",
+                            height: "462px",
+                            overflowY: "auto",
+                          }}
+                          className="mb-3"
+                        >
                           {(() => {
-                            const submissionId = studentSubmission?.submission?.id;
-                            const comments = submissionId ? commentsMap[submissionId] || [] : [];
+                            const submissionId =
+                              studentSubmission?.submission?.id;
+                            const comments = submissionId
+                              ? commentsMap[submissionId] || []
+                              : [];
                             return comments.length > 0 ? (
                               comments.map((cm) => {
                                 const senderName =
@@ -1562,13 +1714,15 @@ const ViewInstructionPage = ({
                                 const isTeacherComment = cm.user_id !== user.id;
                                 return (
                                   <div
-                                    key={`comment-${cm.id}-${cm.user_id || '0'}`}
+                                    key={`comment-${cm.id}-${cm.user_id || "0"}`}
                                     className="d-flex gap-3 mb-3"
                                   >
                                     <Avatar
                                       name={senderName}
                                       size={36}
-                                      color={isTeacherComment ? "#1a73e8" : "#00897b"}
+                                      color={
+                                        isTeacherComment ? "#1a73e8" : "#00897b"
+                                      }
                                     />
                                     <div className="flex-grow-1">
                                       <div className="d-flex align-items-center gap-2">
@@ -1576,11 +1730,23 @@ const ViewInstructionPage = ({
                                           {senderName}
                                           {isTeacherComment && " (Teacher)"}
                                         </span>
-                                        <span className="text-muted" style={{ fontSize: "0.75rem" }}>
+                                        <span
+                                          className="text-muted"
+                                          style={{ fontSize: "0.75rem" }}
+                                        >
                                           {date}
                                         </span>
                                       </div>
-                                      <p className="mb-0 text-dark" style={{ fontSize: "0.95rem", lineHeight: "1.5", borderBottom: "1px solid #e0e0e0", marginRight: "20px", paddingBottom: "0.5rem"  }}>
+                                      <p
+                                        className="mb-0 text-dark"
+                                        style={{
+                                          fontSize: "0.95rem",
+                                          lineHeight: "1.5",
+                                          borderBottom: "1px solid #e0e0e0",
+                                          marginRight: "20px",
+                                          paddingBottom: "0.5rem",
+                                        }}
+                                      >
                                         {cm.comment}
                                       </p>
                                     </div>
@@ -1588,13 +1754,19 @@ const ViewInstructionPage = ({
                                 );
                               })
                             ) : (
-                              <p className="text-muted small fst-italic">No private comments yet.</p>
+                              <p className="text-muted small fst-italic">
+                                No private comments yet.
+                              </p>
                             );
                           })()}
                         </div>
 
                         <div className="d-flex gap-2 align-items-start">
-                          <Avatar name={user.first_name + " " + user.last_name} size={36} color="#00897b" />
+                          <Avatar
+                            name={user.first_name + " " + user.last_name}
+                            size={36}
+                            color="#00897b"
+                          />
                           <div className="flex-grow-1 d-flex gap-2">
                             <input
                               type="text"
@@ -1605,9 +1777,14 @@ const ViewInstructionPage = ({
                               }}
                               placeholder="Write a private comment to the teacher..."
                               value={studentCommentInput}
-                              onChange={(e) => setStudentCommentInput(e.target.value)}
+                              onChange={(e) =>
+                                setStudentCommentInput(e.target.value)
+                              }
                               onKeyDown={(e) => {
-                                if (e.key === "Enter" && studentCommentInput.trim()) {
+                                if (
+                                  e.key === "Enter" &&
+                                  studentCommentInput.trim()
+                                ) {
                                   handleSendStudentComment();
                                 }
                               }}
@@ -1631,7 +1808,11 @@ const ViewInstructionPage = ({
                               }
                             >
                               {isSendingStudentComment ? (
-                                <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                <span
+                                  className="spinner-border spinner-border-sm"
+                                  role="status"
+                                  aria-hidden="true"
+                                ></span>
                               ) : (
                                 <i className="bi bi-send-fill"></i>
                               )}
@@ -1644,7 +1825,7 @@ const ViewInstructionPage = ({
                     <div className="col-12 col-md-4">
                       <div className="bg-light border rounded-3 p-3 h-100">
                         {studentSubmission?.submission_status ===
-                          "not_submitted" ? (
+                        "not_submitted" ? (
                           <>
                             <div className="text-center py-4">
                               <i className="bi bi-inbox text-muted fs-1 mb-2"></i>
@@ -1657,8 +1838,8 @@ const ViewInstructionPage = ({
                                 className="btn btn-primary fw-medium shadow-sm"
                                 onClick={() => setShowFileUploadModal(true)}
                               >
-                                <i className="bi bi-plus-circle me-1"></i>{" "}
-                                Add or Create & Turn In
+                                <i className="bi bi-plus-circle me-1"></i> Add
+                                or Create & Turn In
                               </button>
                               <button
                                 className="btn btn-outline-secondary fw-medium"
@@ -1677,47 +1858,57 @@ const ViewInstructionPage = ({
                                     Your submitted files
                                   </div>
                                   <div className="d-flex flex-wrap gap-2">
-                                    {studentSubmission.submission.files.map((file, idx) => {
-                                      const normalizeName = (value) => {
-                                        if (!value) return null;
-                                        const text = String(value).trim();
-                                        if (!text) return null;
-                                        const parts = text.replace(/\\/g, "/").split("/");
-                                        return parts[parts.length - 1] || null;
-                                      };
+                                    {studentSubmission.submission.files.map(
+                                      (file, idx) => {
+                                        const normalizeName = (value) => {
+                                          if (!value) return null;
+                                          const text = String(value).trim();
+                                          if (!text) return null;
+                                          const parts = text
+                                            .replace(/\\/g, "/")
+                                            .split("/");
+                                          return (
+                                            parts[parts.length - 1] || null
+                                          );
+                                        };
 
-                                      const fileObj = {
-                                        id: `sub-${idx}`,
-                                        name:
-                                          normalizeName(file.file_name) ||
-                                          normalizeName(file.filename) ||
-                                          normalizeName(file.name) ||
-                                          (file.file_path
-                                            ? file.file_path.split("/").pop()
-                                            : "file"),
-                                        type: file.file_type || "pdf",
-                                        url: file.file_url || file.url || "#",
-                                      };
-                                      return (
-                                        <a
-                                          key={idx}
-                                          href={fileObj.url}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="border rounded p-2 px-3 d-flex align-items-center gap-2 text-decoration-none text-dark bg-white shadow-sm"
-                                        >
-                                          <i className={`bi ${getPreviewIcon(fileObj)} fs-5`}></i>
-                                          <span className="small fw-medium">{fileObj.name}</span>
-                                        </a>
-                                      );
-                                    })}
+                                        const fileObj = {
+                                          id: `sub-${idx}`,
+                                          name:
+                                            normalizeName(file.file_name) ||
+                                            normalizeName(file.filename) ||
+                                            normalizeName(file.name) ||
+                                            (file.file_path
+                                              ? file.file_path.split("/").pop()
+                                              : "file"),
+                                          type: file.file_type || "pdf",
+                                          url: file.file_url || file.url || "#",
+                                        };
+                                        return (
+                                          <a
+                                            key={idx}
+                                            href={fileObj.url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="border rounded p-2 px-3 d-flex align-items-center gap-2 text-decoration-none text-dark bg-white shadow-sm"
+                                          >
+                                            <i
+                                              className={`bi ${getPreviewIcon(fileObj)} fs-5`}
+                                            ></i>
+                                            <span className="small fw-medium">
+                                              {fileObj.name}
+                                            </span>
+                                          </a>
+                                        );
+                                      },
+                                    )}
                                   </div>
                                 </div>
                               )}
 
                             {studentSubmission?.submission?.grade !== null &&
                               studentSubmission?.submission?.grade !==
-                              undefined && (
+                                undefined && (
                                 <div className="mb-3">
                                   <div className="fw-semibold text-dark mb-1">
                                     Grade & Feedback
@@ -1744,18 +1935,19 @@ const ViewInstructionPage = ({
 
                             {studentSubmission?.submission?.status ===
                               "returned" && (
-                                <div className="alert alert-info mb-3">
-                                  This work has been returned to you by your
-                                  teacher.
-                                </div>
-                              )}
+                              <div className="alert alert-info mb-3">
+                                This work has been returned to you by your
+                                teacher.
+                              </div>
+                            )}
 
                             <div className="border-top pt-3">
                               <button
                                 className="btn btn-outline-primary w-100"
                                 onClick={() => setShowFileUploadModal(true)}
                               >
-                                <i className="bi bi-arrow-repeat me-1"></i> Resubmit
+                                <i className="bi bi-arrow-repeat me-1"></i>{" "}
+                                Resubmit
                               </button>
                             </div>
                           </>
@@ -1804,14 +1996,16 @@ const ViewInstructionPage = ({
                     className="form-control"
                     multiple
                     onChange={(e) => {
-                      const files = Array.from(e.target.files || []).map((f) => {
-                        try {
-                          if (!f.file_name) f.file_name = f.name;
-                        } catch (err) {
-                          // ignore if property cannot be set
-                        }
-                        return f;
-                      });
+                      const files = Array.from(e.target.files || []).map(
+                        (f) => {
+                          try {
+                            if (!f.file_name) f.file_name = f.name;
+                          } catch (err) {
+                            // ignore if property cannot be set
+                          }
+                          return f;
+                        },
+                      );
                       setMarkAsDoneFiles(files);
                     }}
                   />
@@ -1900,25 +2094,28 @@ const ViewInstructionPage = ({
                     className="form-control"
                     multiple
                     onChange={(e) => {
-                      const files = Array.from(e.target.files || []).map((f) => {
-                        const normalizedName = f?.name || f?.file_name || "upload";
-                        const normalizedFile =
-                          f instanceof File
-                            ? new File([f], normalizedName, {
-                                type: f.type || "application/octet-stream",
-                                lastModified: f.lastModified || Date.now(),
-                              })
-                            : f;
+                      const files = Array.from(e.target.files || []).map(
+                        (f) => {
+                          const normalizedName =
+                            f?.name || f?.file_name || "upload";
+                          const normalizedFile =
+                            f instanceof File
+                              ? new File([f], normalizedName, {
+                                  type: f.type || "application/octet-stream",
+                                  lastModified: f.lastModified || Date.now(),
+                                })
+                              : f;
 
-                        try {
-                          normalizedFile.file_name = normalizedName;
-                          normalizedFile.filename = normalizedName;
-                        } catch (err) {
-                          // ignore if property cannot be set
-                        }
+                          try {
+                            normalizedFile.file_name = normalizedName;
+                            normalizedFile.filename = normalizedName;
+                          } catch (err) {
+                            // ignore if property cannot be set
+                          }
 
-                        return normalizedFile;
-                      });
+                          return normalizedFile;
+                        },
+                      );
                       setUploadFiles(files);
                     }}
                   />
