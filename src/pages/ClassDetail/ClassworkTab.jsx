@@ -3,7 +3,10 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import DocViewer, { DocViewerRenderers } from "@iamjariwala/react-doc-viewer";
 import "@iamjariwala/react-doc-viewer/dist/index.css";
 import { useToast } from "@/context/ToastContext.jsx";
-import apiClient, { assignmentAPI, resolveAttachmentUrl } from "@/api/client.js";
+import apiClient, {
+  assignmentAPI,
+  resolveAttachmentUrl,
+} from "@/api/client.js";
 
 const ClassworkTab = ({
   cls,
@@ -64,6 +67,9 @@ const ClassworkTab = ({
   const [previewMode, setPreviewMode] = useState(null);
   const [viewerError, setViewerError] = useState("");
   const [docViewerDocs, setDocViewerDocs] = useState([]);
+  const [previewImageUrl, setPreviewImageUrl] = useState(null);
+  const [docxPreviewError, setDocxPreviewError] = useState("");
+  const docxPreviewRef = useRef(null);
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
 
   // Reset function
@@ -118,12 +124,15 @@ const ClassworkTab = ({
       att.topic,
     ];
 
-    const name = candidates.find((value) => typeof value === "string" && value.trim());
+    const name = candidates.find(
+      (value) => typeof value === "string" && value.trim(),
+    );
     if (name) {
       return name.trim();
     }
 
-    const path = att.file_path || att.url || att.fileUrl || att.path || att.link;
+    const path =
+      att.file_path || att.url || att.fileUrl || att.path || att.link;
     if (typeof path === "string" && path.trim()) {
       const parts = path.replace(/\\/g, "/").split("/");
       return parts[parts.length - 1] || "Unnamed";
@@ -172,18 +181,28 @@ const ClassworkTab = ({
     if (sourceWork) {
       return sourceWork.map((item) => {
         const detail = courseworkDetailsMap[item.id] || {};
-        const attachments = (detail.attachments || item.attachments || []).map((att) => ({
-          name: getAttachmentDisplayName(att),
-          url: att.file_path
-            ? resolveAttachmentUrl(att.file_path)
-            : att.url || att.fileUrl || '#',
-          type: att.file_type || att.type || getAttachmentPreviewMode(att) || 'file',
-        }));
+        const attachments = (detail.attachments || item.attachments || []).map(
+          (att) => ({
+            name: getAttachmentDisplayName(att),
+            url: att.file_path
+              ? resolveAttachmentUrl(att.file_path)
+              : att.url || att.fileUrl || "#",
+            type:
+              att.file_type ||
+              att.type ||
+              getAttachmentPreviewMode(att) ||
+              "file",
+          }),
+        );
 
         return {
           ...item,
-          topic: normalizeTopicValue(item.topic) || 'General',
-          instructions: detail.instructions || item.instructions || item.description || 'No instructions provided.',
+          topic: normalizeTopicValue(item.topic) || "General",
+          instructions:
+            detail.instructions ||
+            item.instructions ||
+            item.description ||
+            "No instructions provided.",
           attachments,
         };
       });
@@ -199,8 +218,8 @@ const ClassworkTab = ({
       instructions: a.instructions || "No instructions provided.",
       attachments: (a.attachments || []).map((att) => ({
         name: getAttachmentDisplayName(att),
-        url: att.file_path ? resolveAttachmentUrl(att.file_path) : '#',
-        type: att.file_type || 'file',
+        url: att.file_path ? resolveAttachmentUrl(att.file_path) : "#",
+        type: att.file_type || "file",
       })),
       postedDate: a.created_at
         ? new Date(a.created_at).toLocaleDateString()
@@ -218,8 +237,8 @@ const ClassworkTab = ({
       instructions: q.instructions || "No instructions provided.",
       attachments: (q.attachments || []).map((att) => ({
         name: getAttachmentDisplayName(att),
-        url: att.file_path ? resolveAttachmentUrl(att.file_path) : '#',
-        type: att.file_type || 'file',
+        url: att.file_path ? resolveAttachmentUrl(att.file_path) : "#",
+        type: att.file_type || "file",
       })),
       postedDate: q.created_at
         ? new Date(q.created_at).toLocaleDateString()
@@ -227,14 +246,20 @@ const ClassworkTab = ({
       stats: q.stats || null,
     }));
     return [...assignments, ...quizzes];
-  }, [localClasswork, classwork, cls.assignments, cls.quizzes, courseworkDetailsMap]);
+  }, [
+    localClasswork,
+    classwork,
+    cls.assignments,
+    cls.quizzes,
+    courseworkDetailsMap,
+  ]);
 
   const fetchCourseworkDetails = async (courseworkId) => {
     if (!courseworkId) return;
     if (courseworkDetailsMap[courseworkId]) return;
 
     const coursework = classworkList.find((item) => item.id === courseworkId);
-    if (!coursework || coursework.type !== 'assignment') return;
+    if (!coursework || coursework.type !== "assignment") return;
 
     try {
       const res = await assignmentAPI.getAssignmentDetails(courseworkId);
@@ -244,19 +269,20 @@ const ClassworkTab = ({
         name: getAttachmentDisplayName(att),
         url: att.file_path
           ? resolveAttachmentUrl(att.file_path)
-          : att.url || att.fileUrl || '#',
-        type: att.file_type || att.type || 'file',
+          : att.url || att.fileUrl || "#",
+        type: att.file_type || att.type || "file",
       }));
 
       setCourseworkDetailsMap((prev) => ({
         ...prev,
         [courseworkId]: {
-          instructions: data.instructions || data.description || coursework.instructions,
+          instructions:
+            data.instructions || data.description || coursework.instructions,
           attachments: parsedAttachments,
         },
       }));
     } catch (error) {
-      console.error('Failed to load coursework details:', error);
+      console.error("Failed to load coursework details:", error);
     }
   };
 
@@ -436,23 +462,29 @@ const ClassworkTab = ({
   const getAttachmentPreviewMode = (att) => {
     if (!att) return null;
 
-    const name = String(att.name || att.file_name || att.filename || att.fileName || "").toLowerCase();
+    const name = String(
+      att.name || att.file_name || att.filename || att.fileName || "",
+    ).toLowerCase();
     const type = String(att.type || "").toLowerCase();
     const extension = name.includes(".") ? name.split(".").pop() : type;
 
     const imageExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"];
     const pdfExtensions = ["pdf"];
-    const documentExtensions = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"];
+    const documentExtensions = ["doc", "xls", "xlsx", "ppt", "pptx"];
 
     if (imageExtensions.includes(extension)) return "image";
     if (pdfExtensions.includes(extension)) return "pdf";
+    if (extension === "docx") return "docx";
     if (documentExtensions.includes(extension)) return "document";
     return null;
   };
 
   const getAttachmentPreviewUrl = (att) => {
-    if (!att?.url || att.url === "#") return null;
-    return att.url;
+    if (!att) return null;
+    const url =
+      att.url || att.file_path || att.fileUrl || att.path || att.link;
+    if (!url || url === "#") return null;
+    return resolveAttachmentUrl(url);
   };
 
   const getAttachmentUrlCandidates = (url) => {
@@ -462,12 +494,18 @@ const ClassworkTab = ({
     const candidates = [normalized];
 
     if (normalized.includes("/public/api/lms_files/")) {
-      candidates.push(normalized.replace(/\/public\/api\/lms_files\//i, "/lms_files/"));
-      candidates.push(normalized.replace(/\/public\/api\/lms_files\//i, "/public/lms_files/"));
+      candidates.push(
+        normalized.replace(/\/public\/api\/lms_files\//i, "/lms_files/"),
+      );
+      candidates.push(
+        normalized.replace(/\/public\/api\/lms_files\//i, "/public/lms_files/"),
+      );
     }
 
     if (normalized.includes("/public/lms_files/")) {
-      candidates.push(normalized.replace(/\/public\/lms_files\//i, "/lms_files/"));
+      candidates.push(
+        normalized.replace(/\/public\/lms_files\//i, "/lms_files/"),
+      );
     }
 
     if (normalized.startsWith("/")) {
@@ -493,9 +531,12 @@ const ClassworkTab = ({
   const closeAttachmentPreview = () => {
     setPreviewAttachment(null);
     setPreviewMode(null);
+    setPreviewImageUrl(null);
     setViewerError("");
+    setDocxPreviewError("");
     setDocViewerDocs([]);
     setIsPreparingPreview(false);
+    if (docxPreviewRef.current) docxPreviewRef.current.innerHTML = "";
   };
 
   useEffect(() => {
@@ -503,6 +544,7 @@ const ClassworkTab = ({
 
     const preparePreview = async () => {
       if (!previewAttachment || !previewMode) {
+        setPreviewImageUrl(null);
         setDocViewerDocs([]);
         setViewerError("");
         setIsPreparingPreview(false);
@@ -519,11 +561,16 @@ const ClassworkTab = ({
         return;
       }
 
-      const shouldUseViewer = previewMode === "pdf" || previewMode === "document" || previewMode === "image";
+      const shouldUseViewer =
+        previewMode === "pdf" ||
+        previewMode === "document" ||
+        previewMode === "image" ||
+        previewMode === "docx";
       if (!shouldUseViewer) {
         if (!cancelled) {
           setDocViewerDocs([]);
           setViewerError("");
+          setDocxPreviewError("");
           setIsPreparingPreview(false);
         }
         return;
@@ -536,7 +583,20 @@ const ClassworkTab = ({
 
       if (previewMode === "image") {
         if (!cancelled) {
+          setPreviewImageUrl(previewUrl);
           setDocViewerDocs([]);
+          setViewerError("");
+          setDocxPreviewError("");
+          setIsPreparingPreview(false);
+        }
+        return;
+      }
+
+      if (previewMode === "docx") {
+        if (!cancelled) {
+          setDocViewerDocs([]);
+          setViewerError("");
+          setDocxPreviewError("");
           setIsPreparingPreview(false);
         }
         return;
@@ -565,7 +625,9 @@ const ClassworkTab = ({
         if (cancelled) return;
 
         if (!resolvedUrl) {
-          setViewerError("This attachment could not be loaded because the file is unavailable.");
+          setViewerError(
+            "This attachment could not be loaded because the file is unavailable.",
+          );
           setDocViewerDocs([]);
           setIsPreparingPreview(false);
           return;
@@ -579,17 +641,26 @@ const ClassworkTab = ({
         if (cancelled) return;
 
         if (!finalResponse.ok) {
-          setViewerError("This attachment could not be loaded because the file is unavailable.");
+          setViewerError(
+            "This attachment could not be loaded because the file is unavailable.",
+          );
           setDocViewerDocs([]);
           setIsPreparingPreview(false);
           return;
         }
 
-        setDocViewerDocs([{ uri: resolvedUrl, fileName: previewAttachment.name || "attachment" }]);
+        setDocViewerDocs([
+          {
+            uri: resolvedUrl,
+            fileName: previewAttachment.name || "attachment",
+          },
+        ]);
       } catch (error) {
         if (!cancelled) {
           console.error("Failed to prepare attachment preview:", error);
-          setViewerError("This attachment could not be loaded because the file is unavailable.");
+          setViewerError(
+            "This attachment could not be loaded because the file is unavailable.",
+          );
           setDocViewerDocs([]);
         }
       } finally {
@@ -618,13 +689,13 @@ const ClassworkTab = ({
         const normalizedTopic =
           created && typeof created === "object"
             ? {
-              id: created.id ?? created.topic_id ?? null,
-              name:
-                created.name ||
-                created.topic_name ||
-                created.topicName ||
-                trimmedTopic,
-            }
+                id: created.id ?? created.topic_id ?? null,
+                name:
+                  created.name ||
+                  created.topic_name ||
+                  created.topicName ||
+                  trimmedTopic,
+              }
             : { id: null, name: trimmedTopic };
 
         setCustomTopics((prev) =>
@@ -637,10 +708,10 @@ const ClassworkTab = ({
             const exists = prev.some((item) => item.id === normalizedTopic.id);
             return exists
               ? prev.map((item) =>
-                item.id === normalizedTopic.id
-                  ? { ...item, name: normalizedTopic.name }
-                  : item,
-              )
+                  item.id === normalizedTopic.id
+                    ? { ...item, name: normalizedTopic.name }
+                    : item,
+                )
               : [...prev, normalizedTopic];
           });
         }
@@ -748,8 +819,8 @@ const ClassworkTab = ({
         const exists = prev.some((item) => item.id === normalizedTopic.id);
         return exists
           ? prev.map((item) =>
-            item.id === normalizedTopic.id ? normalizedTopic : item,
-          )
+              item.id === normalizedTopic.id ? normalizedTopic : item,
+            )
           : [...prev, normalizedTopic];
       });
       setCustomTopics((prev) =>
@@ -811,62 +882,62 @@ const ClassworkTab = ({
       const payload =
         createType === "assignment"
           ? (() => {
-            const formData = new FormData();
-            formData.append("class_id", cls.id);
-            formData.append("title", cwTitle.trim());
-            formData.append("instructions", cwInstructions.trim());
-            formData.append("max_points", Number(cwPoints) || 100);
-            formData.append("topic", finalTopicName);
-            if (finalTopicId) {
-              formData.append("topic_id", finalTopicId);
-            }
-            if (cwDueDate) formData.append("due_date", cwDueDate);
-
-            // --- Send attachments and raw filenames ---
-            cwAttachments.forEach((file) => {
-              if (file instanceof File) {
-                formData.append("attachments[]", file);
-                formData.append("file_name", file.name);
-                formData.append("file_names[]", file.name);
+              const formData = new FormData();
+              formData.append("class_id", cls.id);
+              formData.append("title", cwTitle.trim());
+              formData.append("instructions", cwInstructions.trim());
+              formData.append("max_points", Number(cwPoints) || 100);
+              formData.append("topic", finalTopicName);
+              if (finalTopicId) {
+                formData.append("topic_id", finalTopicId);
               }
-            });
+              if (cwDueDate) formData.append("due_date", cwDueDate);
 
-            // Assign students
-            if (cwAssignToAll) {
-              formData.append("assign_to_all", "true");
-            } else if (cwSelectedStudents.length > 0) {
-              cwSelectedStudents.forEach((studentId) => {
-                formData.append("student_ids[]", studentId);
+              // --- Send attachments and raw filenames ---
+              cwAttachments.forEach((file) => {
+                if (file instanceof File) {
+                  formData.append("attachments[]", file);
+                  formData.append("file_name", file.name);
+                  formData.append("file_names[]", file.name);
+                }
               });
-            }
-            if (!cwAssignToAll && cwSelectedStudents.length === 0) {
-              addToast(
-                "Please select at least one student or choose 'All students'.",
-                "warning",
-              );
-              setIsSubmitting(false);
-              return;
-            }
 
-            return { type: "assignment", data: formData };
-          })()
+              // Assign students
+              if (cwAssignToAll) {
+                formData.append("assign_to_all", "true");
+              } else if (cwSelectedStudents.length > 0) {
+                cwSelectedStudents.forEach((studentId) => {
+                  formData.append("student_ids[]", studentId);
+                });
+              }
+              if (!cwAssignToAll && cwSelectedStudents.length === 0) {
+                addToast(
+                  "Please select at least one student or choose 'All students'.",
+                  "warning",
+                );
+                setIsSubmitting(false);
+                return;
+              }
+
+              return { type: "assignment", data: formData };
+            })()
           : {
-            title: cwTitle.trim(),
-            type: createType,
-            topic: finalTopicName,
-            dueDate: createType === "material" ? null : cwDueDate,
-            points:
-              createType === "material" ? null : Number(cwPoints) || 100,
-            instructions: cwInstructions.trim(),
-            attachments: [
-              {
-                type: "pdf",
-                name: `${cwTitle.replace(/\s+/g, "_")}_Docs.pdf`,
-                url: "#",
-              },
-            ],
-            postedDate: "Today",
-          };
+              title: cwTitle.trim(),
+              type: createType,
+              topic: finalTopicName,
+              dueDate: createType === "material" ? null : cwDueDate,
+              points:
+                createType === "material" ? null : Number(cwPoints) || 100,
+              instructions: cwInstructions.trim(),
+              attachments: [
+                {
+                  type: "pdf",
+                  name: `${cwTitle.replace(/\s+/g, "_")}_Docs.pdf`,
+                  url: "#",
+                },
+              ],
+              postedDate: "Today",
+            };
 
       const created = await onCreateCoursework(cls.id, payload);
       if (created !== false) {
@@ -1205,48 +1276,79 @@ const ClassworkTab = ({
                                     "No instructions provided."}
                                 </p>
 
-                                {cw.attachments && cw.attachments.length > 0 && (
-                                  <div>
-                                    <h6 className="fw-semibold small text-muted text-uppercase mb-2">
-                                      Attachments
-                                    </h6>
-                                    <div className="d-flex flex-wrap gap-2">
-                                      {cw.attachments.map((att, idx) => {
-                                        // Determine icon based on file type
-                                        let iconClass = 'bi-file-earmark-text-fill text-secondary';
-                                        if (att.type === 'pdf') iconClass = 'bi-file-earmark-pdf-fill text-danger';
-                                        else if (['jpg', 'jpeg', 'png', 'gif', 'svg'].includes(att.type?.toLowerCase())) {
-                                          iconClass = 'bi-file-earmark-image-fill text-info';
-                                        } else if (att.type === 'doc' || att.type === 'docx') {
-                                          iconClass = 'bi-file-earmark-word-fill text-primary';
-                                        } else if (att.type === 'xls' || att.type === 'xlsx') {
-                                          iconClass = 'bi-file-earmark-excel-fill text-success';
-                                        } else if (att.type === 'ppt' || att.type === 'pptx') {
-                                          iconClass = 'bi-file-earmark-slides-fill text-warning';
-                                        } else if (att.type === 'zip' || att.type === 'rar') {
-                                          iconClass = 'bi-file-earmark-zip-fill text-muted';
-                                        }
+                                {cw.attachments &&
+                                  cw.attachments.length > 0 && (
+                                    <div>
+                                      <h6 className="fw-semibold small text-muted text-uppercase mb-2">
+                                        Attachments
+                                      </h6>
+                                      <div className="d-flex flex-wrap gap-2">
+                                        {cw.attachments.map((att, idx) => {
+                                          // Determine icon based on file type
+                                          let iconClass =
+                                            "bi-file-earmark-text-fill text-secondary";
+                                          if (att.type === "pdf")
+                                            iconClass =
+                                              "bi-file-earmark-pdf-fill text-danger";
+                                          else if (
+                                            [
+                                              "jpg",
+                                              "jpeg",
+                                              "png",
+                                              "gif",
+                                              "svg",
+                                            ].includes(att.type?.toLowerCase())
+                                          ) {
+                                            iconClass =
+                                              "bi-file-earmark-image-fill text-info";
+                                          } else if (
+                                            att.type === "doc" ||
+                                            att.type === "docx"
+                                          ) {
+                                            iconClass =
+                                              "bi-file-earmark-word-fill text-primary";
+                                          } else if (
+                                            att.type === "xls" ||
+                                            att.type === "xlsx"
+                                          ) {
+                                            iconClass =
+                                              "bi-file-earmark-excel-fill text-success";
+                                          } else if (
+                                            att.type === "ppt" ||
+                                            att.type === "pptx"
+                                          ) {
+                                            iconClass =
+                                              "bi-file-earmark-slides-fill text-warning";
+                                          } else if (
+                                            att.type === "zip" ||
+                                            att.type === "rar"
+                                          ) {
+                                            iconClass =
+                                              "bi-file-earmark-zip-fill text-muted";
+                                          }
 
-                                        return (
-                                          <button
-                                            key={idx}
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              openAttachmentPreview(att);
-                                            }}
-                                            className="border rounded p-2 px-3 d-flex align-items-center gap-2 text-decoration-none text-dark bg-light hover-bg-white shadow-sm"
-                                          >
-                                            <i className={`bi ${iconClass} fs-5`}></i>
-                                            <span className="small fw-medium">
-                                              {att.name}
-                                            </span>
-                                          </button>
-                                        );
-                                      })}
+                                          return (
+                                            <button
+                                              key={idx}
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                openAttachmentPreview(att);
+                                              }}
+                                              className="border rounded p-2 px-3 d-flex align-items-center gap-2 text-decoration-none text-dark bg-light hover-bg-white shadow-sm"
+                                            >
+                                              <i
+                                                className={`bi ${iconClass} fs-5`}
+                                              ></i>
+                                              <span className="small fw-medium">
+                                                {att.name}
+                                              </span>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
+                                  )}
                               </div>
 
                               {/* Teacher Stats or Student Action Box */}
@@ -1400,43 +1502,77 @@ const ClassworkTab = ({
           >
             <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
               <div className="modal-header border-bottom px-4 py-3">
-                <h5 className="modal-title fw-bold text-dark">
-                  {previewAttachment.name || "Attachment preview"}
-                </h5>
-                <div className="d-flex align-items-center gap-2">
+                <div className="d-flex align-items-center">
+                  {/* Group: title + eye icon */}
                   {previewAttachment.url && previewAttachment.url !== "#" && (
-                    <a
-                      href={previewAttachment.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn btn-outline-secondary btn-sm"
-                    >
-                      Open file
-                    </a>
+                    <div className="d-flex align-items-center gap-2">
+                      <h5 className="modal-title fw-bold text-dark">
+                        {previewAttachment.name || "Attachment preview"}
+                      </h5>
+                      <a
+                        href={previewAttachment.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-muted"
+                      >
+                        <i className="bi bi-eye"></i>
+                      </a>
+                    </div>
                   )}
+
+                  {/* Close button pushed to the right */}
                   <button
                     type="button"
-                    className="btn-close"
+                    className="btn-close ms-auto"
                     onClick={closeAttachmentPreview}
+                    aria-label="Close"
                   ></button>
                 </div>
               </div>
               <div className="modal-body p-0" style={{ minHeight: "70vh" }}>
-                {previewMode === "image" && previewAttachment.url ? (
-                  <img
-                    src={previewAttachment.url}
-                    alt={previewAttachment.name || "Attachment preview"}
-                    className="w-100"
-                    style={{ maxHeight: "75vh", objectFit: "contain" }}
-                  />
+                {previewMode === "image" ? (
+                  <div className="position-relative w-100" style={{ minHeight: "70vh" }}>
+                    {isPreparingPreview ? (
+                      <div className="d-flex justify-content-center align-items-center h-100 text-muted">
+                        <div className="text-center">
+                          <div className="spinner-border mb-2" role="status" />
+                          <div>Preparing preview...</div>
+                        </div>
+                      </div>
+                    ) : previewImageUrl ? (
+                      <img
+                        src={previewImageUrl}
+                        alt={previewAttachment?.name || "Attachment preview"}
+                        className="w-100"
+                        style={{ maxHeight: "75vh", objectFit: "contain", padding: "1rem" }}
+                      />
+                    ) : viewerError ? (
+                      <div className="d-flex flex-column justify-content-center align-items-center text-center p-5 h-100">
+                        <i className="bi bi-exclamation-triangle-fill fs-1 text-warning mb-3"></i>
+                        <h6 className="fw-semibold text-dark">Preview unavailable</h6>
+                        <p className="text-muted small mb-3">{viewerError}</p>
+                        <a
+                          href={previewAttachment?.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-outline-primary btn-sm"
+                        >
+                          Open file directly
+                        </a>
+                      </div>
+                    ) : null}
+                  </div>
                 ) : null}
 
-                {(previewMode === "pdf" || previewMode === "document") && getAttachmentPreviewUrl(previewAttachment) ? (
+                {(previewMode === "pdf" || previewMode === "document" || previewMode === "docx") &&
+                getAttachmentPreviewUrl(previewAttachment) ? (
                   <div className="w-100 h-100" style={{ minHeight: "70vh" }}>
                     {viewerError ? (
                       <div className="d-flex flex-column justify-content-center align-items-center text-center p-5 h-100">
                         <i className="bi bi-exclamation-triangle-fill fs-1 text-warning mb-3"></i>
-                        <h6 className="fw-semibold text-dark">Preview unavailable</h6>
+                        <h6 className="fw-semibold text-dark">
+                          Preview unavailable
+                        </h6>
                         <p className="text-muted small mb-3">{viewerError}</p>
                         <a
                           href={getAttachmentPreviewUrl(previewAttachment)}
@@ -1449,25 +1585,48 @@ const ClassworkTab = ({
                       </div>
                     ) : (
                       <div style={{ height: "70vh", width: "100%" }}>
-                        {isPreparingPreview ? (
-                          <div className="d-flex justify-content-center align-items-center h-100 text-muted">
-                            <div className="text-center">
-                              <div className="spinner-border mb-2" role="status" />
-                              <div>Preparing preview...</div>
+                        {previewMode === "docx" ? (
+                          <div className="p-3 bg-white h-100" style={{ minHeight: "70vh" }}>
+                            <iframe
+                              title="Word preview"
+                              src={`https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(getAttachmentPreviewUrl(previewAttachment))}`}
+                              className="w-100 h-100"
+                              style={{ border: 0, minHeight: "70vh" }}
+                            />
+                            <div className="mt-2 text-center">
+                              <a
+                                href={getAttachmentPreviewUrl(previewAttachment)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="btn btn-outline-primary btn-sm"
+                              >
+                                Open file directly
+                              </a>
                             </div>
                           </div>
                         ) : (
-                          <DocViewer
-                            documents={docViewerDocs}
-                            pluginRenderers={DocViewerRenderers}
-                            config={{
-                              header: {
-                                disableHeader: false,
-                              },
-                              pdfVerticalScrollByDefault: true,
-                            }}
-                            style={{ height: "100%", width: "100%" }}
-                          />
+                          <div style={{ height: "70vh", width: "100%" }}>
+                            {isPreparingPreview ? (
+                              <div className="d-flex justify-content-center align-items-center h-100 text-muted">
+                                <div className="text-center">
+                                  <div className="spinner-border mb-2" role="status" />
+                                  <div>Preparing preview...</div>
+                                </div>
+                              </div>
+                            ) : (
+                              <DocViewer
+                                documents={docViewerDocs}
+                                pluginRenderers={DocViewerRenderers}
+                                config={{
+                                  header: {
+                                    disableHeader: false,
+                                  },
+                                  pdfVerticalScrollByDefault: true,
+                                }}
+                                style={{ height: "100%", width: "100%" }}
+                              />
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
@@ -1677,7 +1836,9 @@ const ClassworkTab = ({
                         type="file"
                         className="form-control"
                         multiple
-                        onChange={(e) => setCwAttachments(Array.from(e.target.files || []))}
+                        onChange={(e) =>
+                          setCwAttachments(Array.from(e.target.files || []))
+                        }
                       />
                       {/* Display selected file names */}
                       {cwAttachments.length > 0 && (
@@ -1685,10 +1846,15 @@ const ClassworkTab = ({
                           <small className="text-muted">Selected files:</small>
                           <ul className="list-unstyled small mb-0">
                             {cwAttachments.map((file, idx) => (
-                              <li key={idx} className="d-flex align-items-center gap-2">
+                              <li
+                                key={idx}
+                                className="d-flex align-items-center gap-2"
+                              >
                                 <i className="bi bi-file-earmark-text"></i>
                                 <span>{file.name}</span>
-                                <span className="text-muted">({(file.size / 1024).toFixed(1)} KB)</span>
+                                <span className="text-muted">
+                                  ({(file.size / 1024).toFixed(1)} KB)
+                                </span>
                               </li>
                             ))}
                           </ul>
@@ -1889,8 +2055,9 @@ const ClassworkTab = ({
                               return (
                                 <li
                                   key={student.id}
-                                  className={`list-group-item list-group-item-action d-flex align-items-center gap-3 ${isSelected ? "active" : ""
-                                    }`}
+                                  className={`list-group-item list-group-item-action d-flex align-items-center gap-3 ${
+                                    isSelected ? "active" : ""
+                                  }`}
                                   style={{ cursor: "pointer" }}
                                   onClick={() => {
                                     if (isSelected) {

@@ -27,16 +27,20 @@ export const resolveAttachmentUrl = (filePath) => {
 
   let normalizedPath = String(filePath).replace(/\\/g, "/").trim();
   const apiBaseUrl = getApiBaseUrl();
-  const apiRootUrl = apiBaseUrl.replace(/\/public\/api\/?$/i, "/").replace(/\/api\/?$/i, "/");
+  const baseUrl = new URL(apiBaseUrl, window.location.origin);
+  const originRoot = `${baseUrl.protocol}//${baseUrl.host}`;
 
-  if (/^\/?(public\/api|public|api)\/(lms_files\/.*)$/i.test(normalizedPath)) {
-    normalizedPath = normalizedPath.replace(/^\/?(public\/api|public|api)\//i, "");
-    return new URL(`/${normalizedPath}`, apiRootUrl).toString();
+  if (/^\/?(public\/api\/)?lms_files\/.+$/i.test(normalizedPath)) {
+    normalizedPath = normalizedPath.replace(/^\/?(public\/api\/)?/i, "");
+    return new URL(`/public/${normalizedPath}`, originRoot).toString();
   }
 
-  const baseUrl = new URL(apiBaseUrl, window.location.origin);
+  if (/^\/?public\/lms_files\/.+$/i.test(normalizedPath)) {
+    return new URL(normalizedPath.replace(/^\/+/, "/"), originRoot).toString();
+  }
+
   if (normalizedPath.startsWith("/")) {
-    return new URL(normalizedPath, baseUrl).toString();
+    return new URL(normalizedPath, originRoot).toString();
   }
 
   return new URL(normalizedPath.replace(/^\/+/, ""), baseUrl).toString();
