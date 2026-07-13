@@ -254,41 +254,50 @@ const ClassworkTab = ({
     courseworkDetailsMap,
   ]);
 
-  const fetchCourseworkDetails = async (courseworkId) => {
-    if (!courseworkId) return;
-    if (courseworkDetailsMap[courseworkId]) return;
+  // const fetchCourseworkDetails = async (courseworkId) => {
+  //   if (!courseworkId) return;
+  //   if (courseworkDetailsMap[courseworkId]) return;
 
-    const coursework = classworkList.find((item) => item.id === courseworkId);
-    if (!coursework || coursework.type !== "assignment") return;
+  //   const coursework = classworkList.find((item) => item.id === courseworkId);
+  //   if (!coursework || coursework.type !== "assignment") return;
 
-    try {
-      const res = await assignmentAPI.getAssignmentDetails(courseworkId);
-      const data = res.data?.data || res.data || {};
-      const parsedAttachments = (data.attachments || []).map((att) => ({
-        ...att,
-        name: getAttachmentDisplayName(att),
-        url: att.file_path
-          ? resolveAttachmentUrl(att.file_path)
-          : att.url || att.fileUrl || "#",
-        type: att.file_type || att.type || "file",
-      }));
+  //   try {
+  //     let res;
+  //     try {
+  //       res = await assignmentAPI.getAssignmentDetails(courseworkId);
+  //     } catch (error) {
+  //       if (error?.response?.status === 404) {
+  //         res = await assignmentAPI.getAssignment(courseworkId);
+  //       } else {
+  //         throw error;
+  //       }
+  //     }
+  //     const data = res.data?.data || res.data || {};
+  //     const parsedAttachments = (data.attachments || []).map((att) => ({
+  //       ...att,
+  //       name: getAttachmentDisplayName(att),
+  //       url: att.file_path
+  //         ? resolveAttachmentUrl(att.file_path)
+  //         : att.url || att.fileUrl || "#",
+  //       type: att.file_type || att.type || "file",
+  //     }));
 
-      setCourseworkDetailsMap((prev) => ({
-        ...prev,
-        [courseworkId]: {
-          instructions:
-            data.instructions || data.description || coursework.instructions,
-          attachments: parsedAttachments,
-        },
-      }));
-    } catch (error) {
-      console.error("Failed to load coursework details:", error);
-    }
-  };
+  //     setCourseworkDetailsMap((prev) => ({
+  //       ...prev,
+  //       [courseworkId]: {
+  //         instructions:
+  //           data.instructions || data.description || coursework.instructions,
+  //         attachments: parsedAttachments,
+  //       },
+  //     }));
+  //   } catch (error) {
+  //     console.error("Failed to load coursework details:", error);
+  //   }
+  // };
 
   useEffect(() => {
     if (!isTeacher || !expandedId) return;
-    fetchCourseworkDetails(expandedId);
+    // fetchCourseworkDetails(expandedId);
     fetchSubmissionsForCoursework(expandedId);
   }, [expandedId, isTeacher]);
 

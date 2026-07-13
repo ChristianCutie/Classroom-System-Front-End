@@ -376,9 +376,33 @@ const App = () => {
 
     console.log("Submitting files:", normalizedFiles); // Debug
 
-    // Append files – ONLY as "files[]" (not duplicate "files")
-    normalizedFiles.forEach((file) => {
-      formData.append("files[]", file);
+    // Append files – preserve the original filename for backend storage
+    normalizedFiles.forEach((file, index) => {
+      const resolvedName =
+        file?.file_name || file?.name || file?.filename || `upload_${index}`;
+      const normalizedFile =
+        file instanceof File
+          ? new File([file], resolvedName, {
+              type: file.type || "application/octet-stream",
+              lastModified: file.lastModified || Date.now(),
+            })
+          : file;
+
+      try {
+        normalizedFile.file_name = resolvedName;
+        normalizedFile.filename = resolvedName;
+      } catch (err) {
+        // ignore if property cannot be set
+      }
+
+      formData.append("files[]", normalizedFile);
+      formData.append("file_name", resolvedName);
+      formData.append("file_names[]", resolvedName);
+      formData.append("name", resolvedName);
+      formData.append("filename", resolvedName);
+      formData.append("filenames[]", resolvedName);
+      formData.append("raw_name", resolvedName);
+      formData.append("raw_names[]", resolvedName);
     });
 
     const privateComment =

@@ -30,9 +30,14 @@ export const resolveAttachmentUrl = (filePath) => {
   const baseUrl = new URL(apiBaseUrl, window.location.origin);
   const originRoot = `${baseUrl.protocol}//${baseUrl.host}`;
 
-  if (/^\/?(public\/api\/)?lms_files\/.+$/i.test(normalizedPath)) {
-    normalizedPath = normalizedPath.replace(/^\/?(public\/api\/)?/i, "");
-    return new URL(`/public/${normalizedPath}`, originRoot).toString();
+  const trimmedPath = normalizedPath.replace(/^\/+/, "");
+
+  if (/^(?:public\/)?(?:storage\/)?(?:api\/)?lms_files\/.+$/i.test(trimmedPath)) {
+    const sanitizedPath = trimmedPath
+      .replace(/^public\//i, "")
+      .replace(/^storage\//i, "")
+      .replace(/^api\//i, "");
+    return new URL(`/public/${sanitizedPath}`, originRoot).toString();
   }
 
   if (/^\/?public\/lms_files\/.+$/i.test(normalizedPath)) {
@@ -70,8 +75,8 @@ export const assignmentAPI = {
   getAssignments: (classId) => apiClient.get(`/classes/${classId}/assignments`),
   getAssignment: (assignmentId) =>
     apiClient.get(`/assignments/${assignmentId}`),
-  getAssignmentDetails: (assignmentId) =>
-    apiClient.get(`/assignments/${assignmentId}/details`),
+  // getAssignmentDetails: (assignmentId) =>
+  //   apiClient.get(`/assignments/${assignmentId}/details`),
   submitAssignment: (assignmentId, formData) =>
     apiClient.post(`/assignments/${assignmentId}/submit`, formData, {
       headers: { "Content-Type": "multipart/form-data" },

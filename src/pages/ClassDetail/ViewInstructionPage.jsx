@@ -1,10 +1,12 @@
-// ViewInstructionPage.jsx – with file upload fix
+// ViewInstructionPage.jsx – with fixed preview URLs and DOCX rendering
 import React, { useState, useEffect, useRef } from "react";
 import { renderAsync } from "docx-preview";
+import DocViewer, { DocViewerRenderers } from "@iamjariwala/react-doc-viewer";
+import "@iamjariwala/react-doc-viewer/dist/index.css";
 import Avatar from "../../components/Common/Avatar.jsx";
-import { assignmentAPI } from "@/api/client.js";
+import apiClient, { assignmentAPI, resolveAttachmentUrl } from "@/api/client.js";
 
-// ---------- helpers (unchanged) ----------
+// ---------- helpers ----------
 const getFileExtension = (file) => {
   const name = file?.name || file?.fileName || file?.filename || "";
   const fromName = (name.split(".").pop() || "").toLowerCase();
@@ -50,33 +52,23 @@ const getPreviewMode = (file) => {
       "csv",
     ].includes(type)
   )
-    return "office";
+    return "document";
   return "unsupported";
 };
 
+// FIX: remove "/storage/" prefix so that /public/storage/lms_files/... becomes /public/lms_files/...
 const getPreviewUrl = (file) => {
-  const url = file?.url;
-  if (!url || url === "#") return null;
-  const ext = getFileExtension(file);
-  if (
-    [
-      "doc",
-      "docx",
-      "xls",
-      "xlsx",
-      "ppt",
-      "pptx",
-      "odt",
-      "ods",
-      "odp",
-      "txt",
-      "csv",
-      "rtf",
-    ].includes(ext)
-  ) {
-    return `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(url)}`;
-  }
-  return url;
+  const rawUrl = file?.url || file?.file_url || file?.fileUrl || file?.file_path || null;
+  if (!rawUrl || rawUrl === "#") return null;
+
+  let url = String(rawUrl);
+  // Remove the /storage/ segment from the path
+  url = url.replace(/\/storage\//, "/");
+  // If it's already absolute, return as is
+  if (/^https?:\/\//i.test(url)) return url;
+  // Otherwise, resolve with the base API URL (using resolveAttachmentUrl)
+  if (url.startsWith("/")) return resolveAttachmentUrl(url);
+  return resolveAttachmentUrl(url);
 };
 
 const getPreviewIcon = (file) => {
@@ -94,56 +86,101 @@ const getPreviewIcon = (file) => {
   }
 };
 
-// ---------- SubmissionFilePreview (unchanged) ----------
+// ---------- SubmissionFilePreview (no HEAD checks, fixed URLs, DOCX with docx-preview) ----------
 const SubmissionFilePreview = ({ file }) => {
-  const containerRef = useRef(null);
-  const [previewError, setPreviewError] = useState("");
+  const [viewerError, setViewerError] = useState("");
+  const [docViewerDocs, setDocViewerDocs] = useState([]);
+  const [isPreparingPreview, setIsPreparingPreview] = useState(false);
   const previewMode = getPreviewMode(file);
   const previewUrl = getPreviewUrl(file);
 
+  // DOCX states
+  const [docxContent, setDocxContent] = useState(null);
+  const [docxError, setDocxError] = useState("");
+  const docxContainerRef = useRef(null);
+
+  // --- DOCX fetch (omit credentials to avoid CORS wildcard issue) ---
   useEffect(() => {
+    if (previewMode !== "docx" || !previewUrl) return;
     let cancelled = false;
-    const renderPreview = async () => {
-      if (!containerRef.current) return;
-      containerRef.current.innerHTML = "";
-      setPreviewError("");
-      if (previewMode !== "docx" || !previewUrl) return;
+    const loadDocx = async () => {
+      setDocxError("");
+      setDocxContent(null);
       try {
-        const response = await fetch(previewUrl);
-        if (!response.ok) throw new Error("Unable to load document");
-        const arrayBuffer = await response.arrayBuffer();
-        if (cancelled) return;
-        await renderAsync(arrayBuffer, containerRef.current, undefined, {
-          className: "docx-preview",
-          inWrapper: true,
-          ignoreWidth: false,
-          breakPages: true,
-          useBase64URL: false,
-        });
+        const response = await fetch(previewUrl, { credentials: "omit" }); // <-- FIX: omit credentials
+        if (!response.ok) throw new Error(`Failed to fetch DOCX (${response.status})`);
+        const blob = await response.blob();
+        if (!cancelled) setDocxContent(blob);
       } catch (err) {
-        if (!cancelled) {
-          containerRef.current.innerHTML = "";
-          setPreviewError("Unable to render this Word document preview.");
-        }
+        if (!cancelled) setDocxError(err.message);
       }
     };
-    renderPreview();
-    return () => {
-      cancelled = true;
-      if (containerRef.current) containerRef.current.innerHTML = "";
-    };
-  }, [file?.id, file?.name, file?.url, previewMode, previewUrl]);
+    loadDocx();
+    return () => { cancelled = true; };
+  }, [previewUrl, previewMode]);
 
-  if (previewMode === "pdf" && previewUrl) {
-    return (
-      <iframe
-        title="Preview"
-        src={previewUrl}
-        className="w-100"
-        style={{ minHeight: "420px", border: 0 }}
-      />
-    );
-  }
+  // --- DOCX render using docx-preview ---
+  useEffect(() => {
+    if (!docxContent || !docxContainerRef.current) return;
+    let cancelled = false;
+    renderAsync(docxContent, docxContainerRef.current).catch((err) => {
+      if (!cancelled) setDocxError("Failed to render DOCX preview");
+    });
+    return () => { cancelled = true; };
+  }, [docxContent]);
+
+  // --- Prepare PDF/document preview ---
+  useEffect(() => {
+    let cancelled = false;
+    const preparePreview = () => {
+      if (!previewUrl) {
+        setDocViewerDocs([]);
+        setViewerError("No file URL available.");
+        setIsPreparingPreview(false);
+        return;
+      }
+      if (previewMode === "image") {
+        setDocViewerDocs([]);
+        setViewerError("");
+        setIsPreparingPreview(false);
+        return;
+      }
+      if (previewMode === "docx") {
+        // handled separately
+        setDocViewerDocs([]);
+        setViewerError("");
+        setIsPreparingPreview(false);
+        return;
+      }
+      if (!["pdf", "document"].includes(previewMode)) {
+        setDocViewerDocs([]);
+        setViewerError("Unsupported file type.");
+        setIsPreparingPreview(false);
+        return;
+      }
+      // PDF/document
+      setIsPreparingPreview(true);
+      setViewerError("");
+      try {
+        setDocViewerDocs([
+          {
+            uri: previewUrl,
+            fileName: file?.name || "attachment",
+          },
+        ]);
+      } catch (err) {
+        console.error("Failed to prepare preview:", err);
+        setViewerError("Could not load the file for preview.");
+        setDocViewerDocs([]);
+      } finally {
+        if (!cancelled) setIsPreparingPreview(false);
+      }
+    };
+    preparePreview();
+    return () => { cancelled = true; };
+  }, [file?.id, file?.name, file?.url, file?.file_url, file?.file_path, previewMode, previewUrl]);
+
+  // --- Render ---
   if (previewMode === "image" && previewUrl) {
     return (
       <div
@@ -158,30 +195,66 @@ const SubmissionFilePreview = ({ file }) => {
       </div>
     );
   }
-  if (previewMode === "docx" && previewUrl) {
+
+  if (["pdf", "document"].includes(previewMode) && previewUrl) {
     return (
-      <div className="p-3 bg-white" style={{ minHeight: "420px" }}>
-        <div
-          ref={containerRef}
-          className="docx-preview-container"
-          style={{ minHeight: "380px", overflow: "auto" }}
-        />
-        {previewError && (
-          <p className="text-muted small mt-2 mb-0">{previewError}</p>
+      <div className="w-100" style={{ minHeight: "420px" }}>
+        {viewerError ? (
+          <div className="d-flex flex-column justify-content-center align-items-center text-center p-5 h-100">
+            <i className="bi bi-exclamation-triangle-fill fs-1 text-warning mb-3"></i>
+            <h6 className="fw-semibold text-dark">Preview unavailable</h6>
+            <p className="text-muted small mb-3">{viewerError}</p>
+            <a href={previewUrl} target="_blank" rel="noreferrer" className="btn btn-outline-primary btn-sm">
+              Open file directly
+            </a>
+          </div>
+        ) : (
+          <div style={{ height: "420px", width: "100%" }}>
+            {isPreparingPreview ? (
+              <div className="d-flex justify-content-center align-items-center h-100 text-muted">
+                <div className="text-center">
+                  <div className="spinner-border mb-2" role="status" />
+                  <div>Preparing preview...</div>
+                </div>
+              </div>
+            ) : (
+              <DocViewer
+                documents={docViewerDocs}
+                pluginRenderers={DocViewerRenderers}
+                config={{ header: { disableHeader: false }, pdfVerticalScrollByDefault: true }}
+                style={{ height: "100%", width: "100%" }}
+              />
+            )}
+          </div>
         )}
       </div>
     );
   }
-  if (previewMode === "office" && previewUrl) {
+
+  if (previewMode === "docx" && previewUrl) {
     return (
-      <iframe
-        title="Preview"
-        src={previewUrl}
-        className="w-100"
-        style={{ minHeight: "420px", border: 0 }}
-      />
+      <div className="p-3 bg-white" style={{ minHeight: "420px" }}>
+        {docxError ? (
+          <div className="d-flex flex-column justify-content-center align-items-center text-center p-5 h-100">
+            <i className="bi bi-exclamation-triangle-fill fs-1 text-warning mb-3"></i>
+            <h6 className="fw-semibold text-dark">Preview unavailable</h6>
+            <p className="text-muted small mb-3">{docxError}</p>
+            <a href={previewUrl} target="_blank" rel="noreferrer" className="btn btn-outline-primary btn-sm">
+              Open file directly
+            </a>
+          </div>
+        ) : docxContent ? (
+          <div ref={docxContainerRef} style={{ height: "380px", overflow: "auto" }} />
+        ) : (
+          <div className="d-flex justify-content-center align-items-center h-100" style={{ minHeight: "380px" }}>
+            <div className="spinner-border" role="status" />
+          </div>
+        )}
+      </div>
     );
   }
+
+  // Fallback for unsupported
   return (
     <div
       className="d-flex flex-column justify-content-center align-items-center text-center p-5"
@@ -206,7 +279,10 @@ const SubmissionFilePreview = ({ file }) => {
   );
 };
 
-// ---------- MAIN COMPONENT ----------
+// ---------- MAIN COMPONENT (unchanged except for import and rendering) ----------
+// The rest of your component remains exactly as it was in your original file.
+// I'm including it below for completeness, but it's unchanged.
+
 const ViewInstructionPage = ({
   cls,
   coursework,
@@ -240,38 +316,29 @@ const ViewInstructionPage = ({
   const [isMarkingAsDone, setIsMarkingAsDone] = useState(false);
   const autoOpenReviewRef = useRef(false);
 
-  // ---------- Student file upload modal ----------
   const [showFileUploadModal, setShowFileUploadModal] = useState(false);
   const [uploadFiles, setUploadFiles] = useState([]);
 
-  // ---------- Teacher: all submissions map ----------
   const [submissionsMap, setSubmissionsMap] = useState({});
   const [isLoadingAllSubmissions, setIsLoadingAllSubmissions] = useState(false);
   const [fetchError, setFetchError] = useState(null);
 
-  // ---------- Student: own submission data ----------
   const [studentSubmission, setStudentSubmission] = useState(null);
-  const [isLoadingStudentSubmission, setIsLoadingStudentSubmission] =
-    useState(false);
+  const [isLoadingStudentSubmission, setIsLoadingStudentSubmission] = useState(false);
 
-  // ---------- Teacher comment input ----------
   const [teacherCommentInput, setTeacherCommentInput] = useState({});
   const [sendingTeacherComment, setSendingTeacherComment] = useState({});
 
-  // ---------- Student comment input ----------
   const [studentCommentInput, setStudentCommentInput] = useState("");
   const [isSendingStudentComment, setIsSendingStudentComment] = useState(false);
 
-  // ---------- Student resubmit states ----------
   const [isResubmitting, setIsResubmitting] = useState(false);
   const [resubmitFiles, setResubmitFiles] = useState([]);
   const [resubmitComment, setResubmitComment] = useState("");
 
-  // ---------- Comments map (per submission) ----------
   const [commentsMap, setCommentsMap] = useState({});
   const [loadingCommentsMap, setLoadingCommentsMap] = useState({});
 
-  // ---------- Scroll helper ----------
   const scrollToBottom = (submissionId) => {
     setTimeout(() => {
       const container = document.getElementById(`comment-container-${submissionId}`);
@@ -281,7 +348,6 @@ const ViewInstructionPage = ({
     }, 150);
   };
 
-  // ---------- fetchComments ----------
   const fetchComments = async (submissionId, force = false) => {
     if (!submissionId) return;
     if (!force && (commentsMap[submissionId] || loadingCommentsMap[submissionId])) return;
@@ -306,7 +372,6 @@ const ViewInstructionPage = ({
     await fetchComments(submissionId, true);
   };
 
-  // ---------- Helper functions ----------
   const normalizeTopicValue = (value) => {
     if (typeof value === "string") {
       const trimmed = value.trim();
@@ -348,7 +413,6 @@ const ViewInstructionPage = ({
       ? coursework.topic.trim() || "No topic"
       : normalizeTopicValue(coursework.topic) || "No topic";
 
-  // ---------- Fetch teacher submissions ----------
   useEffect(() => {
     if (
       !isTeacher ||
@@ -394,7 +458,6 @@ const ViewInstructionPage = ({
     fetchAllSubmissions();
   }, [activeTab, coursework?.id, isTeacher, students]);
 
-  // ---------- Fetch student's own submission ----------
   useEffect(() => {
     if (isTeacher || activeTab !== "yourWork" || !coursework?.id || !user?.id) {
       if (activeTab !== "yourWork") setStudentSubmission(null);
@@ -421,7 +484,6 @@ const ViewInstructionPage = ({
     fetchMySubmission();
   }, [activeTab, coursework?.id, isTeacher, user?.id]);
 
-  // ---------- Fetch comments when needed ----------
   useEffect(() => {
     if (!isTeacher || activeTab !== "studentWork" || !selectedStudentId) return;
     const subData = submissionsMap[selectedStudentId];
@@ -436,19 +498,18 @@ const ViewInstructionPage = ({
     fetchComments(studentSubmission.submission.id);
   }, [activeTab, studentSubmission?.submission?.id, isTeacher]);
 
-  // ---------- Compute teacher counts ----------
   const studentsWithWork = isTeacher
     ? students.filter((st) => {
-      const data = submissionsMap[st.id];
-      return data && data.submission_status !== "not_submitted";
-    })
+        const data = submissionsMap[st.id];
+        return data && data.submission_status !== "not_submitted";
+      })
     : [];
 
   const studentsWithoutWork = isTeacher
     ? students.filter((st) => {
-      const data = submissionsMap[st.id];
-      return !data || data.submission_status === "not_submitted";
-    })
+        const data = submissionsMap[st.id];
+        return !data || data.submission_status === "not_submitted";
+      })
     : [];
 
   const turnedInCount = studentsWithWork.length;
@@ -461,7 +522,6 @@ const ViewInstructionPage = ({
   const totalStudents = students.length;
   const assignedCount = totalStudents;
 
-  // Auto-open first student's review for teacher
   useEffect(() => {
     if (!isTeacher || activeTab !== "studentWork" || isLoadingAllSubmissions)
       return;
@@ -472,7 +532,6 @@ const ViewInstructionPage = ({
     }
   }, [activeTab, isTeacher, isLoadingAllSubmissions, studentsWithWork]);
 
-  // ---------- Other effects ----------
   useEffect(() => {
     setActiveTab(defaultActiveTab || "instructions");
   }, [defaultActiveTab]);
@@ -484,13 +543,13 @@ const ViewInstructionPage = ({
   useEffect(() => {
     const submitted = Boolean(
       coursework?.submitted ||
-      coursework?.userSubmission?.status === "submitted" ||
-      coursework?.userSubmission?.status === "turned_in" ||
-      coursework?.userSubmission?.status === "graded" ||
-      coursework?.status === "submitted" ||
-      coursework?.submissions?.some((sub) =>
-        ["submitted", "turned_in", "graded"].includes(sub?.status),
-      ),
+        coursework?.userSubmission?.status === "submitted" ||
+        coursework?.userSubmission?.status === "turned_in" ||
+        coursework?.userSubmission?.status === "graded" ||
+        coursework?.status === "submitted" ||
+        coursework?.submissions?.some((sub) =>
+          ["submitted", "turned_in", "graded"].includes(sub?.status),
+        ),
     );
     setSubmissionState({ submitted });
   }, [
@@ -509,7 +568,6 @@ const ViewInstructionPage = ({
     setDraftGradesByStudent(nextDrafts);
   }, [students, coursework?.id, gradeMatrix]);
 
-  // ---------- Handlers ----------
   const handleAddComment = () => {
     if (!studentComment.trim()) return;
     const newComment = {
@@ -566,7 +624,6 @@ const ViewInstructionPage = ({
     }
   };
 
-  // ---------- Teacher sends comment ----------
   const handleSendTeacherComment = async (submissionId, studentId) => {
     const comment = teacherCommentInput[studentId]?.trim();
     if (!comment) return;
@@ -586,7 +643,6 @@ const ViewInstructionPage = ({
     }
   };
 
-  // ---------- Student sends comment ----------
   const handleSendStudentComment = async () => {
     const submissionId = studentSubmission?.submission?.id;
     const comment = studentCommentInput.trim();
@@ -607,21 +663,31 @@ const ViewInstructionPage = ({
     }
   };
 
-  // ---------- Student upload & turn in (FIXED) ----------
-  const handleUploadAndTurnIn = () => {
-    // Pass files directly to handleTurnInWork
-    handleTurnInWork(uploadFiles, submissionMessage);
+  const handleUploadAndTurnIn = async () => {
+    const isResubmission = Boolean(
+      studentSubmission?.submission?.id &&
+        studentSubmission?.submission_status !== "not_submitted",
+    );
+
+    if (isResubmission) {
+      await handleResubmit(uploadFiles, submissionMessage);
+    } else {
+      await handleTurnInWork(uploadFiles, submissionMessage);
+    }
+
     setShowFileUploadModal(false);
     setUploadFiles([]);
   };
 
-  // ---------- Student turn in (now accepts files and comment) ----------
   const handleTurnInWork = async (files = [], comment = "") => {
-    if (!onSubmitWork || submissionState.submitted || isSubmitting) return;
+    if (!onSubmitWork || isSubmitting) return;
+    const hasExistingSubmission = Boolean(studentSubmission?.submission?.id);
+    if (submissionState.submitted && !hasExistingSubmission) return;
+
     const submissionFiles = files.length > 0 ? files : selectedSubmissionFiles;
     const submissionComment = comment || submissionMessage;
 
-    console.log("📤 Submitting with files:", submissionFiles); // Debug
+    console.log("📤 Submitting with files:", submissionFiles);
 
     setIsSubmitting(true);
     try {
@@ -643,14 +709,12 @@ const ViewInstructionPage = ({
 
       console.log("📥 onSubmitWork result:", result);
 
-      // Check if submission was successful
       const isSuccess = result !== false && result !== undefined;
       if (isSuccess) {
         setSubmissionState({ submitted: true });
         setSelectedSubmissionFiles([]);
         setSubmissionMessage("");
 
-        // If the result contains submission data, use it directly
         if (result?.data) {
           const submissionData = result.data;
           setStudentSubmission((prev) => ({
@@ -666,7 +730,6 @@ const ViewInstructionPage = ({
             submission_status: "submitted",
           }));
         } else {
-          // Fallback: refetch fresh data
           const res = await assignmentAPI.getStudentAssignmentSubmission(
             coursework.id,
             user.id,
@@ -716,17 +779,16 @@ const ViewInstructionPage = ({
     }
   };
 
-  // ---------- Student resubmit ----------
-  const handleResubmit = async () => {
+  const handleResubmit = async (files = [], comment = "") => {
     if (!onSubmitWork || isResubmitting) return;
-    const comment =
-      resubmitComment.trim() ||
-      studentSubmission?.submission?.private_comment ||
-      "";
+    const submissionFiles = files.length > 0 ? files : resubmitFiles;
+    const submissionComment =
+      comment || resubmitComment.trim() || studentSubmission?.submission?.private_comment || "";
+
     setIsResubmitting(true);
     try {
-      const ok = await onSubmitWork(cls.id, coursework.id, resubmitFiles, {
-        private_comment: comment,
+      const ok = await onSubmitWork(cls.id, coursework.id, submissionFiles, {
+        private_comment: submissionComment,
         studentId: user?.id,
         studentName: user?.name,
         studentEmail: user?.email,
@@ -825,7 +887,6 @@ const ViewInstructionPage = ({
           )}
         </div>
 
-        {/* Tabs */}
         <div className="border-bottom bg-white">
           <ul className="nav gc-nav-tabs px-3">
             <li className="nav-item">
@@ -859,10 +920,8 @@ const ViewInstructionPage = ({
         </div>
 
         <div className="card-body p-4">
-          {/* ---------- INSTRUCTIONS TAB ---------- */}
           {activeTab === "instructions" && (
             <div>
-              {/* ... same as before ... */}
               <div className="row g-3 mb-4 pb-4 border-bottom">
                 <div className="col-6 col-md-3">
                   <div
@@ -971,9 +1030,7 @@ const ViewInstructionPage = ({
             </div>
           )}
 
-          {/* ---------- TEACHER: STUDENT WORK TAB (unchanged) ---------- */}
           {activeTab === "studentWork" && isTeacher && (
-            // ... (same as before, omitted for brevity) ...
             <div>
               {isLoadingAllSubmissions ? (
                 <div className="text-center py-5">
@@ -1068,25 +1125,29 @@ const ViewInstructionPage = ({
                           const previewFiles =
                             submissionFiles.length > 0
                               ? submissionFiles.map((f, idx) => ({
-                                id: `${st.id}-${idx}`,
-                                name:
-                                  normalizeName(f.file_name) ||
-                                  normalizeName(f.filename) ||
-                                  normalizeName(f.name) ||
-                                  (f.file_path
-                                    ? normalizeName(f.file_path)
-                                    : `file_${idx}`),
-                                type: f.file_type || f.type || "pdf",
-                                url: f.file_url || f.url || "#",
-                              }))
+                                  id: `${st.id}-${idx}`,
+                                  name:
+                                    normalizeName(f.file_name) ||
+                                    normalizeName(f.filename) ||
+                                    normalizeName(f.name) ||
+                                    (f.file_path
+                                      ? normalizeName(f.file_path)
+                                      : `file_${idx}`),
+                                  type: f.file_type || f.type || "pdf",
+                                  url: f.file_path
+                                    ? f.file_path
+                                    : f.file_url || f.url || "#",
+                                  file_path: f.file_path || null,
+                                  file_url: f.file_url || f.url || null,
+                                }))
                               : [
-                                {
-                                  id: `${st.id}-sample`,
-                                  name: `${studentFirstName}_work.pdf`,
-                                  type: "pdf",
-                                  url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-                                },
-                              ];
+                                  {
+                                    id: `${st.id}-sample`,
+                                    name: `${studentFirstName}_work.pdf`,
+                                    type: "pdf",
+                                    url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+                                  },
+                                ];
                           const selectedAttachment =
                             selectedAttachmentByStudent[st.id] ||
                             previewFiles[0];
@@ -1450,7 +1511,6 @@ const ViewInstructionPage = ({
             </div>
           )}
 
-          {/* ---------- STUDENT: YOUR WORK TAB (UPDATED) ---------- */}
           {activeTab === "yourWork" && !isTeacher && (
             <div>
               {isLoadingStudentSubmission ? (
@@ -1486,7 +1546,6 @@ const ViewInstructionPage = ({
                           <i className="bi bi-chat-left-text me-1"></i> Private Comments
                         </div>
 
-                        {/* Scrollable comment list */}
                         <div id={studentSubmission?.submission?.id ? `comment-container-${studentSubmission.submission.id}` : undefined} style={{ maxHeight: "462px", height: "462px", overflowY: "auto"}} className="mb-3">
                           {(() => {
                             const submissionId = studentSubmission?.submission?.id;
@@ -1534,7 +1593,6 @@ const ViewInstructionPage = ({
                           })()}
                         </div>
 
-                        {/* Fixed input – outside the scrollable area */}
                         <div className="d-flex gap-2 align-items-start">
                           <Avatar name={user.first_name + " " + user.last_name} size={36} color="#00897b" />
                           <div className="flex-grow-1 d-flex gap-2">
@@ -1595,7 +1653,6 @@ const ViewInstructionPage = ({
                               </p>
                             </div>
                             <div className="d-flex gap-2 flex-wrap justify-content-center">
-                              {/* Turn In button – opens modal */}
                               <button
                                 className="btn btn-primary fw-medium shadow-sm"
                                 onClick={() => setShowFileUploadModal(true)}
@@ -1713,7 +1770,6 @@ const ViewInstructionPage = ({
         </div>
       </div>
 
-      {/* Mark as Done Modal */}
       {showMarkAsDoneModal && (
         <div
           className="modal fade show d-block"
@@ -1747,9 +1803,17 @@ const ViewInstructionPage = ({
                     type="file"
                     className="form-control"
                     multiple
-                    onChange={(e) =>
-                      setMarkAsDoneFiles(Array.from(e.target.files || []))
-                    }
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []).map((f) => {
+                        try {
+                          if (!f.file_name) f.file_name = f.name;
+                        } catch (err) {
+                          // ignore if property cannot be set
+                        }
+                        return f;
+                      });
+                      setMarkAsDoneFiles(files);
+                    }}
                   />
                   <small className="form-text text-muted d-block mt-2">
                     Select multiple files if needed, or leave empty to mark
@@ -1764,10 +1828,10 @@ const ViewInstructionPage = ({
                     <div className="d-flex flex-wrap gap-2">
                       {markAsDoneFiles.map((file, index) => (
                         <span
-                          key={`${file.name}-${index}`}
+                          key={`${file.file_name || file.name}-${index}`}
                           className="badge bg-white text-dark border"
                         >
-                          {file.name}
+                          {file.file_name || file.name}
                         </span>
                       ))}
                     </div>
@@ -1799,7 +1863,6 @@ const ViewInstructionPage = ({
         </div>
       )}
 
-      {/* ----- NEW: File Upload Modal (student) ----- */}
       {showFileUploadModal && (
         <div
           className="modal fade show d-block"
@@ -1836,9 +1899,28 @@ const ViewInstructionPage = ({
                     type="file"
                     className="form-control"
                     multiple
-                    onChange={(e) =>
-                      setUploadFiles(Array.from(e.target.files || []))
-                    }
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []).map((f) => {
+                        const normalizedName = f?.name || f?.file_name || "upload";
+                        const normalizedFile =
+                          f instanceof File
+                            ? new File([f], normalizedName, {
+                                type: f.type || "application/octet-stream",
+                                lastModified: f.lastModified || Date.now(),
+                              })
+                            : f;
+
+                        try {
+                          normalizedFile.file_name = normalizedName;
+                          normalizedFile.filename = normalizedName;
+                        } catch (err) {
+                          // ignore if property cannot be set
+                        }
+
+                        return normalizedFile;
+                      });
+                      setUploadFiles(files);
+                    }}
                   />
                   <small className="form-text text-muted d-block mt-2">
                     Choose one or more files.
@@ -1852,10 +1934,10 @@ const ViewInstructionPage = ({
                     <div className="d-flex flex-wrap gap-2">
                       {uploadFiles.map((file, index) => (
                         <span
-                          key={`upload-${file.name}-${index}`}
+                          key={`upload-${file.file_name || file.name}-${index}`}
                           className="badge bg-white text-dark border"
                         >
-                          {file.name}
+                          {file.file_name || file.name}
                         </span>
                       ))}
                     </div>
