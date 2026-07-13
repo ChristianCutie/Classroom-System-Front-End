@@ -98,11 +98,23 @@ const SubmissionFilePreview = memo(
     const [isPreparingPreview, setIsPreparingPreview] = useState(false);
     const previewMode = getPreviewMode(file);
     const previewUrl = getPreviewUrl(file);
+    const previewIdentity = `${file?.id ?? ""}-${file?.name ?? ""}-${file?.url ?? ""}-${file?.file_url ?? ""}-${file?.file_path ?? ""}-${file?.type ?? ""}`;
 
     // DOCX states
     const [docxContent, setDocxContent] = useState(null);
     const [docxError, setDocxError] = useState("");
     const docxContainerRef = useRef(null);
+
+    useEffect(() => {
+      setViewerError("");
+      setDocViewerDocs([]);
+      setIsPreparingPreview(false);
+      setDocxContent(null);
+      setDocxError("");
+      if (docxContainerRef.current) {
+        docxContainerRef.current.innerHTML = "";
+      }
+    }, [previewIdentity]);
 
     // Clean up DOCX when previewMode is not "docx"
     useEffect(() => {
@@ -1307,6 +1319,7 @@ const ViewInstructionPage = ({
                                             </span>
                                           </div>
                                           <SubmissionFilePreview
+                                            key={selectedAttachment?.id || selectedAttachment?.name || selectedAttachment?.url || selectedAttachment?.file_path || selectedAttachment?.file_url || "attachment"}
                                             file={selectedAttachment}
                                           />
                                         </div>
