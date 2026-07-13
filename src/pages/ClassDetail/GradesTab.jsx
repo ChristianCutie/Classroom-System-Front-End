@@ -15,6 +15,24 @@ const GradesTab = ({ cls, user, onUpdateGrade }) => {
       .trim();
     return fullName || person.fullName || person.name || "User";
   };
+
+  const normalizeTopicValue = (value) => {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed || '';
+    }
+
+    if (!value || typeof value !== 'object') return '';
+
+    const derivedName = value.topic_name || value.name || value.topicName || value.label || value.title || value.topic;
+    if (typeof derivedName === 'string') {
+      const trimmed = derivedName.trim();
+      return trimmed || '';
+    }
+
+    return '';
+  };
+
   const initialGrades = cls.grades || [];
 
   const [gradeMatrix, setGradeMatrix] = useState(() => {
@@ -121,7 +139,7 @@ const GradesTab = ({ cls, user, onUpdateGrade }) => {
                   return (
                     <tr key={asg.id}>
                       <td className="ps-4 fw-medium text-dark py-3">{asg.title}</td>
-                      <td className="text-muted small">{asg.topic}</td>
+                      <td className="text-muted small">{normalizeTopicValue(asg.topic)}</td>
                       <td>
                         <span className={`badge ${hasGrade ? 'bg-success bg-opacity-10 text-success border border-success' : 'bg-warning bg-opacity-10 text-warning border border-warning'}`}>
                           {hasGrade ? 'Graded & Returned' : 'Assigned / Pending'}
