@@ -17,6 +17,7 @@ const ClassworkTab = ({
   onCreateTopic,
   onViewInstruction,
   classwork,
+  onSetActiveTab, 
 }) => {
   const [selectedTopic, setSelectedTopic] = useState("All topics");
   const [expandedId, setExpandedId] = useState(null);
@@ -862,6 +863,9 @@ const ClassworkTab = ({
 
       const created = await onCreateCoursework(cls.id, payload);
       if (created !== false) {
+
+         if (onSetActiveTab) onSetActiveTab('classwork');
+
         setCwTitle("");
         setCwInstructions("");
         setCwTopic("General");
@@ -1706,6 +1710,7 @@ const ClassworkTab = ({
                   Create {createType.replace("-", " ")}
                 </h5>
                 <button
+                  type="button"
                   className="btn-close"
                   onClick={() => {
                     setShowCreateModal(false);

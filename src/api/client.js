@@ -128,6 +128,7 @@ export const classAPI = {
     apiClient.get(`/assignments/${courseworkId}/details`),
   gradeSubmission: (submissionId, payload) =>
     apiClient.post(`/submissions/${submissionId}/grade`, payload),
+  getClassGrades: (classId) => apiClient.get(`/classes/${classId}/grades`),
   updateClassBanner: (classId, bannerCss, themeColor) =>
     apiClient.patch(`/classes/${classId}`, {
       banner: bannerCss,

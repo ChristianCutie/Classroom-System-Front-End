@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Avatar from '../../components/Common/Avatar.jsx';
 import { useToast } from '@/context/ToastContext.jsx';
+import { classAPI } from '@/api/client';
 
 const GradesTab = ({ cls, user, onUpdateGrade }) => {
   const students = cls.students || [];
@@ -47,6 +48,32 @@ const GradesTab = ({ cls, user, onUpdateGrade }) => {
     });
     return matrix;
   });
+
+  const [gradesSummary, setGradesSummary] = useState(null);
+  const [loadingGrades, setLoadingGrades] = useState(false);
+  const [gradesError, setGradesError] = useState(null);
+  const [showSummary, setShowSummary] = useState(false);
+
+  useEffect(() => {
+    if (!cls || !cls.id) return;
+    let mounted = true;
+    const fetchGrades = async () => {
+      setLoadingGrades(true);
+      try {
+        const res = await classAPI.getClassGrades(cls.id);
+        if (!mounted) return;
+        setGradesSummary(res.data?.data || null);
+      } catch (err) {
+        if (!mounted) return;
+        setGradesError(err);
+        addToast('Failed to load grades summary', 'danger');
+      } finally {
+        if (mounted) setLoadingGrades(false);
+      }
+    };
+    fetchGrades();
+    return () => { mounted = false; };
+  }, [cls?.id]);
 
   const handleGradeChange = (studentId, cwId, newScore) => {
     const numeric = newScore === '' ? null : Number(newScore);
@@ -159,6 +186,52 @@ const GradesTab = ({ cls, user, onUpdateGrade }) => {
     );
   }
 
+  if (user.role === 'teacher' && showSummary) {
+    return (
+      <div className="bg-white border rounded-3 shadow-sm p-3">
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <h5 className="mb-0">{gradesSummary?.class_name || cls.class_name || 'Grades'}</h5>
+            <div className="text-muted small">Grades summary</div>
+          </div>
+          <div className="d-flex gap-2">
+            <button className="btn btn-sm btn-outline-secondary" onClick={() => setShowSummary(false)}>Back to Gradebook</button>
+          </div>
+        </div>
+        {loadingGrades ? (
+          <div className="text-center py-4">Loading...</div>
+        ) : (gradesSummary?.grades && gradesSummary.grades.length > 0) ? (
+          <div className="table-responsive">
+            <table className="table table-striped mb-0">
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Email</th>
+                  <th>Assignments</th>
+                  <th>Quizzes</th>
+                  <th>Average</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gradesSummary.grades.map((g, idx) => (
+                  <tr key={idx}>
+                    <td>{g.student_name}</td>
+                    <td>{g.email}</td>
+                    <td>{g.assignments}</td>
+                    <td>{g.quizzes}</td>
+                    <td>{g.average}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-center py-3 text-muted">No grades available.</div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white border rounded-3 shadow-sm overflow-hidden">
       
@@ -168,12 +241,20 @@ const GradesTab = ({ cls, user, onUpdateGrade }) => {
           <i className="bi bi-info-circle text-primary"></i>
           Type numbers directly into the cells below to grade or update scores.
         </span>
-        <button
-          className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
-          onClick={() => addToast("Grades exported to Google Sheets!", "success")}
-        >
-          <i className="bi bi-file-earmark-spreadsheet"></i> Export to Sheets
-        </button>
+        <div className="d-flex gap-2">
+          <button
+            className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1"
+            onClick={() => setShowSummary(prev => !prev)}
+          >
+            <i className="bi bi-card-list"></i> {showSummary ? 'Summary' : 'Summary'}
+          </button>
+          <button
+            className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+            onClick={() => addToast("Grades exported to Google Sheets!", "success")}
+          >
+            <i className="bi bi-file-earmark-spreadsheet"></i> Export to Sheets
+          </button>
+        </div>
       </div>
 
       <div className="table-responsive" style={{ maxHeight: '70vh', overflow: 'auto' }}>

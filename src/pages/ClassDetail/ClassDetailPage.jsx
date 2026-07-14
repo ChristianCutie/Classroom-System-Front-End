@@ -134,6 +134,24 @@ const ClassDetailPage = ({
     // If there is a more specific API handler for returning work, call it via props
     // For now, we provide a feedback toast and leave room for server integration.
   };
+  //
+  //
+  // =========== Use Effects for Data Fetching and State Persistence ===========
+  //
+  //
+  //
+
+  // Persist active tab in sessionStorage
+useEffect(() => {
+  const savedTab = sessionStorage.getItem('classDetailActiveTab');
+  if (savedTab && ['stream', 'classwork', 'people', 'grades'].includes(savedTab)) {
+    setActiveTab(savedTab);
+  }
+}, []);
+
+useEffect(() => {
+  sessionStorage.setItem('classDetailActiveTab', activeTab);
+}, [activeTab]);
 
   useEffect(() => {
     if (!selectedCoursework?.id) return;
@@ -354,6 +372,7 @@ const ClassDetailPage = ({
                 onCreateTopic={onCreateTopic}
                 onViewInstruction={handleViewInstruction}
                 classwork={mergedClasswork}
+                onSetActiveTab={setActiveTab}
               />
             )}
             {activeTab === 'people' && (
