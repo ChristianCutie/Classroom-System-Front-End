@@ -1,8 +1,8 @@
-// ClassworkTab.jsx – fixed attachment preview (no gview, no HEAD checks)
+// ClassworkTab.jsx – with assignment fetch on "View instructions" / "View submissions"
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import DocViewer, { DocViewerRenderers } from "@iamjariwala/react-doc-viewer";
 import "@iamjariwala/react-doc-viewer/dist/index.css";
-import { renderAsync } from "docx-preview"; // <-- for local DOCX rendering
+import { renderAsync } from "docx-preview";
 import { useToast } from "@/context/ToastContext.jsx";
 import apiClient, {
   assignmentAPI,
@@ -17,7 +17,7 @@ const ClassworkTab = ({
   onCreateTopic,
   onViewInstruction,
   classwork,
-  onSetActiveTab, 
+  onSetActiveTab,
 }) => {
   const [selectedTopic, setSelectedTopic] = useState("All topics");
   const [expandedId, setExpandedId] = useState(null);
@@ -35,11 +35,8 @@ const ClassworkTab = ({
   const [showTopicActionModal, setShowTopicActionModal] = useState(false);
   const [isUpdatingTopic, setIsUpdatingTopic] = useState(false);
   const [isDeletingTopic, setIsDeletingTopic] = useState(false);
-
   const [topicMode, setTopicMode] = useState("existing");
   const [isCreatingNewTopic, setIsCreatingNewTopic] = useState(false);
-
-  // Create coursework form state
   const [cwTitle, setCwTitle] = useState("");
   const [cwInstructions, setCwInstructions] = useState("");
   const [cwTopic, setCwTopic] = useState("General");
@@ -61,7 +58,7 @@ const ClassworkTab = ({
   const [cwAssignToAll, setCwAssignToAll] = useState(true);
   const [cwSelectedStudents, setCwSelectedStudents] = useState([]);
 
-  // ---------- Submissions per coursework ----------
+  // Submissions per coursework
   const [submissionsMap, setSubmissionsMap] = useState({});
   const [loadingSubmissionsMap, setLoadingSubmissionsMap] = useState({});
   const [courseworkDetailsMap, setCourseworkDetailsMap] = useState({});
@@ -70,14 +67,14 @@ const ClassworkTab = ({
   const [viewerError, setViewerError] = useState("");
   const [docViewerDocs, setDocViewerDocs] = useState([]);
   const [previewImageUrl, setPreviewImageUrl] = useState(null);
-
-  // DOCX preview states (local render)
   const [docxContent, setDocxContent] = useState(null);
   const [docxError, setDocxError] = useState("");
   const docxContainerRef = useRef(null);
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
 
-  // Reset function
+  // Loading state for fetching a single assignment
+  const [loadingAssignmentId, setLoadingAssignmentId] = useState(null);
+
   const resetCreateForm = () => {
     setCwTitle("");
     setCwInstructions("");
@@ -90,6 +87,23 @@ const ClassworkTab = ({
     setStudentSearchTerm("");
     setShowStudentDropdown(false);
     setIsCreatingNewTopic(false);
+    setCwAssignToAll(true);
+  };
+
+  const normalizeAttachments = (attachments) => {
+    if (!Array.isArray(attachments)) return [];
+    return attachments.map((att) => ({
+      id: att.id,
+      name: att.file_name || att.name || "Unnamed",
+      url: att.file_path ? resolveAttachmentUrl(att.file_path) : att.url || "#",
+      type:
+        att.file_type ||
+        att.type ||
+        (att.file_path ? att.file_path.split(".").pop() : "file"),
+      file_path: att.file_path,
+      file_name: att.file_name,
+      file_type: att.file_type,
+    }));
   };
 
   const normalizeTopicValue = (value) => {
@@ -292,10 +306,13 @@ const ClassworkTab = ({
     const loadTopics = async () => {
       if (!cls?.id) return;
       try {
-        const res = await apiClient.get(`/dropdown/topics?class_id=${cls.id}`);
-        const topicsFromApi = (res.data?.data || []).map((topic) => ({
-          id: topic.id ?? topic.topic_id ?? null,
-          name: topic.topic_name || topic.name || topic.topicName || "",
+        // Use the /classes/{id} endpoint to get the full class
+        const res = await apiClient.get(`/classes/${cls.id}`);
+        const classData = res.data?.data || {};
+        // Extract topics from the class data
+        const topicsFromApi = (classData.topics || []).map((topic) => ({
+          id: topic.id,
+          name: topic.topic_name || topic.name || "",
         }));
         if (mounted) {
           setAvailableTopics(topicsFromApi.filter((topic) => topic.name));
@@ -490,7 +507,7 @@ const ClassworkTab = ({
     if (docxContainerRef.current) docxContainerRef.current.innerHTML = "";
   };
 
-  // --- NEW: DOCX fetch with credentials: 'omit' ---
+  // --- DOCX fetch with credentials: 'omit' ---
   useEffect(() => {
     if (!previewAttachment || previewMode !== "docx") {
       setDocxContent(null);
@@ -509,7 +526,8 @@ const ClassworkTab = ({
       setIsPreparingPreview(true);
       try {
         const response = await fetch(url, { credentials: "omit" });
-        if (!response.ok) throw new Error(`Failed to fetch DOCX (${response.status})`);
+        if (!response.ok)
+          throw new Error(`Failed to fetch DOCX (${response.status})`);
         const blob = await response.blob();
         if (!cancelled) setDocxContent(blob);
       } catch (err) {
@@ -519,7 +537,9 @@ const ClassworkTab = ({
       }
     };
     loadDocx();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [previewAttachment, previewMode]);
 
   // --- Render DOCX with docx-preview ---
@@ -529,7 +549,9 @@ const ClassworkTab = ({
     renderAsync(docxContent, docxContainerRef.current).catch((err) => {
       if (!cancelled) setDocxError("Failed to render DOCX preview");
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [docxContent]);
 
   // --- Prepare PDF/document preview (simplified, no HEAD checks) ---
@@ -610,45 +632,42 @@ const ClassworkTab = ({
 
     setIsCreatingTopic(true);
     try {
-      const created = await onCreateTopic?.(trimmedTopic);
-      if (created !== false) {
-        const normalizedTopic =
-          created && typeof created === "object"
-            ? {
-                id: created.id ?? created.topic_id ?? null,
-                name:
-                  created.name ||
-                  created.topic_name ||
-                  created.topicName ||
-                  trimmedTopic,
-              }
-            : { id: null, name: trimmedTopic };
+      // 1. Create the topic with class_id
+      const res = await apiClient.post("/create/topics", {
+        topic_name: trimmedTopic,
+        class_id: cls.id,
+      });
+      const created = res.data?.data || {};
 
-        setCustomTopics((prev) =>
-          prev.includes(normalizedTopic.name)
-            ? prev
-            : [...prev, normalizedTopic.name],
-        );
-        if (normalizedTopic.id) {
-          setAvailableTopics((prev) => {
-            const exists = prev.some((item) => item.id === normalizedTopic.id);
-            return exists
-              ? prev.map((item) =>
-                  item.id === normalizedTopic.id
-                    ? { ...item, name: normalizedTopic.name }
-                    : item,
-                )
-              : [...prev, normalizedTopic];
-          });
-        }
-        setSelectedTopic(normalizedTopic.name);
-        setCwTopic(normalizedTopic.name);
-        setCwTopicId(normalizedTopic.id ?? null);
-        setTopicName("");
-        setShowTopicModal(false);
-      }
+      // 2. Fetch the updated class to get the full topics list
+      const classRes = await apiClient.get(`/classes/${cls.id}`);
+      const classData = classRes.data?.data || {};
+      const topicsFromClass = (classData.topics || []).map((topic) => ({
+        id: topic.id,
+        name: topic.topic_name || topic.name,
+      }));
+
+      // 3. Update availableTopics with the fresh list
+      setAvailableTopics(topicsFromClass.filter((topic) => topic.name));
+
+      // 4. Also update customTopics if needed (optional)
+      // Since we have the full list, we might not need customTopics,
+      // but we can keep it as is.
+
+      const normalizedTopic = {
+        id: created.id ?? created.topic_id ?? null,
+        name: created.topic_name || created.name || trimmedTopic,
+      };
+
+      setSelectedTopic(normalizedTopic.name);
+      setCwTopic(normalizedTopic.name);
+      setCwTopicId(normalizedTopic.id ?? null);
+      setTopicName("");
+      setShowTopicModal(false);
+      addToast("Topic created and class updated.", "success");
     } catch (error) {
       console.error("Failed to create topic:", error);
+      addToast("Could not create the topic. Please try again.", "error");
     } finally {
       setIsCreatingTopic(false);
     }
@@ -732,28 +751,26 @@ const ClassworkTab = ({
 
     try {
       setIsCreatingTopic(true);
+      // 1. Create the topic with class_id
       const res = await apiClient.post("/create/topics", {
         topic_name: trimmedTopic,
+        class_id: cls.id,
       });
       const createdTopic = res.data?.data || {};
+
+      // 2. Fetch the updated class
+      const classRes = await apiClient.get(`/classes/${cls.id}`);
+      const classData = classRes.data?.data || {};
+      const topicsFromClass = (classData.topics || []).map((topic) => ({
+        id: topic.id,
+        name: topic.topic_name || topic.name,
+      }));
+      setAvailableTopics(topicsFromClass.filter((topic) => topic.name));
+
       const normalizedTopic = {
         id: createdTopic.id ?? createdTopic.topic_id ?? null,
         name: createdTopic.topic_name || createdTopic.name || trimmedTopic,
       };
-
-      setAvailableTopics((prev) => {
-        const exists = prev.some((item) => item.id === normalizedTopic.id);
-        return exists
-          ? prev.map((item) =>
-              item.id === normalizedTopic.id ? normalizedTopic : item,
-            )
-          : [...prev, normalizedTopic];
-      });
-      setCustomTopics((prev) =>
-        prev.includes(normalizedTopic.name)
-          ? prev
-          : [...prev, normalizedTopic.name],
-      );
 
       return normalizedTopic;
     } catch (error) {
@@ -863,8 +880,7 @@ const ClassworkTab = ({
 
       const created = await onCreateCoursework(cls.id, payload);
       if (created !== false) {
-
-         if (onSetActiveTab) onSetActiveTab('classwork');
+        if (onSetActiveTab) onSetActiveTab("classwork");
 
         setCwTitle("");
         setCwInstructions("");
@@ -941,6 +957,39 @@ const ClassworkTab = ({
         return "bi-question-circle-fill";
       default:
         return "bi-file-earmark-text-fill";
+    }
+  };
+
+  // Fetch and view assignment
+  const fetchAndViewAssignment = async (cw, options = {}) => {
+    if (!cw?.id) return;
+    setLoadingAssignmentId(cw.id);
+    try {
+      const res = await assignmentAPI.getAssignment(cw.id);
+      const apiData = res.data?.data || res.data || {};
+
+      // Merge API data with existing cw, mapping fields to frontend expectations
+      const enriched = {
+        ...cw,
+        ...apiData,
+        points: apiData.max_points ?? apiData.points ?? cw.points,
+        dueDate: apiData.due_date ?? apiData.dueDate ?? cw.dueDate,
+        attachments: normalizeAttachments(
+          apiData.attachments ?? cw.attachments,
+        ),
+        instructions: apiData.instructions ?? cw.instructions,
+        topic: apiData.topic ?? cw.topic,
+        topic_id: apiData.topic_id ?? cw.topic_id,
+      };
+
+      onViewInstruction?.(enriched, options);
+    } catch (err) {
+      console.error("Failed to fetch assignment details:", err);
+      addToast("Could not load assignment details. Please try again.", "error");
+      // Fallback: pass the original cw
+      onViewInstruction?.(cw, options);
+    } finally {
+      setLoadingAssignmentId(null);
     }
   };
 
@@ -1113,6 +1162,7 @@ const ClassworkTab = ({
                     const assigned =
                       cw.stats?.assigned ?? cls.students?.length ?? 0;
                     const isLoading = loadingSubmissionsMap[cw.id];
+                    const isFetchingAssignment = loadingAssignmentId === cw.id;
 
                     return (
                       <div
@@ -1326,12 +1376,24 @@ const ClassworkTab = ({
                                       className="btn btn-sm btn-outline-primary w-100 fw-medium"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        onViewInstruction?.(cw, {
+                                        fetchAndViewAssignment(cw, {
                                           openTab: "studentWork",
                                         });
                                       }}
+                                      disabled={isFetchingAssignment}
                                     >
-                                      View submissions
+                                      {isFetchingAssignment ? (
+                                        <>
+                                          <span
+                                            className="spinner-border spinner-border-sm me-2"
+                                            role="status"
+                                            aria-hidden="true"
+                                          ></span>
+                                          Loading...
+                                        </>
+                                      ) : (
+                                        "View submissions"
+                                      )}
                                     </button>
                                   </div>
                                 ) : (
@@ -1381,10 +1443,22 @@ const ClassworkTab = ({
                                 className="btn btn-link btn-sm p-0 text-decoration-none fw-medium text-primary"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onViewInstruction?.(cw);
+                                  fetchAndViewAssignment(cw);
                                 }}
+                                disabled={isFetchingAssignment}
                               >
-                                View instructions
+                                {isFetchingAssignment ? (
+                                  <>
+                                    <span
+                                      className="spinner-border spinner-border-sm me-1"
+                                      role="status"
+                                      aria-hidden="true"
+                                    ></span>
+                                    Loading...
+                                  </>
+                                ) : (
+                                  "View instructions"
+                                )}
                               </button>
                             </div>
                           </div>
@@ -1409,7 +1483,7 @@ const ClassworkTab = ({
         </div>
       </div>
 
-      {/* ===== ATTACHMENT PREVIEW MODAL (fixed) ===== */}
+      {/* ===== ATTACHMENT PREVIEW MODAL ===== */}
       {previewAttachment && (
         <div
           className="modal fade show d-block"
@@ -1448,7 +1522,10 @@ const ClassworkTab = ({
               <div className="modal-body p-0" style={{ minHeight: "70vh" }}>
                 {/* IMAGE preview */}
                 {previewMode === "image" && (
-                  <div className="position-relative w-100" style={{ minHeight: "70vh" }}>
+                  <div
+                    className="position-relative w-100"
+                    style={{ minHeight: "70vh" }}
+                  >
                     {isPreparingPreview ? (
                       <div className="d-flex justify-content-center align-items-center h-100 text-muted">
                         <div className="text-center">
@@ -1461,12 +1538,18 @@ const ClassworkTab = ({
                         src={previewImageUrl}
                         alt={previewAttachment?.name || "Attachment preview"}
                         className="w-100"
-                        style={{ maxHeight: "75vh", objectFit: "contain", padding: "1rem" }}
+                        style={{
+                          maxHeight: "75vh",
+                          objectFit: "contain",
+                          padding: "1rem",
+                        }}
                       />
                     ) : viewerError ? (
                       <div className="d-flex flex-column justify-content-center align-items-center text-center p-5 h-100">
                         <i className="bi bi-exclamation-triangle-fill fs-1 text-warning mb-3"></i>
-                        <h6 className="fw-semibold text-dark">Preview unavailable</h6>
+                        <h6 className="fw-semibold text-dark">
+                          Preview unavailable
+                        </h6>
                         <p className="text-muted small mb-3">{viewerError}</p>
                         <a
                           href={previewAttachment?.url}
@@ -1506,7 +1589,10 @@ const ClassworkTab = ({
                           {isPreparingPreview ? (
                             <div className="d-flex justify-content-center align-items-center h-100 text-muted">
                               <div className="text-center">
-                                <div className="spinner-border mb-2" role="status" />
+                                <div
+                                  className="spinner-border mb-2"
+                                  role="status"
+                                />
                                 <div>Preparing preview...</div>
                               </div>
                             </div>
@@ -1528,32 +1614,41 @@ const ClassworkTab = ({
                     </div>
                   )}
 
-                {/* DOCX preview with docx-preview (no gview) */}
-                {previewMode === "docx" && getAttachmentPreviewUrl(previewAttachment) && (
-                  <div className="p-3 bg-white" style={{ minHeight: "70vh" }}>
-                    {docxError ? (
-                      <div className="d-flex flex-column justify-content-center align-items-center text-center p-5 h-100">
-                        <i className="bi bi-exclamation-triangle-fill fs-1 text-warning mb-3"></i>
-                        <h6 className="fw-semibold text-dark">Preview unavailable</h6>
-                        <p className="text-muted small mb-3">{docxError}</p>
-                        <a
-                          href={getAttachmentPreviewUrl(previewAttachment)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="btn btn-outline-primary btn-sm"
+                {/* DOCX preview with docx-preview */}
+                {previewMode === "docx" &&
+                  getAttachmentPreviewUrl(previewAttachment) && (
+                    <div className="p-3 bg-white" style={{ minHeight: "70vh" }}>
+                      {docxError ? (
+                        <div className="d-flex flex-column justify-content-center align-items-center text-center p-5 h-100">
+                          <i className="bi bi-exclamation-triangle-fill fs-1 text-warning mb-3"></i>
+                          <h6 className="fw-semibold text-dark">
+                            Preview unavailable
+                          </h6>
+                          <p className="text-muted small mb-3">{docxError}</p>
+                          <a
+                            href={getAttachmentPreviewUrl(previewAttachment)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn btn-outline-primary btn-sm"
+                          >
+                            Open file directly
+                          </a>
+                        </div>
+                      ) : docxContent ? (
+                        <div
+                          ref={docxContainerRef}
+                          style={{ height: "65vh", overflow: "auto" }}
+                        />
+                      ) : (
+                        <div
+                          className="d-flex justify-content-center align-items-center h-100"
+                          style={{ minHeight: "65vh" }}
                         >
-                          Open file directly
-                        </a>
-                      </div>
-                    ) : docxContent ? (
-                      <div ref={docxContainerRef} style={{ height: "65vh", overflow: "auto" }} />
-                    ) : (
-                      <div className="d-flex justify-content-center align-items-center h-100" style={{ minHeight: "65vh" }}>
-                        <div className="spinner-border" role="status" />
-                      </div>
-                    )}
-                  </div>
-                )}
+                          <div className="spinner-border" role="status" />
+                        </div>
+                      )}
+                    </div>
+                  )}
               </div>
             </div>
           </div>
@@ -1890,234 +1985,266 @@ const ClassworkTab = ({
                   {/* ===== STUDENT ASSIGNMENT (always visible) ===== */}
                   {createType === "assignment" && (
                     <div className="mb-3 border-top pt-3">
-                      <div className="d-flex justify-content-between align-items-center mb-2">
-                        <label className="form-label small fw-bold text-muted mb-0">
-                          Assign to students
-                        </label>
-                        <div>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-link text-decoration-none p-0 me-2"
-                            onClick={() => {
-                              const allIds = (cls.students || []).map(
-                                (s) => s.id,
-                              );
+                      {/* Assign to all checkbox */}
+                      <div className="form-check mb-2">
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          id="assignToAll"
+                          checked={cwAssignToAll}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setCwAssignToAll(checked);
+                            if (checked) {
+                              // Select all students
+                              const allIds = (cls.students || []).map((s) => s.id);
                               setCwSelectedStudents(allIds);
                               setStudentSearchTerm("");
                               setShowStudentDropdown(false);
-                            }}
-                          >
-                            Select all
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-link text-decoration-none p-0 text-danger"
-                            onClick={() => {
+                            } else {
+                              // Clear selected students
                               setCwSelectedStudents([]);
-                              setStudentSearchTerm("");
-                              setShowStudentDropdown(false);
-                            }}
-                          >
-                            Clear all
-                          </button>
-                        </div>
-                      </div>
-
-                      <div ref={dropdownRef}>
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Type student name or email to add..."
-                          value={studentSearchTerm}
-                          onChange={(e) => {
-                            setStudentSearchTerm(e.target.value);
-                            setShowStudentDropdown(true);
+                            }
                           }}
-                          onFocus={() => setShowStudentDropdown(true)}
-                          onBlur={() => {
-                            setTimeout(
-                              () => setShowStudentDropdown(false),
-                              150,
-                            );
-                          }}
-                          autoComplete="off"
                         />
-
-                        {showStudentDropdown && filteredStudents.length > 0 && (
-                          <ul
-                            className="list-group mt-1 shadow-sm"
-                            style={{
-                              maxHeight: "200px",
-                              overflowY: "auto",
-                              position: "relative",
-                              zIndex: 1050,
-                            }}
-                          >
-                            {filteredStudents.map((student) => {
-                              const isSelected = cwSelectedStudents.includes(
-                                student.id,
-                              );
-                              const displayName =
-                                student.first_name + " " + student.last_name ||
-                                student.full_name ||
-                                student.username ||
-                                "Unnamed";
-                              const displayEmail = student.email || "";
-                              const avatarUrl = getStudentAvatar(student);
-                              const initials = displayName
-                                .split(" ")
-                                .map((word) => word[0])
-                                .join("")
-                                .toUpperCase()
-                                .slice(0, 2);
-                              const bgColor = stringToColor(displayName);
-
-                              return (
-                                <li
-                                  key={student.id}
-                                  className={`list-group-item list-group-item-action d-flex align-items-center gap-3 ${
-                                    isSelected ? "active" : ""
-                                  }`}
-                                  style={{ cursor: "pointer" }}
-                                  onClick={() => {
-                                    if (isSelected) {
-                                      removeStudent(student.id);
-                                    } else {
-                                      addStudent(student.id);
-                                    }
-                                    setStudentSearchTerm("");
-                                    setShowStudentDropdown(false);
-                                  }}
-                                >
-                                  {avatarUrl ? (
-                                    <img
-                                      src={avatarUrl}
-                                      alt={displayName}
-                                      className="rounded-circle"
-                                      style={{
-                                        width: "32px",
-                                        height: "32px",
-                                        objectFit: "cover",
-                                      }}
-                                    />
-                                  ) : (
-                                    <span
-                                      className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
-                                      style={{
-                                        width: "32px",
-                                        height: "32px",
-                                        backgroundColor: bgColor,
-                                        fontSize: "0.75rem",
-                                        flexShrink: 0,
-                                      }}
-                                    >
-                                      {initials}
-                                    </span>
-                                  )}
-                                  <div className="flex-grow-1">
-                                    <div className="fw-semibold">
-                                      {displayName}
-                                    </div>
-                                    <small
-                                      className={
-                                        isSelected ? "text-light" : "text-muted"
-                                      }
-                                    >
-                                      {displayEmail}
-                                    </small>
-                                  </div>
-                                  {isSelected && (
-                                    <i className="bi bi-check-circle-fill text-light"></i>
-                                  )}
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        )}
-
-                        {cwSelectedStudents.length > 0 && (
-                          <div className="d-flex flex-wrap gap-2 mt-2">
-                            {cwSelectedStudents.map((studentId) => {
-                              const student = cls.students?.find(
-                                (s) => s.id === studentId,
-                              );
-                              if (!student) return null;
-                              const displayName =
-                                student.name ||
-                                student.first_name + " " + student.last_name ||
-                                student.username ||
-                                "Student";
-                              const displayEmail = student.email || "";
-                              const avatarUrl = getStudentAvatar(student);
-                              const initials = displayName
-                                .split(" ")
-                                .map((word) => word[0])
-                                .join("")
-                                .toUpperCase()
-                                .slice(0, 2);
-                              const bgColor = stringToColor(displayName);
-
-                              return (
-                                <span
-                                  key={studentId}
-                                  className="badge bg-light text-dark d-inline-flex align-items-center gap-1 px-2 py-1 rounded-pill border"
-                                  style={{ fontSize: "0.9rem" }}
-                                >
-                                  {avatarUrl ? (
-                                    <img
-                                      src={avatarUrl}
-                                      alt={displayName}
-                                      className="rounded-circle"
-                                      style={{
-                                        width: "20px",
-                                        height: "20px",
-                                        objectFit: "cover",
-                                      }}
-                                    />
-                                  ) : (
-                                    <span
-                                      className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
-                                      style={{
-                                        width: "20px",
-                                        height: "20px",
-                                        backgroundColor: bgColor,
-                                        fontSize: "0.6rem",
-                                        flexShrink: 0,
-                                      }}
-                                    >
-                                      {initials}
-                                    </span>
-                                  )}
-                                  <span>{displayName}</span>
-                                  {displayEmail && (
-                                    <span
-                                      className="text-muted small"
-                                      style={{ fontSize: "0.7rem" }}
-                                    >
-                                      {displayEmail}
-                                    </span>
-                                  )}
-                                  <button
-                                    type="button"
-                                    className="btn-close btn-close-sm ms-1"
-                                    aria-label="Remove"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      removeStudent(studentId);
-                                    }}
-                                  ></button>
-                                </span>
-                              );
-                            })}
-                          </div>
-                        )}
-                        {cwSelectedStudents.length === 0 && (
-                          <div className="text-muted small mt-1">
-                            No students selected – assignment will not be
-                            visible to anyone.
-                          </div>
-                        )}
+                        <label className="form-check-label" htmlFor="assignToAll">
+                          Assign to all students
+                        </label>
                       </div>
+
+                      {/* Student selection UI – only shown when NOT assigning to all */}
+                      {!cwAssignToAll && (
+                        <>
+                          <div className="d-flex justify-content-between align-items-center mb-2">
+                            <label className="form-label small fw-bold text-muted mb-0">
+                              Select specific students
+                            </label>
+                            <div>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-link text-decoration-none p-0 me-2"
+                                onClick={() => {
+                                  const allIds = (cls.students || []).map(
+                                    (s) => s.id,
+                                  );
+                                  setCwSelectedStudents(allIds);
+                                  setStudentSearchTerm("");
+                                  setShowStudentDropdown(false);
+                                }}
+                              >
+                                Select all
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-link text-decoration-none p-0 text-danger"
+                                onClick={() => {
+                                  setCwSelectedStudents([]);
+                                  setStudentSearchTerm("");
+                                  setShowStudentDropdown(false);
+                                }}
+                              >
+                                Clear all
+                              </button>
+                            </div>
+                          </div>
+
+                          <div ref={dropdownRef}>
+                            <input
+                              type="text"
+                              className="form-control"
+                              placeholder="Type student name or email to add..."
+                              value={studentSearchTerm}
+                              onChange={(e) => {
+                                setStudentSearchTerm(e.target.value);
+                                setShowStudentDropdown(true);
+                              }}
+                              onFocus={() => setShowStudentDropdown(true)}
+                              onBlur={() => {
+                                setTimeout(
+                                  () => setShowStudentDropdown(false),
+                                  150,
+                                );
+                              }}
+                              autoComplete="off"
+                            />
+
+                            {showStudentDropdown && filteredStudents.length > 0 && (
+                              <ul
+                                className="list-group mt-1 shadow-sm"
+                                style={{
+                                  maxHeight: "200px",
+                                  overflowY: "auto",
+                                  position: "relative",
+                                  zIndex: 1050,
+                                }}
+                              >
+                                {filteredStudents.map((student) => {
+                                  const isSelected = cwSelectedStudents.includes(
+                                    student.id,
+                                  );
+                                  const displayName =
+                                    student.first_name + " " + student.last_name ||
+                                    student.full_name ||
+                                    student.username ||
+                                    "Unnamed";
+                                  const displayEmail = student.email || "";
+                                  const avatarUrl = getStudentAvatar(student);
+                                  const initials = displayName
+                                    .split(" ")
+                                    .map((word) => word[0])
+                                    .join("")
+                                    .toUpperCase()
+                                    .slice(0, 2);
+                                  const bgColor = stringToColor(displayName);
+
+                                  return (
+                                    <li
+                                      key={student.id}
+                                      className={`list-group-item list-group-item-action d-flex align-items-center gap-3 ${
+                                        isSelected ? "active" : ""
+                                      }`}
+                                      style={{ cursor: "pointer" }}
+                                      onClick={() => {
+                                        if (isSelected) {
+                                          removeStudent(student.id);
+                                        } else {
+                                          addStudent(student.id);
+                                        }
+                                        setStudentSearchTerm("");
+                                        setShowStudentDropdown(false);
+                                      }}
+                                    >
+                                      {avatarUrl ? (
+                                        <img
+                                          src={avatarUrl}
+                                          alt={displayName}
+                                          className="rounded-circle"
+                                          style={{
+                                            width: "32px",
+                                            height: "32px",
+                                            objectFit: "cover",
+                                          }}
+                                        />
+                                      ) : (
+                                        <span
+                                          className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
+                                          style={{
+                                            width: "32px",
+                                            height: "32px",
+                                            backgroundColor: bgColor,
+                                            fontSize: "0.75rem",
+                                            flexShrink: 0,
+                                          }}
+                                        >
+                                          {initials}
+                                        </span>
+                                      )}
+                                      <div className="flex-grow-1">
+                                        <div className="fw-semibold">
+                                          {displayName}
+                                        </div>
+                                        <small
+                                          className={
+                                            isSelected ? "text-light" : "text-muted"
+                                          }
+                                        >
+                                          {displayEmail}
+                                        </small>
+                                      </div>
+                                      {isSelected && (
+                                        <i className="bi bi-check-circle-fill text-light"></i>
+                                      )}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+
+                            {cwSelectedStudents.length > 0 && (
+                              <div className="d-flex flex-wrap gap-2 mt-2">
+                                {cwSelectedStudents.map((studentId) => {
+                                  const student = cls.students?.find(
+                                    (s) => s.id === studentId,
+                                  );
+                                  if (!student) return null;
+                                  const displayName =
+                                    student.name ||
+                                    student.first_name + " " + student.last_name ||
+                                    student.username ||
+                                    "Student";
+                                  const displayEmail = student.email || "";
+                                  const avatarUrl = getStudentAvatar(student);
+                                  const initials = displayName
+                                    .split(" ")
+                                    .map((word) => word[0])
+                                    .join("")
+                                    .toUpperCase()
+                                    .slice(0, 2);
+                                  const bgColor = stringToColor(displayName);
+
+                                  return (
+                                    <span
+                                      key={studentId}
+                                      className="badge bg-light text-dark d-inline-flex align-items-center gap-1 px-2 py-1 rounded-pill border"
+                                      style={{ fontSize: "0.9rem" }}
+                                    >
+                                      {avatarUrl ? (
+                                        <img
+                                          src={avatarUrl}
+                                          alt={displayName}
+                                          className="rounded-circle"
+                                          style={{
+                                            width: "20px",
+                                            height: "20px",
+                                            objectFit: "cover",
+                                          }}
+                                        />
+                                      ) : (
+                                        <span
+                                          className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
+                                          style={{
+                                            width: "20px",
+                                            height: "20px",
+                                            backgroundColor: bgColor,
+                                            fontSize: "0.6rem",
+                                            flexShrink: 0,
+                                          }}
+                                        >
+                                          {initials}
+                                        </span>
+                                      )}
+                                      <span>{displayName}</span>
+                                      {displayEmail && (
+                                        <span
+                                          className="text-muted small"
+                                          style={{ fontSize: "0.7rem" }}
+                                        >
+                                          {displayEmail}
+                                        </span>
+                                      )}
+                                      <button
+                                        type="button"
+                                        className="btn-close btn-close-sm ms-1"
+                                        aria-label="Remove"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          removeStudent(studentId);
+                                        }}
+                                      ></button>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            {cwSelectedStudents.length === 0 && (
+                              <div className="text-muted small mt-1">
+                                No students selected – assignment will not be
+                                visible to anyone.
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -2139,8 +2266,7 @@ const ClassworkTab = ({
                     disabled={
                       !cwTitle.trim() ||
                       isSubmitting ||
-                      (createType === "assignment" &&
-                        cwSelectedStudents.length === 0)
+                      (createType === "assignment" && !cwAssignToAll && cwSelectedStudents.length === 0)
                     }
                   >
                     {isSubmitting
