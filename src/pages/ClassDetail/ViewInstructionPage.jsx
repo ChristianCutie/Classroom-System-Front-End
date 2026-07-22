@@ -512,41 +512,41 @@ const ViewInstructionPage = ({
 
   // ---------- Existing useEffect hooks ----------
   useEffect(() => {
-    if (!isTeacher || activeTab !== "studentWork" || !localCoursework?.id || !students?.length) {
-      if (activeTab !== "studentWork") setSubmissionsMap({});
-      return;
+  if (!isTeacher || !localCoursework?.id || !students?.length) {
+    setSubmissionsMap({});
+    return;
+  }
+
+  const fetchAllSubmissions = async () => {
+    setIsLoadingAllSubmissions(true);
+    setFetchError(null);
+    const map = {};
+    try {
+      const promises = students.map(async (st) => {
+        try {
+          const res = await assignmentAPI.getStudentAssignmentSubmission(
+            localCoursework.id,
+            st.id,
+          );
+          const data = res.data?.data || res.data;
+          map[st.id] = data;
+        } catch (err) {
+          console.error(`Failed to fetch submission for student ${st.id}:`, err);
+          map[st.id] = null;
+        }
+      });
+      await Promise.all(promises);
+      setSubmissionsMap(map);
+    } catch (err) {
+      console.error("Error fetching all submissions:", err);
+      setFetchError("Failed to load submissions. Please try again.");
+    } finally {
+      setIsLoadingAllSubmissions(false);
     }
+  };
 
-    const fetchAllSubmissions = async () => {
-      setIsLoadingAllSubmissions(true);
-      setFetchError(null);
-      const map = {};
-      try {
-        const promises = students.map(async (st) => {
-          try {
-            const res = await assignmentAPI.getStudentAssignmentSubmission(
-              localCoursework.id,
-              st.id,
-            );
-            const data = res.data?.data || res.data;
-            map[st.id] = data;
-          } catch (err) {
-            console.error(`Failed to fetch submission for student ${st.id}:`, err);
-            map[st.id] = null;
-          }
-        });
-        await Promise.all(promises);
-        setSubmissionsMap(map);
-      } catch (err) {
-        console.error("Error fetching all submissions:", err);
-        setFetchError("Failed to load submissions. Please try again.");
-      } finally {
-        setIsLoadingAllSubmissions(false);
-      }
-    };
-
-    fetchAllSubmissions();
-  }, [activeTab, localCoursework?.id, isTeacher, students]);
+  fetchAllSubmissions();
+}, [localCoursework?.id, isTeacher, students]);
 
   useEffect(() => {
     if (isTeacher || activeTab !== "yourWork" || !localCoursework?.id || !user?.id) {
