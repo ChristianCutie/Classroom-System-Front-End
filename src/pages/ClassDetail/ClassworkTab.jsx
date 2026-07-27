@@ -1,4 +1,4 @@
-// ClassworkTab.jsx – with assignment fetch on "View instructions" / "View submissions"
+// ClassworkTab.jsx – updated with backend integration for topics
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import DocViewer, { DocViewerRenderers } from "@iamjariwala/react-doc-viewer";
 import "@iamjariwala/react-doc-viewer/dist/index.css";
@@ -158,6 +158,29 @@ const ClassworkTab = ({
     }
     return "Unnamed";
   };
+  const getStudentAvatar = (student) => {
+    const avatar =
+      student.avatar ||
+      student.profile_pic ||
+      student.photo ||
+      student.photo_url ||
+      student.picture;
+    return avatar || null;
+  };
+
+  const stringToColor = (str) => {
+  if (!str) return "#6c757d";
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  let color = "#";
+  for (let i = 0; i < 3; i++) {
+    const value = (hash >> (i * 8)) & 0xff;
+    color += ("00" + value.toString(16)).substr(-2);
+  }
+  return color;
+};
 
   const isTeacher = useMemo(() => {
     if (!user) return false;
@@ -650,10 +673,6 @@ const ClassworkTab = ({
       // 3. Update availableTopics with the fresh list
       setAvailableTopics(topicsFromClass.filter((topic) => topic.name));
 
-      // 4. Also update customTopics if needed (optional)
-      // Since we have the full list, we might not need customTopics,
-      // but we can keep it as is.
-
       const normalizedTopic = {
         id: created.id ?? created.topic_id ?? null,
         name: created.topic_name || created.name || trimmedTopic,
@@ -733,92 +752,17 @@ const ClassworkTab = ({
     }
   };
 
-  const ensureTopicExists = async (topicValue) => {
-    const trimmedTopic = topicValue?.trim();
-    if (!trimmedTopic) return { id: null, name: "General" };
-
-    const normalizedInput = trimmedTopic.toLowerCase();
-    const existingTopic = availableTopics.find(
-      (topic) => topic.name?.toLowerCase() === normalizedInput,
-    );
-
-    if (existingTopic) {
-      return {
-        id: existingTopic.id ?? null,
-        name: existingTopic.name,
-      };
-    }
-
-    try {
-      setIsCreatingTopic(true);
-      // 1. Create the topic with class_id
-      const res = await apiClient.post("/create/topics", {
-        topic_name: trimmedTopic,
-        class_id: cls.id,
-      });
-      const createdTopic = res.data?.data || {};
-
-      // 2. Fetch the updated class
-      const classRes = await apiClient.get(`/classes/${cls.id}`);
-      const classData = classRes.data?.data || {};
-      const topicsFromClass = (classData.topics || []).map((topic) => ({
-        id: topic.id,
-        name: topic.topic_name || topic.name,
-      }));
-      setAvailableTopics(topicsFromClass.filter((topic) => topic.name));
-
-      const normalizedTopic = {
-        id: createdTopic.id ?? createdTopic.topic_id ?? null,
-        name: createdTopic.topic_name || createdTopic.name || trimmedTopic,
-      };
-
-      return normalizedTopic;
-    } catch (error) {
-      console.error("Failed to create topic from assignment modal:", error);
-      addToast("Could not create the topic. Please try again.", "error");
-      return null;
-    } finally {
-      setIsCreatingTopic(false);
-    }
-  };
-
-  // Helper to get avatar URL or generate fallback
-  const getStudentAvatar = (student) => {
-    const avatar =
-      student.avatar ||
-      student.profile_pic ||
-      student.photo ||
-      student.photo_url ||
-      student.picture;
-    if (avatar) return avatar;
-    return null;
-  };
-
-  const stringToColor = (str) => {
-    if (!str) return "#6c757d";
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    let color = "#";
-    for (let i = 0; i < 3; i++) {
-      const value = (hash >> (i * 8)) & 0xff;
-      color += ("00" + value.toString(16)).substr(-2);
-    }
-    return color;
-  };
-
+  // ----- UPDATED: handleCreateSubmit without ensureTopicExists -----
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
     if (!cwTitle.trim()) return;
 
     setIsSubmitting(true);
     try {
-      const resolvedTopic = await ensureTopicExists(cwTopic || "General");
-      if (!resolvedTopic) return;
-
-      const finalTopicName = resolvedTopic.name || "General";
-      const finalTopicId = resolvedTopic.id ?? cwTopicId ?? null;
+      // Determine topic payload: if user selected an existing topic, send topic_id; otherwise send topic_name.
+      // The backend will create a new topic if topic_name is provided and no topic_id.
+      const finalTopicName = cwTopic?.trim() || "General";
+      const finalTopicId = cwTopicId ?? null;
 
       const payload =
         createType === "assignment"
@@ -828,20 +772,23 @@ const ClassworkTab = ({
               formData.append("title", cwTitle.trim());
               formData.append("instructions", cwInstructions.trim());
               formData.append("max_points", Number(cwPoints) || 100);
-              formData.append("topic", finalTopicName);
+              // Send topic_name always (backend uses it if topic_id is missing)
+              formData.append("topic_name", finalTopicName);
               if (finalTopicId) {
                 formData.append("topic_id", finalTopicId);
               }
               if (cwDueDate) formData.append("due_date", cwDueDate);
 
+              // Attachments
               cwAttachments.forEach((file) => {
                 if (file instanceof File) {
                   formData.append("attachments[]", file);
-                  formData.append("file_name", file.name);
+                  // The backend expects 'file_names[]' array for original names
                   formData.append("file_names[]", file.name);
                 }
               });
 
+              // Student assignment
               if (cwAssignToAll) {
                 formData.append("assign_to_all", "true");
               } else if (cwSelectedStudents.length > 0) {
@@ -882,6 +829,7 @@ const ClassworkTab = ({
       if (created !== false) {
         if (onSetActiveTab) onSetActiveTab("classwork");
 
+        // Reset form
         setCwTitle("");
         setCwInstructions("");
         setCwTopic("General");
@@ -968,7 +916,6 @@ const ClassworkTab = ({
       const res = await assignmentAPI.getAssignment(cw.id);
       const apiData = res.data?.data || res.data || {};
 
-      // Merge API data with existing cw, mapping fields to frontend expectations
       const enriched = {
         ...cw,
         ...apiData,
@@ -1791,7 +1738,7 @@ const ClassworkTab = ({
         </div>
       )}
 
-      {/* Create Assignment Modal */}
+      {/* Create Assignment Modal – with updated topic fields */}
       {showCreateModal && (
         <div
           className="modal fade show d-block"

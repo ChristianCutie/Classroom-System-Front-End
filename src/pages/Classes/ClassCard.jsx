@@ -8,24 +8,38 @@ const ClassCard = ({
   onSelectClass,
   onArchiveClass,
   onUnenrollClass,
-  onOpenClasswork
+  onOpenClasswork,
+  onRestoreClass,
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const { addToast } = useToast();
 
+  const isArchived = cls.is_archived || cls.isArchived || false;
+
+  const normalizeValue = (value) => (value == null ? '' : String(value).trim());
+  const userId = normalizeValue(user?.id);
+  const classTeacherId = normalizeValue(cls?.teacher_id || cls?.created_by || cls?.owner_id || cls?.teacher?.id || cls?.teacher?.user_id);
+  const userRole = normalizeValue(user?.role?.role_name || user?.role_name || user?.role || '');
+
+  const isTeaching = Boolean(
+    cls?.isTeaching === true ||
+    cls?.is_teaching === true ||
+    (classTeacherId && classTeacherId === userId) ||
+    userRole.toLowerCase() === 'teacher' ||
+    userRole.toLowerCase() === 'instructor' ||
+    userRole.toLowerCase() === 'admin' ||
+    user?.is_teacher === true
+  );
+
   const truncateText = (text, maxLength = 25) => {
-    if (text.length > maxLength) {
-      return text.substring(0, maxLength) + '...';
-    }
+    if (text.length > maxLength) return text.substring(0, maxLength) + '...';
     return text;
   };
 
   const formatDueDate = (dateString) => {
     if (!dateString) return '';
-
     const date = new Date(dateString);
-    if (Number.isNaN(date.getTime())) return dateString;
-
+    if (isNaN(date.getTime())) return dateString;
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -54,11 +68,13 @@ const ClassCard = ({
 
   return (
     <div className="gc-class-card position-relative d-flex flex-column h-100 shadow-sm">
-      
-      {/* Top Banner Header */}
+      {/* Banner – grayscale when archived */}
       <div
         className="gc-class-banner position-relative"
-        style={{ background: cls.banner }}
+        style={{
+          background: cls.banner,
+          filter: isArchived ? 'grayscale(40%)' : 'none',
+        }}
       >
         <div className="d-flex justify-content-between align-items-start">
           <div
@@ -95,8 +111,9 @@ const ClassCard = ({
             {showMenu && (
               <div
                 className="dropdown-menu show position-absolute bg-white shadow-lg border py-2"
-                style={{ right: 0, top: '36px', minWidth: '180px', zIndex: 1050 }}
+                style={{ right: 0, top: '36px', minWidth: '180px', zIndex: 9999 }}
               >
+                {/* Copy invite link – always available */}
                 <button
                   className="dropdown-item d-flex align-items-center gap-2"
                   onClick={() => {
@@ -109,40 +126,69 @@ const ClassCard = ({
                   Copy invite link
                 </button>
 
-                {cls.isTeaching ? (
+                {isArchived ? (
+                  // ---- Archived class menu ----
                   <>
+                    <hr className="dropdown-divider" />
                     <button
-                      className="dropdown-item d-flex align-items-center gap-2"
+                      className="dropdown-item d-flex align-items-center gap-2 text-success"
                       onClick={() => {
                         setShowMenu(false);
-                        addToast(`Edit options for ${cls.subject}`, 'info');
+                        onRestoreClass(cls.id);
                       }}
                     >
-                      <i className="bi bi-pencil text-secondary"></i>
-                      Edit
+                      <i className="bi bi-arrow-counterclockwise text-success"></i>
+                      Restore
                     </button>
+                    {/* <button
+                      className="dropdown-item d-flex align-items-center gap-2 text-danger"
+                      onClick={() => {
+                        setShowMenu(false);
+                        onDeleteClass(cls.id);
+                      }}
+                    >
+                      <i className="bi bi-trash text-danger"></i>
+                      Delete forever
+                    </button> */}
+                  </>
+                ) : (
+                  // ---- Active class menu ----
+                  isTeaching ? (
+                    <>
+                      <button
+                        className="dropdown-item d-flex align-items-center gap-2"
+                        onClick={() => {
+                          setShowMenu(false);
+                          addToast(`Edit options for ${cls.subject}`, 'info');
+                        }}
+                      >
+                        <i className="bi bi-pencil text-secondary"></i>
+                        Edit
+                      </button>
+                      <hr className="dropdown-divider" />
+                      <button
+                        className="dropdown-item d-flex align-items-center gap-2 text-danger"
+                        onClick={() => {
+                          setShowMenu(false);
+                          onArchiveClass(cls.id);
+                        }}
+                      >
+                        <i className="bi bi-archive text-danger"></i>
+                        Archive
+                      </button>
+                    </>
+                  ) : (
                     <button
                       className="dropdown-item d-flex align-items-center gap-2 text-danger"
                       onClick={() => {
                         setShowMenu(false);
-                        onArchiveClass(cls.id);
+                        onUnenrollClass(cls.id);
                       }}
                     >
-                      <i className="bi bi-archive text-danger"></i>
-                      Archive
+                      <i className="bi bi-box-arrow-right text-danger"></i>
+                      Unenroll
                     </button>
-                  </>
-                ) : (
-                  <button
-                    className="dropdown-item d-flex align-items-center gap-2 text-danger"
-                    onClick={() => {
-                      setShowMenu(false);
-                      onUnenrollClass(cls.id);
-                    }}
-                  >
-                    <i className="bi bi-box-arrow-right text-danger"></i>
-                    Unenroll
-                  </button>
+                  )
                 )}
               </div>
             )}
@@ -155,7 +201,7 @@ const ClassCard = ({
       </div>
 
       {/* Teacher Avatar overlapping banner */}
-      <div className="position-absolute" style={{ top: '68px', right: '16px', zIndex: 2 }}>
+      <div className="position-absolute" style={{ top: '68px', right: '16px', zIndex: 0 }}>
         <Avatar
           name={cls.teacher}
           size={64}
@@ -171,7 +217,7 @@ const ClassCard = ({
         onClick={() => onSelectClass(cls.id)}
       >
         <div>
-          {upcomingWork.length > 0 ? (
+          {!isArchived && upcomingWork.length > 0 ? (
             upcomingWork.map(item => (
               <div key={`${item.type}-${item.id}`} className="mb-2">
                 <div className="text-muted small fw-medium text-truncate" style={{ fontSize: '0.78rem' }}>
@@ -186,12 +232,14 @@ const ClassCard = ({
               </div>
             ))
           ) : (
-            <div className="text-muted small py-3">No work due soon</div>
+            <div className="text-muted small py-3">
+              {isArchived ? 'This class is archived' : 'No work due soon'}
+            </div>
           )}
         </div>
       </div>
 
-      {/* Card Footer: Folder & Gradebook/Open icons */}
+      {/* Card Footer */}
       <div className="border-top px-3 py-2 d-flex justify-content-end align-items-center bg-white gap-1">
         <button
           className="btn-icon btn-icon-sm"
@@ -214,7 +262,6 @@ const ClassCard = ({
           <i className="bi bi-folder2-open fs-5"></i>
         </button>
       </div>
-
     </div>
   );
 };

@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { classAPI, userAPI, assignmentAPI } from "@/api/client";
-import { Routes, Route, useNavigate } from "react-router-dom";
+import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 
 // Components
 import Navbar from "./components/Navbar/Navbar.jsx";
@@ -26,6 +26,7 @@ const App = () => {
   const { user, login, logout, loading, updateUser } = useAuth();
   const { addToast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // ------------------------------------------------------------
   // 4. Real classes state (fetched from API)
@@ -44,19 +45,10 @@ const App = () => {
   const [showJoinModal, setShowJoinModal] = useState(false);
 
   // ------------------------------------------------------------
-  // 5. Fetch classes when user logs in
+  // 5. Fetch classes when user logs in and refresh on page changes
   // ------------------------------------------------------------
-  useEffect(() => {
-    if (user) {
-      fetchClasses();
-    } else {
-      setClasses([]);
-      navigate("/");
-    }
-  }, [user, navigate]);
-
-  const fetchClasses = async () => {
-    setLoadingClasses(true);
+  const fetchClasses = useCallback(async ({ showSpinner = false } = {}) => {
+    if (showSpinner) setLoadingClasses(true);
     try {
       const res = await classAPI.getClasses();
       setClasses(res.data.data || []);
@@ -64,9 +56,47 @@ const App = () => {
       console.error("Failed to fetch classes:", err);
       addToast("Unable to load classes right now.", "error");
     } finally {
-      setLoadingClasses(false);
+      if (showSpinner) setLoadingClasses(false);
     }
-  };
+  }, [addToast]);
+
+  const refreshSelectedClass = useCallback(async (classId, { showLoading = true } = {}) => {
+    if (!classId) return null;
+
+    if (showLoading) setActiveClassLoading(true);
+    try {
+      const res = await classAPI.getClass(classId);
+      const nextClass = res.data?.data || null;
+      setSelectedClass(nextClass);
+      return nextClass;
+    } catch (err) {
+      console.error("Failed to load class detail:", err);
+      setSelectedClass(null);
+      addToast("Unable to open that class right now.", "error");
+      return null;
+    } finally {
+      if (showLoading) setActiveClassLoading(false);
+    }
+  }, [addToast]);
+
+  useEffect(() => {
+    if (!user) {
+      setClasses([]);
+      setSelectedClass(null);
+      navigate("/");
+      return;
+    }
+
+    const classId = location.pathname.startsWith("/class/")
+      ? location.pathname.split("/").filter(Boolean).pop()
+      : null;
+
+    fetchClasses({ showSpinner: !classes.length });
+
+    if (classId) {
+      refreshSelectedClass(classId, { showLoading: true });
+    }
+  }, [user, location.pathname, navigate, fetchClasses, refreshSelectedClass, classes.length]);
 
   const handleRegister = (newUser) => {
     // Currently the registration form does not have a backend endpoint,
@@ -117,21 +147,14 @@ const App = () => {
   const handleSelectClass = async (classId) => {
     if (!classId) return;
 
-    setActiveClassLoading(true);
     if (window.innerWidth < 992) setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
 
-    try {
-      const res = await classAPI.getClass(classId);
-      setSelectedClass(res.data?.data || null);
+    const nextClass = await refreshSelectedClass(classId, { showLoading: true });
+    if (nextClass) {
       navigate(`/class/${classId}`);
-    } catch (err) {
-      console.error("Failed to load class detail:", err);
-      setSelectedClass(null);
-      addToast("Unable to open that class right now.", "error");
+    } else {
       navigate("/");
-    } finally {
-      setActiveClassLoading(false);
     }
   };
 

@@ -32,7 +32,9 @@ export const resolveAttachmentUrl = (filePath) => {
 
   const trimmedPath = normalizedPath.replace(/^\/+/, "");
 
-  if (/^(?:public\/)?(?:storage\/)?(?:api\/)?lms_files\/.+$/i.test(trimmedPath)) {
+  if (
+    /^(?:public\/)?(?:storage\/)?(?:api\/)?lms_files\/.+$/i.test(trimmedPath)
+  ) {
     const sanitizedPath = trimmedPath
       .replace(/^public\//i, "")
       .replace(/^storage\//i, "")
@@ -98,10 +100,11 @@ export const assignmentAPI = {
 export const classAPI = {
   getClasses: () => apiClient.get("/classes"),
   getClass: (classId) => apiClient.get(`/classes/${classId}`),
+  getArchivedClasses: () => apiClient.get("/archive/classes"),
   createClass: (data) => apiClient.post("/classes", data),
   joinClass: (code) => apiClient.post("/classes/join", { code }),
-  archiveClass: (classId) => apiClient.patch(`/classes/${classId}/archive`),
-  restoreClass: (classId) => apiClient.patch(`/classes/${classId}/restore`),
+  archiveClass: (classId) => apiClient.post(`/archive/classes/${classId}`),
+  restoreClass: (classId) => apiClient.post(`/restore/classes/${classId}`),
   deleteClass: (classId) => apiClient.delete(`/classes/${classId}`),
   unenrollClass: (classId) => apiClient.delete(`/classes/${classId}/unenroll`),
   createAnnouncement: (classId, payload) =>

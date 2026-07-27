@@ -56,7 +56,7 @@ body {
   height: 118px;
   position: relative;
   border-radius: 8px 8px 0 0;
-  overflow: hidden;
+  overflow: visible;
   background-size: cover;
   background-position: center;
   color: white;
@@ -89,12 +89,12 @@ body {
 /* Class card container */
 .gc-class-card {
   border: 1px solid var(--gc-border-color);
-  border-radius: 8px;
+  border-radius: 8px !important;
   background: white;
   transition:
     box-shadow 0.2s ease-in-out,
     transform 0.15s ease;
-  overflow: hidden;
+  overflow: visible;
   height: 100%;
   display: flex;
   flex-direction: column;
