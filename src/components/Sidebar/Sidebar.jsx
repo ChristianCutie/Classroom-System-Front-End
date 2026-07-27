@@ -21,6 +21,9 @@ const Sidebar = ({
   // Determine if user is a teacher (using the nested role object)
   const isTeacher = user?.role?.role_name === 'teacher';
 
+  // Determine if user is an admin
+  const isAdmin = user?.role?.role_name === 'admin';
+
   // Helper to check if a route is active
   const isActive = (path) => {
     if (path === 'home') return location.pathname === '/';
@@ -34,25 +37,37 @@ const Sidebar = ({
   return (
     <div className={`gc-sidebar pt-2 ${!isOpen ? 'closed' : ''}`}>
       {/* Top navigation */}
-      <div className="d-flex flex-column mb-4 pb-3 border-bottom">
-        <div
-          className={`gc-sidebar-item ${isActive('home') ? 'active' : ''}`}
-          onClick={() => navigate('/')}
-        >
-          <i className="bi bi-house-door-fill"></i>
-          <span>Classes</span>
+      {!isAdmin ? (
+        <div className="d-flex flex-column mb-4 pb-3 border-bottom">
+          <div
+            className={`gc-sidebar-item ${isActive('home') ? 'active' : ''}`}
+            onClick={() => navigate('/')}
+          >
+            <i className="bi bi-house-door-fill"></i>
+            <span>Classes</span>
+          </div>
+          <div
+            className={`gc-sidebar-item ${isActive('calendar') ? 'active' : ''}`}
+            onClick={() => navigate('/calendar')}
+          >
+            <i className="bi bi-calendar-date"></i>
+            <span>Calendar</span>
+          </div>
         </div>
-        <div
-          className={`gc-sidebar-item ${isActive('calendar') ? 'active' : ''}`}
-          onClick={() => navigate('/calendar')}
-        >
-          <i className="bi bi-calendar-date"></i>
-          <span>Calendar</span>
+      ) : (
+        <div className="d-flex flex-column mb-4 pb-3 border-bottom">
+          <div
+            className={`gc-sidebar-item ${isActive('admin') ? 'active' : ''}`}
+            onClick={() => navigate('/admin')}
+          >
+            <i className="bi bi-shield-check"></i>
+            <span>Admin</span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Teaching section – only for teachers */}
-      {isTeacher && (
+      {isTeacher && !isAdmin && (
         <div className="mb-4 pb-3 border-bottom">
           <div className="px-4 mb-2 text-muted small fw-bold text-uppercase" style={{ letterSpacing: '0.5px' }}>
             Teaching
@@ -88,7 +103,8 @@ const Sidebar = ({
         </div>
       )}
 
-      {/* Enrolled section – visible to everyone */}
+      {/* Enrolled section – visible to everyone except admins */}
+      {!isAdmin && (
       <div className="mb-4 pb-3 border-bottom">
         <div className="px-4 mb-2 text-muted small fw-bold text-uppercase" style={{ letterSpacing: '0.5px' }}>
           Enrolled
@@ -125,9 +141,11 @@ const Sidebar = ({
           <div className="px-4 text-muted small fst-italic py-1">No enrolled classes yet</div>
         )}
       </div>
+      )}
 
       {/* Footer links */}
       <div className="mb-4">
+        {!isAdmin && (
         <div
           className={`gc-sidebar-item ${isActive('archived') ? 'active' : ''}`}
           onClick={() => navigate('/archived')}
@@ -135,6 +153,7 @@ const Sidebar = ({
           <i className="bi bi-archive"></i>
           <span>Archived classes</span>
         </div>
+        )}
         <div
           className={`gc-sidebar-item ${isActive('settings') ? 'active' : ''}`}
           onClick={() => navigate('/settings')}

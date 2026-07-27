@@ -260,6 +260,12 @@ body {
   cursor: pointer;
 }
 
+.btn-icon i,
+.btn-icon .bi {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
 .btn-icon:hover {
   background-color: rgba(95, 99, 104, 0.1);
   color: var(--gc-text-primary);

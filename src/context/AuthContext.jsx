@@ -30,7 +30,7 @@ export const AuthProvider = ({ children }) => {
       setUser(user);
       addToast('Signed in successfully', 'success');
 
-      return { success: true };
+      return { success: true, user };
     } catch (error) {
       const message = error.response?.data?.message || 'Login failed';
       addToast(message, 'error');

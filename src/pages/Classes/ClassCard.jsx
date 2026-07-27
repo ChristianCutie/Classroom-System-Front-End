@@ -10,6 +10,7 @@ const ClassCard = ({
   onUnenrollClass,
   onOpenClasswork,
   onRestoreClass,
+  onDeleteClass, // if you want to show delete in archived menu
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const { addToast } = useToast();
@@ -113,23 +114,9 @@ const ClassCard = ({
                 className="dropdown-menu show position-absolute bg-white shadow-lg border py-2"
                 style={{ right: 0, top: '36px', minWidth: '180px', zIndex: 9999 }}
               >
-                {/* Copy invite link – always available */}
-                <button
-                  className="dropdown-item d-flex align-items-center gap-2"
-                  onClick={() => {
-                    setShowMenu(false);
-                    navigator.clipboard?.writeText(`https://classroom.google.com/c/${cls.class_code}`);
-                    addToast(`Invite link copied for ${cls.subject}`, 'success');
-                  }}
-                >
-                  <i className="bi bi-link-45deg text-secondary fs-5"></i>
-                  Copy invite link
-                </button>
-
                 {isArchived ? (
-                  // ---- Archived class menu ----
+                  // ---- Archived class menu – no "Copy invite link" ----
                   <>
-                    <hr className="dropdown-divider" />
                     <button
                       className="dropdown-item d-flex align-items-center gap-2 text-success"
                       onClick={() => {
@@ -140,55 +127,72 @@ const ClassCard = ({
                       <i className="bi bi-arrow-counterclockwise text-success"></i>
                       Restore
                     </button>
-                    {/* <button
-                      className="dropdown-item d-flex align-items-center gap-2 text-danger"
-                      onClick={() => {
-                        setShowMenu(false);
-                        onDeleteClass(cls.id);
-                      }}
-                    >
-                      <i className="bi bi-trash text-danger"></i>
-                      Delete forever
-                    </button> */}
-                  </>
-                ) : (
-                  // ---- Active class menu ----
-                  isTeaching ? (
-                    <>
-                      <button
-                        className="dropdown-item d-flex align-items-center gap-2"
-                        onClick={() => {
-                          setShowMenu(false);
-                          addToast(`Edit options for ${cls.subject}`, 'info');
-                        }}
-                      >
-                        <i className="bi bi-pencil text-secondary"></i>
-                        Edit
-                      </button>
-                      <hr className="dropdown-divider" />
+                    {onDeleteClass && (
                       <button
                         className="dropdown-item d-flex align-items-center gap-2 text-danger"
                         onClick={() => {
                           setShowMenu(false);
-                          onArchiveClass(cls.id);
+                          onDeleteClass(cls.id);
                         }}
                       >
-                        <i className="bi bi-archive text-danger"></i>
-                        Archive
+                        <i className="bi bi-trash text-danger"></i>
+                        Delete forever
                       </button>
-                    </>
-                  ) : (
+                    )}
+                  </>
+                ) : (
+                  // ---- Active class menu ----
+                  <>
+                    {/* Copy invite link – only for active classes */}
                     <button
-                      className="dropdown-item d-flex align-items-center gap-2 text-danger"
+                      className="dropdown-item d-flex align-items-center gap-2"
                       onClick={() => {
                         setShowMenu(false);
-                        onUnenrollClass(cls.id);
+                        navigator.clipboard?.writeText(`${cls.class_code}`);
+                        addToast(`Class code copied for ${cls.subject}`, 'success');
                       }}
                     >
-                      <i className="bi bi-box-arrow-right text-danger"></i>
-                      Unenroll
+                      <i className="bi bi-link-45deg text-secondary fs-5"></i>
+                      Copy code
                     </button>
-                  )
+
+                    {isTeaching ? (
+                      <>
+                        <button
+                          className="dropdown-item d-flex align-items-center gap-2"
+                          onClick={() => {
+                            setShowMenu(false);
+                            addToast(`Edit options for ${cls.subject}`, 'info');
+                          }}
+                        >
+                          <i className="bi bi-pencil text-secondary"></i>
+                          Edit
+                        </button>
+                        <hr className="dropdown-divider" />
+                        <button
+                          className="dropdown-item d-flex align-items-center gap-2 text-danger"
+                          onClick={() => {
+                            setShowMenu(false);
+                            onArchiveClass(cls.id);
+                          }}
+                        >
+                          <i className="bi bi-archive text-danger"></i>
+                          Archive
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        className="dropdown-item d-flex align-items-center gap-2 text-danger"
+                        onClick={() => {
+                          setShowMenu(false);
+                          onUnenrollClass(cls.id);
+                        }}
+                      >
+                        <i className="bi bi-box-arrow-right text-danger"></i>
+                        Unenroll
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             )}

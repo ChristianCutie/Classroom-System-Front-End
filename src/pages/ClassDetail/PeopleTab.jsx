@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import Avatar from "../../components/Common/Avatar.jsx";
 import { useToast } from "@/context/ToastContext.jsx";
+import { classAPI } from "@/api/client";
 
-const PeopleTab = ({ cls, user }) => {
+const PeopleTab = ({ cls, user, onRefresh }) => {
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -15,7 +16,10 @@ const PeopleTab = ({ cls, user }) => {
   const getFullName = (person) => {
     if (!person) return "Unknown";
     return (
-      [person.first_name || person.firstName, person.last_name || person.lastName].filter(Boolean).join(" ").trim() ||
+      [person.first_name || person.firstName, person.last_name || person.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim() ||
       person.fullName ||
       person.name ||
       "Unknown"
@@ -32,11 +36,6 @@ const PeopleTab = ({ cls, user }) => {
     }
   };
 
-  const fullName =
-    [cls.teacher?.first_name, cls.teacher?.last_name]
-      .filter(Boolean)
-      .join(" ") || "Teacher";
-
   const toggleStudent = (id) => {
     if (selectedStudents.includes(id)) {
       setSelectedStudents(selectedStudents.filter((sId) => sId !== id));
@@ -45,6 +44,38 @@ const PeopleTab = ({ cls, user }) => {
     }
   };
 
+  // ---------- Remove single student ----------
+  const handleRemoveStudent = async (studentId, studentName) => {
+    if (!window.confirm(`Remove ${studentName} from this class?`)) return;
+    try {
+      await classAPI.removeStudent(cls.id, studentId);
+      addToast(`${studentName} removed successfully.`, "success");
+      // Remove from local list (optimistic update)
+      // if (onRefresh) onRefresh(); // or filter locally
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to remove student.", "error");
+    }
+  };
+
+  // ---------- Bulk remove selected students ----------
+  const handleBulkRemove = async () => {
+    if (selectedStudents.length === 0) return;
+    if (!window.confirm(`Remove ${selectedStudents.length} selected students?`)) return;
+    try {
+      // Remove one by one (or parallel)
+      await Promise.all(
+        selectedStudents.map((id) => classAPI.removeStudent(cls.id, id))
+      );
+      addToast(`${selectedStudents.length} students removed.`, "success");
+      setSelectedStudents([]);
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to remove students.", "error");
+    }
+  };
+
+  // ---------- Invite handler ----------
   const handleInvite = (e) => {
     e.preventDefault();
     if (!inviteEmail.trim()) return;
@@ -52,6 +83,16 @@ const PeopleTab = ({ cls, user }) => {
     setInviteEmail("");
     setShowInviteModal(false);
   };
+
+  // Determine if user is teacher
+  const roleString =
+    typeof user?.role === "string"
+      ? user.role
+      : user?.role?.role_name || user?.role?.name || user?.role?.value || "";
+  const normalizedRole = String(roleString).toLowerCase();
+  const isTeacher =
+    ["teacher", "instructor", "teacher/instructor"].includes(normalizedRole) ||
+    Boolean(user?.is_teacher || user?.isTeacher);
 
   return (
     <div className="max-w-4xl mx-auto" style={{ maxWidth: "850px" }}>
@@ -64,7 +105,7 @@ const PeopleTab = ({ cls, user }) => {
           >
             Teachers
           </h4>
-          {user.role === "teacher" && (
+          {isTeacher && (
             <button
               className="btn btn-icon text-primary"
               title="Invite teachers"
@@ -110,7 +151,7 @@ const PeopleTab = ({ cls, user }) => {
             </span>
           </div>
 
-          {user.role === "teacher" && (
+          {isTeacher && (
             <button
               className="btn btn-icon text-primary"
               title="Invite students"
@@ -122,7 +163,7 @@ const PeopleTab = ({ cls, user }) => {
         </div>
 
         {/* Bulk action toolbar when checkboxes are checked */}
-        {user.role === "teacher" && students.length > 0 && (
+        {isTeacher && students.length > 0 && (
           <div className="d-flex align-items-center justify-content-between bg-light p-2 rounded mb-3 border">
             <div className="form-check ms-2 mb-0 d-flex align-items-center gap-2">
               <input
@@ -155,13 +196,7 @@ const PeopleTab = ({ cls, user }) => {
                 </button>
                 <button
                   className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1"
-                  onClick={() => {
-                    addToast(
-                      `Removed ${selectedStudents.length} selected students.`,
-                      "success"
-                    );
-                    setSelectedStudents([]);
-                  }}
+                  onClick={handleBulkRemove}
                 >
                   <i className="bi bi-person-x"></i> Remove
                 </button>
@@ -180,7 +215,7 @@ const PeopleTab = ({ cls, user }) => {
                 style={{ transition: "background 0.15s" }}
               >
                 <div className="d-flex align-items-center gap-3">
-                  {user.role === "teacher" && (
+                  {isTeacher && (
                     <input
                       type="checkbox"
                       className="form-check-input mb-0 me-1"
@@ -213,9 +248,10 @@ const PeopleTab = ({ cls, user }) => {
                   >
                     <i className="bi bi-envelope"></i>
                   </a>
-                  {user.role === "teacher" && (
+                  {isTeacher && (
                     <div className="dropdown">
                       <button
+                        type="button"
                         className="btn btn-icon text-secondary"
                         data-bs-toggle="dropdown"
                         aria-expanded="false"
@@ -226,7 +262,9 @@ const PeopleTab = ({ cls, user }) => {
                         <li>
                           <button
                             className="dropdown-item py-2"
-                            onClick={() => addToast(`Muted ${getFullName(st)}`, "info")}
+                            onClick={() =>
+                              addToast(`Muted ${getFullName(st)}`, "info")
+                            }
                           >
                             <i className="bi bi-volume-mute me-2"></i> Mute
                             student
@@ -235,7 +273,9 @@ const PeopleTab = ({ cls, user }) => {
                         <li>
                           <button
                             className="dropdown-item py-2 text-danger"
-                            onClick={() => addToast(`Removed ${getFullName(st)}`, "success")}
+                            onClick={() =>
+                              handleRemoveStudent(st.id, getFullName(st))
+                            }
                           >
                             <i className="bi bi-person-x me-2"></i> Remove
                           </button>

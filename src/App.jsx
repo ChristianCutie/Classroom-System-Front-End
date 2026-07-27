@@ -18,6 +18,7 @@ import CalendarPage from "./pages/Calendar/CalendarPage.jsx";
 import ToDoPage from "./pages/ToDo/ToDoPage.jsx";
 import ArchivedPage from "./pages/Archived/ArchivedPage.jsx";
 import SettingsPage from "./pages/Settings/SettingsPage.jsx";
+import AdminPage from "./pages/Admin/AdminPage.jsx";
 
 const App = () => {
   // ------------------------------------------------------------
@@ -80,6 +81,12 @@ const App = () => {
   }, [addToast]);
 
   useEffect(() => {
+    // Admin route - don't load classes
+    if (location.pathname === "/admin") {
+      setLoadingClasses(false);
+      return;
+    }
+
     if (!user) {
       setClasses([]);
       setSelectedClass(null);
@@ -780,6 +787,11 @@ const App = () => {
                     onToggleRole={handleToggleRole}
                   />
                 }
+              />
+
+              <Route
+                path="/admin"
+                element={<AdminPage />}
               />
             </Routes>
           )}

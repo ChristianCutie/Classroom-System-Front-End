@@ -138,6 +138,8 @@ export const classAPI = {
       theme_color: themeColor,
     }),
   refreshClass: (classId) => apiClient.get(`/classes/${classId}`),
+  removeStudent: (classId, studentId) => 
+    apiClient.post(`/remove/classes/${classId}/${studentId}`),
 };
 
 export const userAPI = {

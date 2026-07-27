@@ -1,9 +1,11 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import logo from "@/images/Logo.png";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext.jsx";
 
 const LoginPage = ({ onLogin, onSwitchToRegister }) => {
+  const navigate = useNavigate();
   const { login } = useAuth();
   const { addToast } = useToast();
   const [email, setEmail] = useState("e.vance@university.edu");
@@ -68,7 +70,12 @@ const LoginPage = ({ onLogin, onSwitchToRegister }) => {
     // Call real login
     const result = await login(email, password);
     if (result.success) {
-      window.location.href = "/dashboard";
+      // Check if user is admin and navigate accordingly
+      if (result.user?.role?.role_name === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/');
+      }
     } else {
       setError(result.message);
       addToast(result.message || "Login failed. Please try again.", "error");

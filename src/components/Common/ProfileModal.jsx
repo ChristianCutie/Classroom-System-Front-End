@@ -57,7 +57,7 @@ const ProfileModal = ({
       <h6 className="fw-bold mb-0 text-dark">{displayName}</h6>
       <p className="text-muted small mb-3">{user.email}</p>
 
-      <div className="p-3 bg-light rounded-3 mb-3 text-start border">
+      {/* <div className="p-3 bg-light rounded-3 mb-3 text-start border">
         <div className="d-flex justify-content-between align-items-center mb-1">
           <span className="small fw-bold text-uppercase text-secondary">
             Active Role
@@ -80,7 +80,7 @@ const ProfileModal = ({
           <i className="bi bi-arrow-repeat"></i>
           Switch to {user.role === "teacher" ? "Student View" : "Teacher View"}
         </button>
-      </div>
+      </div> */}
 
       <div className="d-grid gap-2 mb-3">
         <button className="btn btn-outline-secondary btn-sm rounded-pill py-2">

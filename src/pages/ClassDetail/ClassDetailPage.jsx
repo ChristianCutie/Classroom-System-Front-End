@@ -379,6 +379,7 @@ useEffect(() => {
               <PeopleTab
                 cls={cls}
                 user={user}
+                onRefresh={() => fetchClassDetails(cls.id)} 
               />
             )}
             {activeTab === 'grades' && (
