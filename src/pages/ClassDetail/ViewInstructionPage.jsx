@@ -73,13 +73,20 @@ const getPreviewUrl = (file) => {
 
 const getPreviewIcon = (file) => {
   const ext = getFileExtension(file) || (file?.type || "").toLowerCase();
-  if (["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"].includes(ext) ||
-      (file?.type || "").includes("image"))
+  if (
+    ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"].includes(ext) ||
+    (file?.type || "").includes("image")
+  )
     return "bi-image-fill text-success";
   if (ext === "pdf") return "bi-file-earmark-pdf-fill text-danger";
   if (ext === "docx") return "bi-file-earmark-word-fill text-primary";
-  if (["doc", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp"].includes(ext) ||
-      (file?.type || "").includes("document") || (file?.type || "").includes("word") || (file?.type || "").includes("excel") || (file?.type || "").includes("powerpoint"))
+  if (
+    ["doc", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp"].includes(ext) ||
+    (file?.type || "").includes("document") ||
+    (file?.type || "").includes("word") ||
+    (file?.type || "").includes("excel") ||
+    (file?.type || "").includes("powerpoint")
+  )
     return "bi-file-earmark-text-fill text-secondary";
   if (ext === "zip" || ext === "rar" || ext === "7z")
     return "bi-file-earmark-zip-fill text-muted";
@@ -239,7 +246,11 @@ const SubmissionFilePreview = memo(
           <img
             src={previewUrl}
             alt={file?.name || "Preview"}
-            style={{ maxWidth: "100%", maxHeight: "400px", objectFit: "contain" }}
+            style={{
+              maxWidth: "100%",
+              maxHeight: "400px",
+              objectFit: "contain",
+            }}
           />
         </div>
       );
@@ -358,7 +369,7 @@ const SubmissionFilePreview = memo(
       prev.file_path === next.file_path &&
       prev.type === next.type
     );
-  }
+  },
 );
 
 // ---------- MAIN COMPONENT ----------
@@ -388,7 +399,9 @@ const ViewInstructionPage = ({
   }, [initialCoursework, localCoursework?.id]);
 
   // ... all other state variables (unchanged) ...
-  const [activeTab, setActiveTab] = useState(defaultActiveTab || "instructions");
+  const [activeTab, setActiveTab] = useState(
+    defaultActiveTab || "instructions",
+  );
   const [studentComment, setStudentComment] = useState("");
   const [privateComments, setPrivateComments] = useState([]);
   const [selectedStudentId, setSelectedStudentId] = useState(null);
@@ -396,7 +409,8 @@ const ViewInstructionPage = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedSubmissionFiles, setSelectedSubmissionFiles] = useState([]);
   const [submissionMessage, setSubmissionMessage] = useState("");
-  const [selectedAttachmentByStudent, setSelectedAttachmentByStudent] = useState({});
+  const [selectedAttachmentByStudent, setSelectedAttachmentByStudent] =
+    useState({});
   const [privateFeedbackByStudent, setPrivateFeedbackByStudent] = useState({});
   const [draftGradesByStudent, setDraftGradesByStudent] = useState({});
   const [savingStudentId, setSavingStudentId] = useState(null);
@@ -411,7 +425,8 @@ const ViewInstructionPage = ({
   const [isLoadingAllSubmissions, setIsLoadingAllSubmissions] = useState(false);
   const [fetchError, setFetchError] = useState(null);
   const [studentSubmission, setStudentSubmission] = useState(null);
-  const [isLoadingStudentSubmission, setIsLoadingStudentSubmission] = useState(false);
+  const [isLoadingStudentSubmission, setIsLoadingStudentSubmission] =
+    useState(false);
   const [teacherCommentInput, setTeacherCommentInput] = useState({});
   const [sendingTeacherComment, setSendingTeacherComment] = useState({});
   const [studentCommentInput, setStudentCommentInput] = useState("");
@@ -425,13 +440,17 @@ const ViewInstructionPage = ({
   // ---------- Edit Assignment State ----------
   const [showEditModal, setShowEditModal] = useState(false);
   const [editFormData, setEditFormData] = useState({
-    title: '',
-    instructions: '',
-    maxPoints: '',
-    dueDate: '',
-    topicId: '',
+    title: "",
+    instructions: "",
+    maxPoints: "",
+    dueDate: "",
+    topicId: "",
   });
   const [editAttachments, setEditAttachments] = useState([]);
+
+  const [isEditDragging, setIsEditDragging] = useState(false);
+  const [isUploadDragging, setIsUploadDragging] = useState(false);
+
   const [existingAttachments, setExistingAttachments] = useState([]);
   const [attachmentsToRemove, setAttachmentsToRemove] = useState([]);
   const [topics, setTopics] = useState([]);
@@ -440,14 +459,20 @@ const ViewInstructionPage = ({
   // ---------- Scroll helper ----------
   const scrollToBottom = (submissionId) => {
     setTimeout(() => {
-      const container = document.getElementById(`comment-container-${submissionId}`);
+      const container = document.getElementById(
+        `comment-container-${submissionId}`,
+      );
       if (container) container.scrollTop = container.scrollHeight;
     }, 150);
   };
 
   const fetchComments = async (submissionId, force = false) => {
     if (!submissionId) return;
-    if (!force && (commentsMap[submissionId] || loadingCommentsMap[submissionId])) return;
+    if (
+      !force &&
+      (commentsMap[submissionId] || loadingCommentsMap[submissionId])
+    )
+      return;
     setLoadingCommentsMap((prev) => ({ ...prev, [submissionId]: true }));
     try {
       const res = await assignmentAPI.getSubmissionComments(submissionId);
@@ -512,44 +537,52 @@ const ViewInstructionPage = ({
 
   // ---------- Existing useEffect hooks ----------
   useEffect(() => {
-  if (!isTeacher || !localCoursework?.id || !students?.length) {
-    setSubmissionsMap({});
-    return;
-  }
-
-  const fetchAllSubmissions = async () => {
-    setIsLoadingAllSubmissions(true);
-    setFetchError(null);
-    const map = {};
-    try {
-      const promises = students.map(async (st) => {
-        try {
-          const res = await assignmentAPI.getStudentAssignmentSubmission(
-            localCoursework.id,
-            st.id,
-          );
-          const data = res.data?.data || res.data;
-          map[st.id] = data;
-        } catch (err) {
-          console.error(`Failed to fetch submission for student ${st.id}:`, err);
-          map[st.id] = null;
-        }
-      });
-      await Promise.all(promises);
-      setSubmissionsMap(map);
-    } catch (err) {
-      console.error("Error fetching all submissions:", err);
-      setFetchError("Failed to load submissions. Please try again.");
-    } finally {
-      setIsLoadingAllSubmissions(false);
+    if (!isTeacher || !localCoursework?.id || !students?.length) {
+      setSubmissionsMap({});
+      return;
     }
-  };
 
-  fetchAllSubmissions();
-}, [localCoursework?.id, isTeacher, students]);
+    const fetchAllSubmissions = async () => {
+      setIsLoadingAllSubmissions(true);
+      setFetchError(null);
+      const map = {};
+      try {
+        const promises = students.map(async (st) => {
+          try {
+            const res = await assignmentAPI.getStudentAssignmentSubmission(
+              localCoursework.id,
+              st.id,
+            );
+            const data = res.data?.data || res.data;
+            map[st.id] = data;
+          } catch (err) {
+            console.error(
+              `Failed to fetch submission for student ${st.id}:`,
+              err,
+            );
+            map[st.id] = null;
+          }
+        });
+        await Promise.all(promises);
+        setSubmissionsMap(map);
+      } catch (err) {
+        console.error("Error fetching all submissions:", err);
+        setFetchError("Failed to load submissions. Please try again.");
+      } finally {
+        setIsLoadingAllSubmissions(false);
+      }
+    };
+
+    fetchAllSubmissions();
+  }, [localCoursework?.id, isTeacher, students]);
 
   useEffect(() => {
-    if (isTeacher || activeTab !== "yourWork" || !localCoursework?.id || !user?.id) {
+    if (
+      isTeacher ||
+      activeTab !== "yourWork" ||
+      !localCoursework?.id ||
+      !user?.id
+    ) {
       if (activeTab !== "yourWork") setStudentSubmission(null);
       return;
     }
@@ -582,7 +615,12 @@ const ViewInstructionPage = ({
   }, [selectedStudentId, isTeacher, activeTab, submissionsMap]);
 
   useEffect(() => {
-    if (isTeacher || activeTab !== "yourWork" || !studentSubmission?.submission?.id) return;
+    if (
+      isTeacher ||
+      activeTab !== "yourWork" ||
+      !studentSubmission?.submission?.id
+    )
+      return;
     fetchComments(studentSubmission.submission.id);
   }, [activeTab, studentSubmission?.submission?.id, isTeacher]);
 
@@ -590,27 +628,32 @@ const ViewInstructionPage = ({
   useEffect(() => {
     if (showEditModal) {
       setEditFormData({
-        title: localCoursework.title || '',
-        instructions: localCoursework.instructions || '',
-        maxPoints: localCoursework.points ?? '',
-        dueDate: localCoursework.dueDate ? new Date(localCoursework.dueDate).toISOString().split('T')[0] : '',
-        topicId: localCoursework.topic_id || '',
+        title: localCoursework.title || "",
+        instructions: localCoursework.instructions || "",
+        maxPoints: localCoursework.points ?? "",
+        dueDate: localCoursework.dueDate
+          ? new Date(localCoursework.dueDate).toISOString().split("T")[0]
+          : "",
+        topicId: localCoursework.topic_id || "",
       });
       // Ensure existing attachments are normalized
-      setExistingAttachments(normalizeAttachments(localCoursework.attachments || []));
+      setExistingAttachments(
+        normalizeAttachments(localCoursework.attachments || []),
+      );
       setEditAttachments([]);
       setAttachmentsToRemove([]);
 
-      apiClient.get('/topics')
-        .then(res => setTopics(res.data.data || []))
+      apiClient
+        .get("/topics")
+        .then((res) => setTopics(res.data.data || []))
         .catch(() => setTopics([]));
     }
   }, [showEditModal, localCoursework]);
 
   // ---------- Handle removing an existing attachment ----------
   const handleRemoveAttachment = (attId) => {
-    setAttachmentsToRemove(prev => [...prev, attId]);
-    setExistingAttachments(prev => prev.filter(att => att.id !== attId));
+    setAttachmentsToRemove((prev) => [...prev, attId]);
+    setExistingAttachments((prev) => prev.filter((att) => att.id !== attId));
   };
 
   // ---------- Handle Edit Submission ----------
@@ -619,37 +662,49 @@ const ViewInstructionPage = ({
     setIsUpdating(true);
     try {
       const formData = new FormData();
-      formData.append('class_id', cls.id);
-      formData.append('title', editFormData.title);
-      formData.append('instructions', editFormData.instructions);
-      formData.append('max_points', editFormData.maxPoints);
-      if (editFormData.dueDate) formData.append('due_date', editFormData.dueDate);
-      if (editFormData.topicId) formData.append('topic_id', editFormData.topicId);
+      formData.append("class_id", cls.id);
+      formData.append("title", editFormData.title);
+      formData.append("instructions", editFormData.instructions);
+      formData.append("max_points", editFormData.maxPoints);
+      if (editFormData.dueDate)
+        formData.append("due_date", editFormData.dueDate);
+      if (editFormData.topicId)
+        formData.append("topic_id", editFormData.topicId);
 
       if (attachmentsToRemove.length > 0) {
-        formData.append('remove_attachments', JSON.stringify(attachmentsToRemove));
+        formData.append(
+          "remove_attachments",
+          JSON.stringify(attachmentsToRemove),
+        );
       }
 
       if (editAttachments.length > 0) {
         editAttachments.forEach((file) => {
-          formData.append('attachments[]', file);
-          formData.append('file_names[]', file.name);
+          formData.append("attachments[]", file);
+          formData.append("file_names[]", file.name);
         });
       }
 
-      const response = await apiClient.post(`/update/assignments/${localCoursework.id}`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const response = await apiClient.post(
+        `/update/assignments/${localCoursework.id}`,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        },
+      );
 
       if (response.data.success) {
-        addToast('Assignment updated successfully!', 'success');
+        addToast("Assignment updated successfully!", "success");
 
         // ------------------------------------------------------------
         // FIX: Use the class‑wide assignment list to fetch the updated data
         // ------------------------------------------------------------
         const assignmentsRes = await assignmentAPI.getAssignments(cls.id);
-        const assignmentsList = assignmentsRes.data?.data || assignmentsRes.data || [];
-        const updatedAssignment = assignmentsList.find(a => a.id === localCoursework.id);
+        const assignmentsList =
+          assignmentsRes.data?.data || assignmentsRes.data || [];
+        const updatedAssignment = assignmentsList.find(
+          (a) => a.id === localCoursework.id,
+        );
 
         if (updatedAssignment) {
           // Map fields to match the component's expected shape
@@ -659,18 +714,22 @@ const ViewInstructionPage = ({
             points: updatedAssignment.max_points ?? updatedAssignment.points,
             dueDate: updatedAssignment.due_date ?? updatedAssignment.dueDate,
             // Normalize attachments
-            attachments: normalizeAttachments(updatedAssignment.attachments ?? localCoursework.attachments),
+            attachments: normalizeAttachments(
+              updatedAssignment.attachments ?? localCoursework.attachments,
+            ),
           };
           setLocalCoursework(mapped);
         } else {
           // Fallback: just merge the raw response (unlikely)
           const apiData = response.data.data || {};
-          setLocalCoursework(prev => ({
+          setLocalCoursework((prev) => ({
             ...prev,
             ...apiData,
             points: apiData.max_points ?? apiData.points ?? prev.points,
             dueDate: apiData.due_date ?? apiData.dueDate ?? prev.dueDate,
-            attachments: normalizeAttachments(apiData.attachments ?? prev.attachments),
+            attachments: normalizeAttachments(
+              apiData.attachments ?? prev.attachments,
+            ),
           }));
         }
 
@@ -679,11 +738,11 @@ const ViewInstructionPage = ({
 
         setShowEditModal(false);
       } else {
-        addToast(response.data.message || 'Update failed.', 'error');
+        addToast(response.data.message || "Update failed.", "error");
       }
     } catch (error) {
       console.error(error);
-      addToast('Error updating assignment.', 'error');
+      addToast("Error updating assignment.", "error");
     } finally {
       setIsUpdating(false);
     }
@@ -707,13 +766,16 @@ const ViewInstructionPage = ({
   const turnedInCount = studentsWithWork.length;
   const gradedCount = studentsWithWork.filter((st) => {
     const data = submissionsMap[st.id];
-    return data?.submission?.grade !== null && data?.submission?.grade !== undefined;
+    return (
+      data?.submission?.grade !== null && data?.submission?.grade !== undefined
+    );
   }).length;
   const totalStudents = students.length;
   const assignedCount = totalStudents;
 
   useEffect(() => {
-    if (!isTeacher || activeTab !== "studentWork" || isLoadingAllSubmissions) return;
+    if (!isTeacher || activeTab !== "studentWork" || isLoadingAllSubmissions)
+      return;
     if (autoOpenReviewRef.current) return;
     if (studentsWithWork.length > 0) {
       autoOpenReviewRef.current = true;
@@ -780,7 +842,13 @@ const ViewInstructionPage = ({
     setSavingStudentId(studentId);
     try {
       if (onUpdateGrade) {
-        await onUpdateGrade(cls.id, studentId, localCoursework.id, score, feedback);
+        await onUpdateGrade(
+          cls.id,
+          studentId,
+          localCoursework.id,
+          score,
+          feedback,
+        );
       }
     } finally {
       setSavingStudentId(null);
@@ -800,8 +868,16 @@ const ViewInstructionPage = ({
         setDraftGradesByStudent((prev) => ({ ...prev, [studentId]: score }));
       }
       if (onReturnWork) {
-        await onReturnWork(cls.id, localCoursework.id, studentId, score, feedback);
-        alert(`Returned work to ${students.find((s) => s.id === studentId)?.name || "student"}`);
+        await onReturnWork(
+          cls.id,
+          localCoursework.id,
+          studentId,
+          score,
+          feedback,
+        );
+        alert(
+          `Returned work to ${students.find((s) => s.id === studentId)?.name || "student"}`,
+        );
       }
     } catch (err) {
       console.error("Error returning work:", err);
@@ -928,16 +1004,21 @@ const ViewInstructionPage = ({
     if (!onSubmitWork || submissionState.submitted || isMarkingAsDone) return;
     setIsMarkingAsDone(true);
     try {
-      const ok = await onSubmitWork(cls.id, localCoursework.id, markAsDoneFiles, {
-        private_comment: submissionMessage.trim(),
-        studentId: user?.id,
-        studentName: user?.name,
-        studentEmail: user?.email,
-        className: cls?.name,
-        assignmentTitle: localCoursework?.title,
-        submittedAt: new Date().toISOString(),
-        status: "done",
-      });
+      const ok = await onSubmitWork(
+        cls.id,
+        localCoursework.id,
+        markAsDoneFiles,
+        {
+          private_comment: submissionMessage.trim(),
+          studentId: user?.id,
+          studentName: user?.name,
+          studentEmail: user?.email,
+          className: cls?.name,
+          assignmentTitle: localCoursework?.title,
+          submittedAt: new Date().toISOString(),
+          status: "done",
+        },
+      );
       if (ok !== false) {
         setSubmissionState({ submitted: true });
         setMarkAsDoneFiles([]);
@@ -967,16 +1048,21 @@ const ViewInstructionPage = ({
 
     setIsResubmitting(true);
     try {
-      const ok = await onSubmitWork(cls.id, localCoursework.id, submissionFiles, {
-        private_comment: submissionComment,
-        studentId: user?.id,
-        studentName: user?.name,
-        studentEmail: user?.email,
-        className: cls?.name,
-        assignmentTitle: localCoursework?.title,
-        submittedAt: new Date().toISOString(),
-        status: "submitted",
-      });
+      const ok = await onSubmitWork(
+        cls.id,
+        localCoursework.id,
+        submissionFiles,
+        {
+          private_comment: submissionComment,
+          studentId: user?.id,
+          studentName: user?.name,
+          studentEmail: user?.email,
+          className: cls?.name,
+          assignmentTitle: localCoursework?.title,
+          submittedAt: new Date().toISOString(),
+          status: "submitted",
+        },
+      );
       if (ok !== false) {
         setSubmissionState({ submitted: true });
         setResubmitFiles([]);
@@ -1055,19 +1141,25 @@ const ViewInstructionPage = ({
               <div className="d-none d-md-flex gap-4 text-white text-center">
                 <div>
                   <div className="fs-3 fw-bold">{turnedInCount}</div>
-                  <div className="small text-white text-opacity-90">Turned in</div>
+                  <div className="small text-white text-opacity-90">
+                    Turned in
+                  </div>
                 </div>
                 <div className="border-start border-white border-opacity-50"></div>
                 <div>
                   <div className="fs-3 fw-bold">{assignedCount}</div>
-                  <div className="small text-white text-opacity-90">Assigned</div>
+                  <div className="small text-white text-opacity-90">
+                    Assigned
+                  </div>
                 </div>
                 {gradedCount > 0 && (
                   <>
                     <div className="border-start border-white border-opacity-50"></div>
                     <div>
                       <div className="fs-3 fw-bold">{gradedCount}</div>
-                      <div className="small text-white text-opacity-90">Graded</div>
+                      <div className="small text-white text-opacity-90">
+                        Graded
+                      </div>
                     </div>
                   </>
                 )}
@@ -1120,7 +1212,8 @@ const ViewInstructionPage = ({
                     Points
                   </div>
                   <div className="fw-bold text-dark">
-                    {localCoursework.points !== null && localCoursework.points !== undefined
+                    {localCoursework.points !== null &&
+                    localCoursework.points !== undefined
                       ? localCoursework.points
                       : "Ungraded"}
                   </div>
@@ -1172,50 +1265,51 @@ const ViewInstructionPage = ({
                 </div>
               </div>
 
-              {localCoursework.attachments && localCoursework.attachments.length > 0 && (
-                <div className="mb-4">
-                  <h6 className="fw-bold text-muted small text-uppercase mb-3">
-                    Attachments
-                  </h6>
-                  <div className="row g-2">
-                    {localCoursework.attachments.map((att, idx) => {
-                      const iconClass = getPreviewIcon(att);
-                      return (
-                        <div key={idx} className="col-12 col-md-6">
-                          <a
-                            href={att.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="border rounded p-3 d-flex align-items-center gap-3 text-decoration-none text-dark bg-white shadow-sm hover-shadow"
-                          >
-                            <div
-                              className="rounded d-flex align-items-center justify-content-center flex-shrink-0"
-                              style={{
-                                width: "48px",
-                                height: "48px",
-                                backgroundColor: "#f8f9fa",
-                              }}
+              {localCoursework.attachments &&
+                localCoursework.attachments.length > 0 && (
+                  <div className="mb-4">
+                    <h6 className="fw-bold text-muted small text-uppercase mb-3">
+                      Attachments
+                    </h6>
+                    <div className="row g-2">
+                      {localCoursework.attachments.map((att, idx) => {
+                        const iconClass = getPreviewIcon(att);
+                        return (
+                          <div key={idx} className="col-12 col-md-6">
+                            <a
+                              href={att.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="border rounded p-3 d-flex align-items-center gap-3 text-decoration-none text-dark bg-white shadow-sm hover-shadow"
                             >
-                              <i className={`bi ${iconClass} fs-4`}></i>
-                            </div>
-                            <div className="overflow-hidden">
-                              <div className="fw-semibold small text-truncate">
-                                {att.name}
-                              </div>
                               <div
-                                className="text-muted text-xs text-uppercase"
-                                style={{ fontSize: "0.72rem" }}
+                                className="rounded d-flex align-items-center justify-content-center flex-shrink-0"
+                                style={{
+                                  width: "48px",
+                                  height: "48px",
+                                  backgroundColor: "#f8f9fa",
+                                }}
                               >
-                                {att.type || 'file'}
+                                <i className={`bi ${iconClass} fs-4`}></i>
                               </div>
-                            </div>
-                          </a>
-                        </div>
-                      );
-                    })}
+                              <div className="overflow-hidden">
+                                <div className="fw-semibold small text-truncate">
+                                  {att.name}
+                                </div>
+                                <div
+                                  className="text-muted text-xs text-uppercase"
+                                  style={{ fontSize: "0.72rem" }}
+                                >
+                                  {att.type || "file"}
+                                </div>
+                              </div>
+                            </a>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
             </div>
           )}
 
@@ -1224,9 +1318,13 @@ const ViewInstructionPage = ({
               {isLoadingAllSubmissions ? (
                 <div className="text-center py-5">
                   <div className="spinner-border text-primary" role="status">
-                    <span className="visually-hidden">Loading submissions...</span>
+                    <span className="visually-hidden">
+                      Loading submissions...
+                    </span>
                   </div>
-                  <p className="text-muted mt-2">Loading student submissions...</p>
+                  <p className="text-muted mt-2">
+                    Loading student submissions...
+                  </p>
                 </div>
               ) : fetchError ? (
                 <div className="alert alert-danger">{fetchError}</div>
@@ -1235,25 +1333,33 @@ const ViewInstructionPage = ({
                   <div className="row g-3 mb-4 pb-4 border-bottom">
                     <div className="col-6 col-md-3">
                       <div className="border rounded-3 p-3 bg-white text-center shadow-sm">
-                        <div className="fs-2 fw-bold text-primary">{turnedInCount}</div>
+                        <div className="fs-2 fw-bold text-primary">
+                          {turnedInCount}
+                        </div>
                         <div className="text-muted small">Turned in</div>
                       </div>
                     </div>
                     <div className="col-6 col-md-3">
                       <div className="border rounded-3 p-3 bg-white text-center shadow-sm">
-                        <div className="fs-2 fw-bold text-warning">{assignedCount}</div>
+                        <div className="fs-2 fw-bold text-warning">
+                          {assignedCount}
+                        </div>
                         <div className="text-muted small">Assigned</div>
                       </div>
                     </div>
                     <div className="col-6 col-md-3">
                       <div className="border rounded-3 p-3 bg-white text-center shadow-sm">
-                        <div className="fs-2 fw-bold text-success">{gradedCount}</div>
+                        <div className="fs-2 fw-bold text-success">
+                          {gradedCount}
+                        </div>
                         <div className="text-muted small">Graded</div>
                       </div>
                     </div>
                     <div className="col-6 col-md-3">
                       <div className="border rounded-3 p-3 bg-white text-center shadow-sm">
-                        <div className="fs-2 fw-bold text-dark">{totalStudents}</div>
+                        <div className="fs-2 fw-bold text-dark">
+                          {totalStudents}
+                        </div>
                         <div className="text-muted small">Total students</div>
                       </div>
                     </div>
@@ -1261,26 +1367,32 @@ const ViewInstructionPage = ({
 
                   <div className="mb-4">
                     <h6 className="fw-bold text-dark mb-3 d-flex align-items-center gap-2">
-                      <i className="bi bi-clipboard-check-fill text-primary"></i> Submission Review
+                      <i className="bi bi-clipboard-check-fill text-primary"></i>{" "}
+                      Submission Review
                     </h6>
                     {studentsWithWork.length > 0 ? (
                       <div className="d-flex flex-column gap-3">
                         {studentsWithWork.map((st) => {
                           const subData = submissionsMap[st.id];
-                          const savedGrade = gradeMatrix?.[st.id]?.[localCoursework.id];
-                          const currentGrade = draftGradesByStudent[st.id] ?? savedGrade ?? "";
+                          const savedGrade =
+                            gradeMatrix?.[st.id]?.[localCoursework.id];
+                          const currentGrade =
+                            draftGradesByStudent[st.id] ?? savedGrade ?? "";
                           const gradeFromApi = subData?.submission?.grade;
                           const gradeToShow =
                             gradeFromApi !== null && gradeFromApi !== undefined
                               ? gradeFromApi
                               : currentGrade;
                           const isGraded =
-                            gradeToShow !== null && gradeToShow !== undefined && gradeToShow !== "";
+                            gradeToShow !== null &&
+                            gradeToShow !== undefined &&
+                            gradeToShow !== "";
                           const studentName =
                             st?.first_name && st?.last_name
                               ? `${st.first_name} ${st.last_name}`
                               : st?.full_name || st?.email || "Student";
-                          const studentFirstName = (studentName || "").split(" ")[0] || "Submission";
+                          const studentFirstName =
+                            (studentName || "").split(" ")[0] || "Submission";
 
                           const isSelected = selectedStudentId === st.id;
                           const normalizeName = (value) => {
@@ -1291,7 +1403,8 @@ const ViewInstructionPage = ({
                             return parts[parts.length - 1] || null;
                           };
 
-                          const submissionFiles = subData?.submission?.files || [];
+                          const submissionFiles =
+                            subData?.submission?.files || [];
                           const previewFiles =
                             submissionFiles.length > 0
                               ? submissionFiles.map((f, idx) => ({
@@ -1300,9 +1413,13 @@ const ViewInstructionPage = ({
                                     normalizeName(f.file_name) ||
                                     normalizeName(f.filename) ||
                                     normalizeName(f.name) ||
-                                    (f.file_path ? normalizeName(f.file_path) : `file_${idx}`),
+                                    (f.file_path
+                                      ? normalizeName(f.file_path)
+                                      : `file_${idx}`),
                                   type: f.file_type || f.type || "pdf",
-                                  url: f.file_path ? f.file_path : f.file_url || f.url || "#",
+                                  url: f.file_path
+                                    ? f.file_path
+                                    : f.file_url || f.url || "#",
                                   file_path: f.file_path || null,
                                   file_url: f.file_url || f.url || null,
                                 }))
@@ -1315,20 +1432,36 @@ const ViewInstructionPage = ({
                                   },
                                 ];
                           const selectedAttachment =
-                            selectedAttachmentByStudent[st.id] || previewFiles[0];
-                          const privateFeedback = privateFeedbackByStudent[st.id] || "";
-                          const hasGrade = gradeToShow !== null && gradeToShow !== undefined && gradeToShow !== "";
+                            selectedAttachmentByStudent[st.id] ||
+                            previewFiles[0];
+                          const privateFeedback =
+                            privateFeedbackByStudent[st.id] || "";
+                          const hasGrade =
+                            gradeToShow !== null &&
+                            gradeToShow !== undefined &&
+                            gradeToShow !== "";
                           const submissionId = subData?.submission?.id;
                           const comments = commentsMap[submissionId] || [];
 
                           return (
-                            <div key={st.id} className="border rounded-4 p-4 bg-white shadow-sm">
+                            <div
+                              key={st.id}
+                              className="border rounded-4 p-4 bg-white shadow-sm"
+                            >
                               <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                                 <div className="d-flex align-items-center gap-3">
-                                  <Avatar name={studentName} size={44} color="#1a73e8" />
+                                  <Avatar
+                                    name={studentName}
+                                    size={44}
+                                    color="#1a73e8"
+                                  />
                                   <div>
-                                    <div className="fw-semibold text-dark">{studentName}</div>
-                                    <div className="text-muted small">{st.email || "No email provided"}</div>
+                                    <div className="fw-semibold text-dark">
+                                      {studentName}
+                                    </div>
+                                    <div className="text-muted small">
+                                      {st.email || "No email provided"}
+                                    </div>
                                   </div>
                                 </div>
                                 <div className="d-flex align-items-center gap-2 flex-wrap">
@@ -1337,13 +1470,21 @@ const ViewInstructionPage = ({
                                       {gradeToShow} / {localCoursework.points}
                                     </span>
                                   ) : (
-                                    <span className="badge bg-warning text-dark border">Not graded</span>
+                                    <span className="badge bg-warning text-dark border">
+                                      Not graded
+                                    </span>
                                   )}
                                   <button
                                     className="btn btn-sm btn-outline-primary"
-                                    onClick={() => setSelectedStudentId(isSelected ? null : st.id)}
+                                    onClick={() =>
+                                      setSelectedStudentId(
+                                        isSelected ? null : st.id,
+                                      )
+                                    }
                                   >
-                                    {isSelected ? "Hide review" : "Review submission"}
+                                    {isSelected
+                                      ? "Hide review"
+                                      : "Review submission"}
                                   </button>
                                 </div>
                               </div>
@@ -1356,9 +1497,12 @@ const ViewInstructionPage = ({
                                         <div className="border rounded-3 overflow-hidden bg-light">
                                           <div className="px-3 py-2 border-bottom bg-white d-flex justify-content-between align-items-center">
                                             <div>
-                                              <div className="fw-semibold text-dark">Preview</div>
+                                              <div className="fw-semibold text-dark">
+                                                Preview
+                                              </div>
                                               <div className="small text-muted">
-                                                Current file: {selectedAttachment.name}
+                                                Current file:{" "}
+                                                {selectedAttachment.name}
                                               </div>
                                             </div>
                                             <span className="badge bg-light text-muted border">
@@ -1366,7 +1510,14 @@ const ViewInstructionPage = ({
                                             </span>
                                           </div>
                                           <SubmissionFilePreview
-                                            key={selectedAttachment?.id || selectedAttachment?.name || selectedAttachment?.url || selectedAttachment?.file_path || selectedAttachment?.file_url || "attachment"}
+                                            key={
+                                              selectedAttachment?.id ||
+                                              selectedAttachment?.name ||
+                                              selectedAttachment?.url ||
+                                              selectedAttachment?.file_path ||
+                                              selectedAttachment?.file_url ||
+                                              "attachment"
+                                            }
                                             file={selectedAttachment}
                                           />
                                         </div>
@@ -1376,29 +1527,46 @@ const ViewInstructionPage = ({
                                         <div className="border rounded-3 p-3 bg-white shadow-sm mb-3">
                                           <div className="mt-0">
                                             <h6 className="fw-bold text-muted small text-uppercase mb-3">
-                                              <i className="bi bi-chat-left-text me-1"></i> Private Comments
+                                              <i className="bi bi-chat-left-text me-1"></i>{" "}
+                                              Private Comments
                                             </h6>
                                             <div
                                               id={`comment-container-${submissionId}`}
-                                              style={{ maxHeight: "370px", height: "370px", overflowY: "auto" }}
+                                              style={{
+                                                maxHeight: "370px",
+                                                height: "370px",
+                                                overflowY: "auto",
+                                              }}
                                               className="mb-3"
                                             >
                                               {comments.length > 0 ? (
                                                 comments.map((cm) => {
                                                   const senderName =
-                                                    cm.user?.first_name && cm.user?.last_name
+                                                    cm.user?.first_name &&
+                                                    cm.user?.last_name
                                                       ? `${cm.user.first_name} ${cm.user.last_name}`
-                                                      : cm.user?.name || "Unknown";
+                                                      : cm.user?.name ||
+                                                        "Unknown";
                                                   const date = cm.created_at
-                                                    ? new Date(cm.created_at).toLocaleString()
+                                                    ? new Date(
+                                                        cm.created_at,
+                                                      ).toLocaleString()
                                                     : "Just now";
-                                                  const isTeacherComment = cm.user_id !== st.id;
+                                                  const isTeacherComment =
+                                                    cm.user_id !== st.id;
                                                   return (
-                                                    <div key={`comment-${cm.id}-${cm.user_id || "0"}`} className="d-flex gap-3 mb-3">
+                                                    <div
+                                                      key={`comment-${cm.id}-${cm.user_id || "0"}`}
+                                                      className="d-flex gap-3 mb-3"
+                                                    >
                                                       <Avatar
                                                         name={senderName}
                                                         size={36}
-                                                        color={isTeacherComment ? "#1a73e8" : "#00897b"}
+                                                        color={
+                                                          isTeacherComment
+                                                            ? "#1a73e8"
+                                                            : "#00897b"
+                                                        }
                                                       />
                                                       <div className="flex-grow-1">
                                                         <div className="d-flex align-items-center gap-2">
@@ -1406,7 +1574,13 @@ const ViewInstructionPage = ({
                                                             {senderName}
                                                             {isTeacherComment}
                                                           </span>
-                                                          <span className="text-muted" style={{ fontSize: "0.75rem" }}>
+                                                          <span
+                                                            className="text-muted"
+                                                            style={{
+                                                              fontSize:
+                                                                "0.75rem",
+                                                            }}
+                                                          >
                                                             {date}
                                                           </span>
                                                         </div>
@@ -1415,9 +1589,11 @@ const ViewInstructionPage = ({
                                                           style={{
                                                             fontSize: "0.95rem",
                                                             lineHeight: "1.5",
-                                                            borderBottom: "1px solid #e9ecef",
+                                                            borderBottom:
+                                                              "1px solid #e9ecef",
                                                             marginRight: "20px",
-                                                            paddingBottom: "0.5rem",
+                                                            paddingBottom:
+                                                              "0.5rem",
                                                           }}
                                                         >
                                                           {cm.comment}
@@ -1427,13 +1603,19 @@ const ViewInstructionPage = ({
                                                   );
                                                 })
                                               ) : (
-                                                <p className="text-muted small fst-italic">No private comments yet.</p>
+                                                <p className="text-muted small fst-italic">
+                                                  No private comments yet.
+                                                </p>
                                               )}
                                             </div>
 
                                             <div className="d-flex gap-2 align-items-start">
                                               <Avatar
-                                                name={user.first_name + " " + user.last_name}
+                                                name={
+                                                  user.first_name +
+                                                  " " +
+                                                  user.last_name
+                                                }
                                                 size={36}
                                                 color={user.color}
                                               />
@@ -1441,28 +1623,63 @@ const ViewInstructionPage = ({
                                                 <input
                                                   type="text"
                                                   className="form-control rounded-pill px-3 py-2 shadow-none"
-                                                  style={{ border: "1px solid #dadce0", backgroundColor: "#f1f3f4" }}
+                                                  style={{
+                                                    border: "1px solid #dadce0",
+                                                    backgroundColor: "#f1f3f4",
+                                                  }}
                                                   placeholder="Write a private comment to this student..."
-                                                  value={teacherCommentInput[st.id] || ""}
+                                                  value={
+                                                    teacherCommentInput[
+                                                      st.id
+                                                    ] || ""
+                                                  }
                                                   onChange={(e) =>
-                                                    setTeacherCommentInput((prev) => ({
-                                                      ...prev,
-                                                      [st.id]: e.target.value,
-                                                    }))
+                                                    setTeacherCommentInput(
+                                                      (prev) => ({
+                                                        ...prev,
+                                                        [st.id]: e.target.value,
+                                                      }),
+                                                    )
                                                   }
                                                   onKeyDown={(e) => {
-                                                    if (e.key === "Enter" && teacherCommentInput[st.id]?.trim()) {
-                                                      handleSendTeacherComment(submissionId, st.id);
+                                                    if (
+                                                      e.key === "Enter" &&
+                                                      teacherCommentInput[
+                                                        st.id
+                                                      ]?.trim()
+                                                    ) {
+                                                      handleSendTeacherComment(
+                                                        submissionId,
+                                                        st.id,
+                                                      );
                                                     }
                                                   }}
                                                 />
                                                 <button
                                                   className="btn btn-lg border-0 px-1"
-                                                  onClick={() => handleSendTeacherComment(submissionId, st.id)}
-                                                  disabled={sendingTeacherComment[st.id] || !teacherCommentInput[st.id]?.trim()}
+                                                  onClick={() =>
+                                                    handleSendTeacherComment(
+                                                      submissionId,
+                                                      st.id,
+                                                    )
+                                                  }
+                                                  disabled={
+                                                    sendingTeacherComment[
+                                                      st.id
+                                                    ] ||
+                                                    !teacherCommentInput[
+                                                      st.id
+                                                    ]?.trim()
+                                                  }
                                                 >
-                                                  {sendingTeacherComment[st.id] ? (
-                                                    <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                  {sendingTeacherComment[
+                                                    st.id
+                                                  ] ? (
+                                                    <span
+                                                      className="spinner-border spinner-border-sm"
+                                                      role="status"
+                                                      aria-hidden="true"
+                                                    ></span>
                                                   ) : (
                                                     <i className="bi bi-send-fill"></i>
                                                   )}
@@ -1474,28 +1691,46 @@ const ViewInstructionPage = ({
 
                                         <div className="border rounded-3 p-3 bg-white shadow-sm">
                                           <div className="mb-3">
-                                            <div className="fw-semibold text-dark mb-2">Current file</div>
-                                            <div className="text-muted small">{selectedAttachment.name}</div>
+                                            <div className="fw-semibold text-dark mb-2">
+                                              Current file
+                                            </div>
+                                            <div className="text-muted small">
+                                              {selectedAttachment.name}
+                                            </div>
                                           </div>
 
-                                          <label className="form-label small fw-bold text-muted mb-1">Grade</label>
+                                          <label className="form-label small fw-bold text-muted mb-1">
+                                            Grade
+                                          </label>
                                           <div className="d-flex align-items-center gap-2 mb-3">
                                             <input
                                               type="number"
                                               className="form-control w-50"
                                               placeholder="--"
                                               min="0"
-                                              max={localCoursework.points || 100}
+                                              max={
+                                                localCoursework.points || 100
+                                              }
                                               value={gradeToShow ?? ""}
                                               onChange={(e) => {
-                                                const val = e.target.value === "" ? null : Number(e.target.value);
-                                                handleGradeInputChange(st.id, val);
+                                                const val =
+                                                  e.target.value === ""
+                                                    ? null
+                                                    : Number(e.target.value);
+                                                handleGradeInputChange(
+                                                  st.id,
+                                                  val,
+                                                );
                                               }}
                                             />
-                                            <span className="text-muted small">/ {localCoursework.points ?? 100}</span>
+                                            <span className="text-muted small">
+                                              / {localCoursework.points ?? 100}
+                                            </span>
                                           </div>
 
-                                          <label className="form-label small fw-bold text-muted mb-1">Feedback (for grading)</label>
+                                          <label className="form-label small fw-bold text-muted mb-1">
+                                            Feedback (for grading)
+                                          </label>
                                           <textarea
                                             className="form-control mb-3"
                                             rows="4"
@@ -1510,7 +1745,9 @@ const ViewInstructionPage = ({
                                           />
 
                                           <div className="mb-3">
-                                            <h6 className="fw-semibold text-muted small text-uppercase mb-2">Attached files</h6>
+                                            <h6 className="fw-semibold text-muted small text-uppercase mb-2">
+                                              Attached files
+                                            </h6>
                                             <div className="d-flex flex-wrap gap-2">
                                               {previewFiles.map((file) => (
                                                 <button
@@ -1518,14 +1755,20 @@ const ViewInstructionPage = ({
                                                   type="button"
                                                   className={`border rounded p-2 px-3 d-flex align-items-center gap-2 text-decoration-none text-dark bg-white shadow-sm ${selectedAttachment.id === file.id ? "border-primary" : ""}`}
                                                   onClick={() =>
-                                                    setSelectedAttachmentByStudent({
-                                                      ...selectedAttachmentByStudent,
-                                                      [st.id]: file,
-                                                    })
+                                                    setSelectedAttachmentByStudent(
+                                                      {
+                                                        ...selectedAttachmentByStudent,
+                                                        [st.id]: file,
+                                                      },
+                                                    )
                                                   }
                                                 >
-                                                  <i className={`bi ${getPreviewIcon(file)} fs-5`}></i>
-                                                  <span className="small fw-medium">{file.name}</span>
+                                                  <i
+                                                    className={`bi ${getPreviewIcon(file)} fs-5`}
+                                                  ></i>
+                                                  <span className="small fw-medium">
+                                                    {file.name}
+                                                  </span>
                                                 </button>
                                               ))}
                                             </div>
@@ -1534,22 +1777,33 @@ const ViewInstructionPage = ({
                                           <div className="d-grid gap-2">
                                             <button
                                               className="btn btn-primary"
-                                              onClick={() => handleReturnToStudent(st.id)}
-                                              disabled={!hasGrade || returningStudentId === st.id}
+                                              onClick={() =>
+                                                handleReturnToStudent(st.id)
+                                              }
+                                              disabled={
+                                                !hasGrade ||
+                                                returningStudentId === st.id
+                                              }
                                             >
                                               {returningStudentId === st.id ? (
                                                 <>
-                                                  <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                                  <span
+                                                    className="spinner-border spinner-border-sm me-2"
+                                                    role="status"
+                                                    aria-hidden="true"
+                                                  ></span>
                                                   Returning...
                                                 </>
                                               ) : (
                                                 <>
-                                                  <i className="bi bi-reply me-2"></i> Return to student
+                                                  <i className="bi bi-reply me-2"></i>{" "}
+                                                  Return to student
                                                 </>
                                               )}
                                             </button>
                                             <button className="btn btn-outline-secondary">
-                                              <i className="bi bi-download me-2"></i> Download all files
+                                              <i className="bi bi-download me-2"></i>{" "}
+                                              Download all files
                                             </button>
                                           </div>
                                         </div>
@@ -1558,7 +1812,10 @@ const ViewInstructionPage = ({
                                   ) : (
                                     <div className="text-center py-4 text-muted">
                                       <i className="bi bi-inbox fs-2"></i>
-                                      <p>No submission data available for this student.</p>
+                                      <p>
+                                        No submission data available for this
+                                        student.
+                                      </p>
                                     </div>
                                   )}
                                 </div>
@@ -1570,29 +1827,45 @@ const ViewInstructionPage = ({
                     ) : (
                       <div className="text-center py-4 bg-light border rounded-3">
                         <i className="bi bi-inbox text-muted fs-1 mb-2"></i>
-                        <p className="text-muted small mb-0">No students have turned in work yet.</p>
+                        <p className="text-muted small mb-0">
+                          No students have turned in work yet.
+                        </p>
                       </div>
                     )}
                   </div>
                   {studentsWithoutWork.length > 0 && (
                     <div>
                       <h6 className="fw-bold text-dark mb-3 d-flex align-items-center gap-2">
-                        <i className="bi bi-clock-fill text-warning"></i> Students who haven't turned in work (
+                        <i className="bi bi-clock-fill text-warning"></i>{" "}
+                        Students who haven't turned in work (
                         {studentsWithoutWork.length})
                       </h6>
                       <div className="d-flex flex-column gap-2">
                         {studentsWithoutWork.map((st) => (
-                          <div key={st.id} className="border rounded-3 p-3 bg-white shadow-sm">
+                          <div
+                            key={st.id}
+                            className="border rounded-3 p-3 bg-white shadow-sm"
+                          >
                             <div className="d-flex justify-content-between align-items-center">
                               <div className="d-flex align-items-center gap-3">
-                                <Avatar name={st.name} size={40} color="#00897b" />
+                                <Avatar
+                                  name={st.name}
+                                  size={40}
+                                  color="#00897b"
+                                />
                                 <div>
-                                  <div className="fw-semibold text-dark">{st.name}</div>
-                                  <div className="text-muted small">{st.email}</div>
+                                  <div className="fw-semibold text-dark">
+                                    {st.name}
+                                  </div>
+                                  <div className="text-muted small">
+                                    {st.email}
+                                  </div>
                                 </div>
                               </div>
                               <div>
-                                <span className="badge bg-light text-muted border">Assigned</span>
+                                <span className="badge bg-light text-muted border">
+                                  Assigned
+                                </span>
                               </div>
                             </div>
                           </div>
@@ -1610,7 +1883,9 @@ const ViewInstructionPage = ({
               {isLoadingStudentSubmission ? (
                 <div className="text-center py-5">
                   <div className="spinner-border text-primary" role="status">
-                    <span className="visually-hidden">Loading your submission...</span>
+                    <span className="visually-hidden">
+                      Loading your submission...
+                    </span>
                   </div>
                   <p className="text-muted mt-2">Loading your work...</p>
                 </div>
@@ -1618,8 +1893,11 @@ const ViewInstructionPage = ({
                 <>
                   <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
                     <h5 className="fw-bold text-dark mb-0">Your Submission</h5>
-                    {studentSubmission?.submission_status === "not_submitted" ? (
-                      <span className="badge bg-warning text-dark">Not submitted</span>
+                    {studentSubmission?.submission_status ===
+                    "not_submitted" ? (
+                      <span className="badge bg-warning text-dark">
+                        Not submitted
+                      </span>
                     ) : studentSubmission?.submission?.grade !== null &&
                       studentSubmission?.submission?.grade !== undefined ? (
                       <span className="badge bg-success">Graded</span>
@@ -1632,34 +1910,60 @@ const ViewInstructionPage = ({
                     <div className="col-12 col-md-8">
                       <div className="bg-light border rounded-3 p-3 h-100">
                         <div className="fw-semibold text-dark mb-2">
-                          <i className="bi bi-chat-left-text me-1"></i> Private Comments
+                          <i className="bi bi-chat-left-text me-1"></i> Private
+                          Comments
                         </div>
                         <div
-                          id={studentSubmission?.submission?.id ? `comment-container-${studentSubmission.submission.id}` : undefined}
-                          style={{ maxHeight: "462px", height: "462px", overflowY: "auto" }}
+                          id={
+                            studentSubmission?.submission?.id
+                              ? `comment-container-${studentSubmission.submission.id}`
+                              : undefined
+                          }
+                          style={{
+                            maxHeight: "462px",
+                            height: "462px",
+                            overflowY: "auto",
+                          }}
                           className="mb-3"
                         >
                           {(() => {
-                            const submissionId = studentSubmission?.submission?.id;
-                            const comments = submissionId ? commentsMap[submissionId] || [] : [];
+                            const submissionId =
+                              studentSubmission?.submission?.id;
+                            const comments = submissionId
+                              ? commentsMap[submissionId] || []
+                              : [];
                             return comments.length > 0 ? (
                               comments.map((cm) => {
                                 const senderName =
                                   cm.user?.first_name && cm.user?.last_name
                                     ? `${cm.user.first_name} ${cm.user.last_name}`
                                     : cm.user?.name || "Unknown";
-                                const date = cm.created_at ? new Date(cm.created_at).toLocaleString() : "Just now";
+                                const date = cm.created_at
+                                  ? new Date(cm.created_at).toLocaleString()
+                                  : "Just now";
                                 const isTeacherComment = cm.user_id !== user.id;
                                 return (
-                                  <div key={`comment-${cm.id}-${cm.user_id || "0"}`} className="d-flex gap-3 mb-3">
-                                    <Avatar name={senderName} size={36} color={isTeacherComment ? "#1a73e8" : "#00897b"} />
+                                  <div
+                                    key={`comment-${cm.id}-${cm.user_id || "0"}`}
+                                    className="d-flex gap-3 mb-3"
+                                  >
+                                    <Avatar
+                                      name={senderName}
+                                      size={36}
+                                      color={
+                                        isTeacherComment ? "#1a73e8" : "#00897b"
+                                      }
+                                    />
                                     <div className="flex-grow-1">
                                       <div className="d-flex align-items-center gap-2">
                                         <span className="fw-semibold text-dark">
                                           {senderName}
                                           {isTeacherComment && " (Teacher)"}
                                         </span>
-                                        <span className="text-muted" style={{ fontSize: "0.75rem" }}>
+                                        <span
+                                          className="text-muted"
+                                          style={{ fontSize: "0.75rem" }}
+                                        >
                                           {date}
                                         </span>
                                       </div>
@@ -1680,27 +1984,44 @@ const ViewInstructionPage = ({
                                 );
                               })
                             ) : (
-                              <p className="text-muted small fst-italic">No private comments yet.</p>
+                              <p className="text-muted small fst-italic">
+                                No private comments yet.
+                              </p>
                             );
                           })()}
                         </div>
 
                         <div className="d-flex gap-2 align-items-start">
-                          <Avatar name={user.first_name + " " + user.last_name} size={36} color="#00897b" />
+                          <Avatar
+                            name={user.first_name + " " + user.last_name}
+                            size={36}
+                            color="#00897b"
+                          />
                           <div className="flex-grow-1 d-flex gap-2">
                             <input
                               type="text"
                               className="form-control rounded-pill px-3 py-2 shadow-none"
-                              style={{ border: "1px solid #dadce0", backgroundColor: "#f1f3f4" }}
+                              style={{
+                                border: "1px solid #dadce0",
+                                backgroundColor: "#f1f3f4",
+                              }}
                               placeholder="Write a private comment to the teacher..."
                               value={studentCommentInput}
-                              onChange={(e) => setStudentCommentInput(e.target.value)}
+                              onChange={(e) =>
+                                setStudentCommentInput(e.target.value)
+                              }
                               onKeyDown={(e) => {
-                                if (e.key === "Enter" && studentCommentInput.trim()) {
+                                if (
+                                  e.key === "Enter" &&
+                                  studentCommentInput.trim()
+                                ) {
                                   handleSendStudentComment();
                                 }
                               }}
-                              disabled={!studentSubmission?.submission?.id || isSendingStudentComment}
+                              disabled={
+                                !studentSubmission?.submission?.id ||
+                                isSendingStudentComment
+                              }
                             />
                             <button
                               className="btn btn-lg border-0 px-1"
@@ -1717,7 +2038,11 @@ const ViewInstructionPage = ({
                               }
                             >
                               {isSendingStudentComment ? (
-                                <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                <span
+                                  className="spinner-border spinner-border-sm"
+                                  role="status"
+                                  aria-hidden="true"
+                                ></span>
                               ) : (
                                 <i className="bi bi-send-fill"></i>
                               )}
@@ -1729,18 +2054,22 @@ const ViewInstructionPage = ({
 
                     <div className="col-12 col-md-4">
                       <div className="bg-light border rounded-3 p-3 h-100">
-                        {studentSubmission?.submission_status === "not_submitted" ? (
+                        {studentSubmission?.submission_status ===
+                        "not_submitted" ? (
                           <>
                             <div className="text-center py-4">
                               <i className="bi bi-inbox text-muted fs-1 mb-2"></i>
-                              <p className="text-muted mb-3">You haven't submitted this assignment yet.</p>
+                              <p className="text-muted mb-3">
+                                You haven't submitted this assignment yet.
+                              </p>
                             </div>
                             <div className="d-flex gap-2 flex-wrap justify-content-center">
                               <button
                                 className="btn btn-primary fw-medium shadow-sm"
                                 onClick={() => setShowFileUploadModal(true)}
                               >
-                                <i className="bi bi-plus-circle me-1"></i> Add or Create & Turn In
+                                <i className="bi bi-plus-circle me-1"></i> Add
+                                or Create & Turn In
                               </button>
                               <button
                                 className="btn btn-outline-secondary fw-medium"
@@ -1755,54 +2084,77 @@ const ViewInstructionPage = ({
                             {studentSubmission?.submission?.files &&
                               studentSubmission.submission.files.length > 0 && (
                                 <div className="mb-3">
-                                  <div className="fw-semibold text-dark mb-2">Your submitted files</div>
+                                  <div className="fw-semibold text-dark mb-2">
+                                    Your submitted files
+                                  </div>
                                   <div className="d-flex flex-wrap gap-2">
-                                    {studentSubmission.submission.files.map((file, idx) => {
-                                      const normalizeName = (value) => {
-                                        if (!value) return null;
-                                        const text = String(value).trim();
-                                        if (!text) return null;
-                                        const parts = text.replace(/\\/g, "/").split("/");
-                                        return parts[parts.length - 1] || null;
-                                      };
-                                      const fileObj = {
-                                        id: `sub-${idx}`,
-                                        name:
-                                          normalizeName(file.file_name) ||
-                                          normalizeName(file.filename) ||
-                                          normalizeName(file.name) ||
-                                          (file.file_path ? file.file_path.split("/").pop() : "file"),
-                                        type: file.file_type || "pdf",
-                                        url: file.file_url || file.url || "#",
-                                      };
-                                      return (
-                                        <a
-                                          key={idx}
-                                          href={fileObj.url}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="border rounded p-2 px-3 d-flex align-items-center gap-2 text-decoration-none text-dark bg-white shadow-sm"
-                                        >
-                                          <i className={`bi ${getPreviewIcon(fileObj)} fs-5`}></i>
-                                          <span className="small fw-medium">{fileObj.name}</span>
-                                        </a>
-                                      );
-                                    })}
+                                    {studentSubmission.submission.files.map(
+                                      (file, idx) => {
+                                        const normalizeName = (value) => {
+                                          if (!value) return null;
+                                          const text = String(value).trim();
+                                          if (!text) return null;
+                                          const parts = text
+                                            .replace(/\\/g, "/")
+                                            .split("/");
+                                          return (
+                                            parts[parts.length - 1] || null
+                                          );
+                                        };
+                                        const fileObj = {
+                                          id: `sub-${idx}`,
+                                          name:
+                                            normalizeName(file.file_name) ||
+                                            normalizeName(file.filename) ||
+                                            normalizeName(file.name) ||
+                                            (file.file_path
+                                              ? file.file_path.split("/").pop()
+                                              : "file"),
+                                          type: file.file_type || "pdf",
+                                          url: file.file_url || file.url || "#",
+                                        };
+                                        return (
+                                          <a
+                                            key={idx}
+                                            href={fileObj.url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="border rounded p-2 px-3 d-flex align-items-center gap-2 text-decoration-none text-dark bg-white shadow-sm"
+                                          >
+                                            <i
+                                              className={`bi ${getPreviewIcon(fileObj)} fs-5`}
+                                            ></i>
+                                            <span className="small fw-medium">
+                                              {fileObj.name}
+                                            </span>
+                                          </a>
+                                        );
+                                      },
+                                    )}
                                   </div>
                                 </div>
                               )}
 
                             {studentSubmission?.submission?.grade !== null &&
-                              studentSubmission?.submission?.grade !== undefined && (
+                              studentSubmission?.submission?.grade !==
+                                undefined && (
                                 <div className="mb-3">
-                                  <div className="fw-semibold text-dark mb-1">Grade & Feedback</div>
+                                  <div className="fw-semibold text-dark mb-1">
+                                    Grade & Feedback
+                                  </div>
                                   <div className="display-6 fw-bold text-success">
-                                    {studentSubmission.submission.grade} / {localCoursework.points}
+                                    {studentSubmission.submission.grade} /{" "}
+                                    {localCoursework.points}
                                   </div>
                                   {studentSubmission.submission.feedback && (
                                     <div className="mt-2">
-                                      <div className="fw-semibold text-dark mb-1">Feedback</div>
-                                      <div className="bg-white p-3 rounded border" style={{ whiteSpace: "pre-wrap" }}>
+                                      <div className="fw-semibold text-dark mb-1">
+                                        Feedback
+                                      </div>
+                                      <div
+                                        className="bg-white p-3 rounded border"
+                                        style={{ whiteSpace: "pre-wrap" }}
+                                      >
                                         {studentSubmission.submission.feedback}
                                       </div>
                                     </div>
@@ -1810,15 +2162,21 @@ const ViewInstructionPage = ({
                                 </div>
                               )}
 
-                            {studentSubmission?.submission?.status === "returned" && (
+                            {studentSubmission?.submission?.status ===
+                              "returned" && (
                               <div className="alert alert-info mb-3">
-                                This work has been returned to you by your teacher.
+                                This work has been returned to you by your
+                                teacher.
                               </div>
                             )}
 
                             <div className="border-top pt-3">
-                              <button className="btn btn-outline-primary w-100" onClick={() => setShowFileUploadModal(true)}>
-                                <i className="bi bi-arrow-repeat me-1"></i> Resubmit
+                              <button
+                                className="btn btn-outline-primary w-100"
+                                onClick={() => setShowFileUploadModal(true)}
+                              >
+                                <i className="bi bi-arrow-repeat me-1"></i>{" "}
+                                Resubmit
                               </button>
                             </div>
                           </>
@@ -1843,8 +2201,14 @@ const ViewInstructionPage = ({
           <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content border-0 shadow-lg rounded-4">
               <div className="modal-header border-bottom px-4 pt-4 pb-3">
-                <h5 className="modal-title font-google fw-bold">Edit Assignment</h5>
-                <button type="button" className="btn-close" onClick={() => setShowEditModal(false)}></button>
+                <h5 className="modal-title font-google fw-bold">
+                  Edit Assignment
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowEditModal(false)}
+                ></button>
               </div>
               <form onSubmit={handleEditSubmit}>
                 <div className="modal-body p-4">
@@ -1854,29 +2218,48 @@ const ViewInstructionPage = ({
                       type="text"
                       className="form-control"
                       value={editFormData.title}
-                      onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          title: e.target.value,
+                        })
+                      }
                       required
                     />
                   </div>
 
                   <div className="mb-3">
-                    <label className="form-label fw-semibold">Instructions</label>
+                    <label className="form-label fw-semibold">
+                      Instructions
+                    </label>
                     <textarea
                       className="form-control"
                       rows="4"
                       value={editFormData.instructions}
-                      onChange={(e) => setEditFormData({ ...editFormData, instructions: e.target.value })}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          instructions: e.target.value,
+                        })
+                      }
                     />
                   </div>
 
                   <div className="row g-3 mb-3">
                     <div className="col-md-4">
-                      <label className="form-label fw-semibold">Max Points</label>
+                      <label className="form-label fw-semibold">
+                        Max Points
+                      </label>
                       <input
                         type="number"
                         className="form-control"
                         value={editFormData.maxPoints}
-                        onChange={(e) => setEditFormData({ ...editFormData, maxPoints: e.target.value })}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            maxPoints: e.target.value,
+                          })
+                        }
                         required
                       />
                     </div>
@@ -1886,7 +2269,12 @@ const ViewInstructionPage = ({
                         type="date"
                         className="form-control"
                         value={editFormData.dueDate}
-                        onChange={(e) => setEditFormData({ ...editFormData, dueDate: e.target.value })}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            dueDate: e.target.value,
+                          })
+                        }
                       />
                     </div>
                     <div className="col-md-4">
@@ -1894,7 +2282,12 @@ const ViewInstructionPage = ({
                       <select
                         className="form-select"
                         value={editFormData.topicId}
-                        onChange={(e) => setEditFormData({ ...editFormData, topicId: e.target.value })}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            topicId: e.target.value,
+                          })
+                        }
                       >
                         <option value="">None</option>
                         {topics.map((topic) => (
@@ -1907,13 +2300,22 @@ const ViewInstructionPage = ({
                   </div>
 
                   <div className="mb-3">
-                    <label className="form-label fw-semibold">Attachments</label>
+                    <label className="form-label fw-semibold">
+                      Attachments
+                    </label>
+
+                    {/* Show existing attachments with remove buttons */}
                     {existingAttachments.length > 0 && (
                       <div className="mb-2">
-                        <div className="small text-muted">Current attachments:</div>
+                        <div className="small text-muted">
+                          Current attachments:
+                        </div>
                         <ul className="list-unstyled d-flex flex-wrap gap-2">
                           {existingAttachments.map((att) => (
-                            <li key={att.id} className="badge bg-light text-dark border d-flex align-items-center gap-2">
+                            <li
+                              key={att.id}
+                              className="badge bg-light text-dark border d-flex align-items-center gap-2"
+                            >
                               {att.file_name || att.name}
                               <button
                                 type="button"
@@ -1927,26 +2329,112 @@ const ViewInstructionPage = ({
                           ))}
                         </ul>
                         <div className="small text-warning">
-                          <i className="bi bi-info-circle"></i> Click the × to remove an attachment. Uploading new files will add them.
+                          <i className="bi bi-info-circle"></i> Click the × to
+                          remove an attachment. Uploading new files will add
+                          them.
                         </div>
                       </div>
                     )}
-                    <input
-                      type="file"
-                      className="form-control"
-                      multiple
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files || []);
-                        setEditAttachments(files);
+
+                    {/* Drag & Drop Zone for new files */}
+                    <div
+                      className={`border rounded-3 p-4 text-center ${isEditDragging ? "border-primary bg-primary bg-opacity-10" : "border-dashed border-2"}`}
+                      style={{ cursor: "pointer", transition: "all 0.2s ease" }}
+                      onDragEnter={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsEditDragging(true);
                       }}
-                    />
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsEditDragging(true);
+                      }}
+                      onDragLeave={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsEditDragging(false);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsEditDragging(false);
+                        const files = Array.from(e.dataTransfer.files);
+                        if (files.length > 0) {
+                          setEditAttachments((prev) => [...prev, ...files]);
+                          addToast(`${files.length} file(s) added.`, "success");
+                        }
+                      }}
+                      onClick={() =>
+                        document.getElementById("editFileInput")?.click()
+                      }
+                    >
+                      <i className="bi bi-cloud-upload fs-1 text-muted"></i>
+                      <p className="mb-1 fw-medium">
+                        Drag & drop new files here or click to browse
+                      </p>
+                      <small className="text-muted">
+                        Supported: any file type (max 100MB per file)
+                      </small>
+                      <input
+                        id="editFileInput"
+                        type="file"
+                        className="d-none"
+                        multiple
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          if (files.length > 0) {
+                            setEditAttachments((prev) => [...prev, ...files]);
+                            addToast(
+                              `${files.length} file(s) added.`,
+                              "success",
+                            );
+                          }
+                          e.target.value = ""; // allow re-selection of same files
+                        }}
+                      />
+                    </div>
+
+                    {/* List of new files to upload */}
                     {editAttachments.length > 0 && (
-                      <div className="mt-2">
-                        <div className="small text-muted">New files to upload:</div>
-                        <ul className="list-unstyled d-flex flex-wrap gap-2">
+                      <div className="mt-3">
+                        <div className="d-flex justify-content-between align-items-center">
+                          <small className="text-muted fw-semibold">
+                            {editAttachments.length} new file(s) to upload
+                          </small>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => setEditAttachments([])}
+                          >
+                            Clear all
+                          </button>
+                        </div>
+                        <ul className="list-unstyled small mt-2">
                           {editAttachments.map((file, idx) => (
-                            <li key={idx} className="badge bg-primary text-white">
-                              {file.name}
+                            <li
+                              key={idx}
+                              className="d-flex align-items-center gap-2 py-1 border-bottom"
+                            >
+                              <i className="bi bi-file-earmark-text"></i>
+                              <span className="fw-medium text-truncate flex-grow-1">
+                                {file.name}
+                              </span>
+                              <span className="text-muted text-nowrap">
+                                {(file.size / 1024).toFixed(1)} KB
+                              </span>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-link text-danger p-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditAttachments((prev) =>
+                                    prev.filter((_, i) => i !== idx),
+                                  );
+                                }}
+                              >
+                                <i className="bi bi-x-circle"></i>
+                              </button>
                             </li>
                           ))}
                         </ul>
@@ -1955,11 +2443,19 @@ const ViewInstructionPage = ({
                   </div>
                 </div>
                 <div className="modal-footer border-top px-4 py-3">
-                  <button type="button" className="btn btn-light fw-medium px-4" onClick={() => setShowEditModal(false)}>
+                  <button
+                    type="button"
+                    className="btn btn-light fw-medium px-4"
+                    onClick={() => setShowEditModal(false)}
+                  >
                     Cancel
                   </button>
-                  <button type="submit" className="btn btn-primary fw-medium px-4" disabled={isUpdating}>
-                    {isUpdating ? 'Saving...' : 'Save Changes'}
+                  <button
+                    type="submit"
+                    className="btn btn-primary fw-medium px-4"
+                    disabled={isUpdating}
+                  >
+                    {isUpdating ? "Saving..." : "Save Changes"}
                   </button>
                 </div>
               </form>
@@ -1978,7 +2474,9 @@ const ViewInstructionPage = ({
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content border-0 shadow-lg rounded-4">
               <div className="modal-header border-bottom px-4 pt-4 pb-3">
-                <h5 className="modal-title font-google fw-bold">Mark as done</h5>
+                <h5 className="modal-title font-google fw-bold">
+                  Mark as done
+                </h5>
                 <button
                   className="btn-close"
                   onClick={() => {
@@ -1989,34 +2487,45 @@ const ViewInstructionPage = ({
               </div>
               <div className="modal-body p-4">
                 <p className="text-muted mb-3">
-                  You can optionally upload files before marking this assignment as done.
+                  You can optionally upload files before marking this assignment
+                  as done.
                 </p>
                 <div className="mb-4">
-                  <label className="form-label small fw-bold text-muted">Attachments (optional)</label>
+                  <label className="form-label small fw-bold text-muted">
+                    Attachments (optional)
+                  </label>
                   <input
                     type="file"
                     className="form-control"
                     multiple
                     onChange={(e) => {
-                      const files = Array.from(e.target.files || []).map((f) => {
-                        try {
-                          if (!f.file_name) f.file_name = f.name;
-                        } catch (err) {}
-                        return f;
-                      });
+                      const files = Array.from(e.target.files || []).map(
+                        (f) => {
+                          try {
+                            if (!f.file_name) f.file_name = f.name;
+                          } catch (err) {}
+                          return f;
+                        },
+                      );
                       setMarkAsDoneFiles(files);
                     }}
                   />
                   <small className="form-text text-muted d-block mt-2">
-                    Select multiple files if needed, or leave empty to mark without files.
+                    Select multiple files if needed, or leave empty to mark
+                    without files.
                   </small>
                 </div>
                 {markAsDoneFiles.length > 0 && (
                   <div className="mb-4">
-                    <div className="fw-semibold small text-dark mb-2">Selected files ({markAsDoneFiles.length})</div>
+                    <div className="fw-semibold small text-dark mb-2">
+                      Selected files ({markAsDoneFiles.length})
+                    </div>
                     <div className="d-flex flex-wrap gap-2">
                       {markAsDoneFiles.map((file, index) => (
-                        <span key={`${file.file_name || file.name}-${index}`} className="badge bg-white text-dark border">
+                        <span
+                          key={`${file.file_name || file.name}-${index}`}
+                          className="badge bg-white text-dark border"
+                        >
                           {file.file_name || file.name}
                         </span>
                       ))}
@@ -2035,7 +2544,12 @@ const ViewInstructionPage = ({
                 >
                   Cancel
                 </button>
-                <button type="button" className="btn btn-primary fw-medium px-4" onClick={handleMarkAsDone} disabled={isMarkingAsDone}>
+                <button
+                  type="button"
+                  className="btn btn-primary fw-medium px-4"
+                  onClick={handleMarkAsDone}
+                  disabled={isMarkingAsDone}
+                >
                   {isMarkingAsDone ? "Marking..." : "Mark as done"}
                 </button>
               </div>
@@ -2072,43 +2586,138 @@ const ViewInstructionPage = ({
                     ? "Select files to submit your work."
                     : "Select new files to replace your previous submission."}
                 </p>
-                <div className="mb-4">
-                  <label className="form-label small fw-bold text-muted">Attachments (multiple files)</label>
+
+                {/* Drag & Drop Zone */}
+                <div
+                  className={`border rounded-3 p-4 text-center ${isUploadDragging ? "border-primary bg-primary bg-opacity-10" : "border-dashed border-2"}`}
+                  style={{ cursor: "pointer", transition: "all 0.2s ease" }}
+                  onDragEnter={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsUploadDragging(true);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsUploadDragging(true);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsUploadDragging(false);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsUploadDragging(false);
+                    const files = Array.from(e.dataTransfer.files).map((f) => {
+                      const normalizedName =
+                        f?.name || f?.file_name || "upload";
+                      const normalizedFile =
+                        f instanceof File
+                          ? new File([f], normalizedName, {
+                              type: f.type || "application/octet-stream",
+                              lastModified: f.lastModified || Date.now(),
+                            })
+                          : f;
+                      try {
+                        normalizedFile.file_name = normalizedName;
+                        normalizedFile.filename = normalizedName;
+                      } catch (err) {}
+                      return normalizedFile;
+                    });
+                    if (files.length > 0) {
+                      setUploadFiles((prev) => [...prev, ...files]);
+                      addToast(`${files.length} file(s) added.`, "success");
+                    }
+                  }}
+                  onClick={() =>
+                    document.getElementById("uploadFileInput")?.click()
+                  }
+                >
+                  <i className="bi bi-cloud-upload fs-1 text-muted"></i>
+                  <p className="mb-1 fw-medium">
+                    Drag & drop files here or click to browse
+                  </p>
+                  <small className="text-muted">
+                    Supported: any file type (max 100MB per file)
+                  </small>
                   <input
+                    id="uploadFileInput"
                     type="file"
-                    className="form-control"
+                    className="d-none"
                     multiple
                     onChange={(e) => {
-                      const files = Array.from(e.target.files || []).map((f) => {
-                        const normalizedName = f?.name || f?.file_name || "upload";
-                        const normalizedFile =
-                          f instanceof File
-                            ? new File([f], normalizedName, {
-                                type: f.type || "application/octet-stream",
-                                lastModified: f.lastModified || Date.now(),
-                              })
-                            : f;
-                        try {
-                          normalizedFile.file_name = normalizedName;
-                          normalizedFile.filename = normalizedName;
-                        } catch (err) {}
-                        return normalizedFile;
-                      });
-                      setUploadFiles(files);
+                      const files = Array.from(e.target.files || []).map(
+                        (f) => {
+                          const normalizedName =
+                            f?.name || f?.file_name || "upload";
+                          const normalizedFile =
+                            f instanceof File
+                              ? new File([f], normalizedName, {
+                                  type: f.type || "application/octet-stream",
+                                  lastModified: f.lastModified || Date.now(),
+                                })
+                              : f;
+                          try {
+                            normalizedFile.file_name = normalizedName;
+                            normalizedFile.filename = normalizedName;
+                          } catch (err) {}
+                          return normalizedFile;
+                        },
+                      );
+                      if (files.length > 0) {
+                        setUploadFiles((prev) => [...prev, ...files]);
+                        addToast(`${files.length} file(s) added.`, "success");
+                      }
+                      e.target.value = ""; // allow re-selection of same files
                     }}
                   />
-                  <small className="form-text text-muted d-block mt-2">Choose one or more files.</small>
                 </div>
+
+                {/* Selected files list */}
                 {uploadFiles.length > 0 && (
-                  <div className="mb-4">
-                    <div className="fw-semibold small text-dark mb-2">Selected files ({uploadFiles.length})</div>
-                    <div className="d-flex flex-wrap gap-2">
-                      {uploadFiles.map((file, index) => (
-                        <span key={`upload-${file.file_name || file.name}-${index}`} className="badge bg-white text-dark border">
-                          {file.file_name || file.name}
-                        </span>
-                      ))}
+                  <div className="mt-3">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <small className="text-muted fw-semibold">
+                        {uploadFiles.length} file(s) selected
+                      </small>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-danger"
+                        onClick={() => setUploadFiles([])}
+                      >
+                        Clear all
+                      </button>
                     </div>
+                    <ul className="list-unstyled small mt-2">
+                      {uploadFiles.map((file, index) => (
+                        <li
+                          key={`upload-${file.file_name || file.name}-${index}`}
+                          className="d-flex align-items-center gap-2 py-1 border-bottom"
+                        >
+                          <i className="bi bi-file-earmark-text"></i>
+                          <span className="fw-medium text-truncate flex-grow-1">
+                            {file.file_name || file.name}
+                          </span>
+                          <span className="text-muted text-nowrap">
+                            {(file.size / 1024).toFixed(1)} KB
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-link text-danger p-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setUploadFiles((prev) =>
+                                prev.filter((_, i) => i !== index),
+                              );
+                            }}
+                          >
+                            <i className="bi bi-x-circle"></i>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
               </div>

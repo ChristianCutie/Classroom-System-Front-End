@@ -538,16 +538,17 @@ const GradesTab = ({ cls, user, onUpdateGrade }) => {
                                       <span className="badge bg-success bg-opacity-10 text-success border border-success">
                                         Submitted
                                       </span>
+                                      
                                     ) : (
                                       <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary">
                                         Not submitted
                                       </span>
                                     )}
-                                    {hasGrade && (
+                                    {/* {hasGrade && (
                                       <span className="badge bg-primary bg-opacity-10 text-primary border border-primary ms-1">
                                         Graded
                                       </span>
-                                    )}
+                                    )} */}
                                   </td>
                                 </tr>
                               );

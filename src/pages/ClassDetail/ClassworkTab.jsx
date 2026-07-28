@@ -47,6 +47,7 @@ const ClassworkTab = ({
   const [submissionStatus, setSubmissionStatus] = useState({});
   const [submittingId, setSubmittingId] = useState(null);
   const [localClasswork, setLocalClasswork] = useState([]);
+  const [isDragging, setIsDragging] = useState(false);
   const { addToast } = useToast();
 
   // Student search and dropdown state
@@ -75,6 +76,11 @@ const ClassworkTab = ({
   // Loading state for fetching a single assignment
   const [loadingAssignmentId, setLoadingAssignmentId] = useState(null);
 
+  // Pending students modal state
+  const [showPendingModal, setShowPendingModal] = useState(false);
+  const [pendingStudents, setPendingStudents] = useState([]);
+  const [loadingPending, setLoadingPending] = useState(false);
+
   const resetCreateForm = () => {
     setCwTitle("");
     setCwInstructions("");
@@ -88,6 +94,36 @@ const ClassworkTab = ({
     setShowStudentDropdown(false);
     setIsCreatingNewTopic(false);
     setCwAssignToAll(true);
+  };
+
+  // Fetch pending students for this class
+  const fetchPendingStudents = async () => {
+    if (!cls?.id) return;
+    setLoadingPending(true);
+    try {
+      const res = await apiClient.get(`/classes/${cls.id}/pending-students`);
+      const data = res.data?.data || [];
+      setPendingStudents(data);
+    } catch (error) {
+      console.error("Failed to fetch pending students:", error);
+      addToast("Could not load pending requests.", "error");
+      setPendingStudents([]);
+    } finally {
+      setLoadingPending(false);
+    }
+  };
+
+  // Approve a student (only approve, no decline action as per backend)
+  const handleApproveStudent = async (studentId) => {
+    try {
+      await apiClient.post(`/approve/classes/${cls.id}/${studentId}`);
+      addToast("Student approved successfully.", "success");
+      // Remove from list
+      setPendingStudents((prev) => prev.filter((s) => s.id !== studentId));
+    } catch (error) {
+      console.error("Failed to approve student:", error);
+      addToast("Could not approve student.", "error");
+    }
   };
 
   const normalizeAttachments = (attachments) => {
@@ -169,18 +205,18 @@ const ClassworkTab = ({
   };
 
   const stringToColor = (str) => {
-  if (!str) return "#6c757d";
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  let color = "#";
-  for (let i = 0; i < 3; i++) {
-    const value = (hash >> (i * 8)) & 0xff;
-    color += ("00" + value.toString(16)).substr(-2);
-  }
-  return color;
-};
+    if (!str) return "#6c757d";
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    let color = "#";
+    for (let i = 0; i < 3; i++) {
+      const value = (hash >> (i * 8)) & 0xff;
+      color += ("00" + value.toString(16)).substr(-2);
+    }
+    return color;
+  };
 
   const isTeacher = useMemo(() => {
     if (!user) return false;
@@ -210,6 +246,12 @@ const ClassworkTab = ({
       setLocalClasswork(classwork);
     }
   }, [classwork]);
+
+  useEffect(() => {
+    if (isTeacher && cls?.id) {
+      fetchPendingStudents();
+    }
+  }, [isTeacher, cls?.id]);
 
   // --- Merge assignments and quizzes into a unified classwork list ---
   const classworkList = useMemo(() => {
@@ -1022,6 +1064,22 @@ const ClassworkTab = ({
         </div>
 
         <div className="d-flex align-items-center gap-3 flex-wrap">
+          {isTeacher && (
+            <button
+              className="btn btn-sm btn-light border rounded-pill px-3 d-flex align-items-center gap-2 text-dark fw-medium py-2"
+              onClick={() => {
+                setShowPendingModal(true);
+                fetchPendingStudents();
+              }}
+            >
+              <i className="bi bi-people text-secondary fs-6"></i> Pending
+              {pendingStudents.length > 0 && (
+                <span className="badge bg-danger rounded-pill ms-1">
+                  {pendingStudents.length}
+                </span>
+              )}
+            </button>
+          )}
           <button className="btn btn-sm btn-light border rounded-pill px-3 d-flex align-items-center gap-2 text-dark fw-medium py-2">
             <i className="bi bi-camera-video text-success fs-6"></i> Meet
           </button>
@@ -1797,28 +1855,112 @@ const ClassworkTab = ({
                       <label className="form-label small fw-bold text-muted">
                         Attachments (optional)
                       </label>
-                      <input
-                        type="file"
-                        className="form-control"
-                        multiple
-                        onChange={(e) =>
-                          setCwAttachments(Array.from(e.target.files || []))
+
+                      {/* Drag & Drop Zone */}
+                      <div
+                        className={`border rounded-3 p-4 text-center ${isDragging ? "border-primary bg-primary bg-opacity-10" : "border-dashed border-2"}`}
+                        style={{
+                          cursor: "pointer",
+                          transition: "all 0.2s ease",
+                        }}
+                        onDragEnter={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setIsDragging(true);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setIsDragging(true);
+                        }}
+                        onDragLeave={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setIsDragging(false);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setIsDragging(false);
+                          const files = Array.from(e.dataTransfer.files);
+                          if (files.length > 0) {
+                            setCwAttachments((prev) => [...prev, ...files]);
+                            addToast(
+                              `${files.length} file(s) added.`,
+                              "success",
+                            );
+                          }
+                        }}
+                        onClick={() =>
+                          document.getElementById("fileInput")?.click()
                         }
-                      />
+                      >
+                        <i className="bi bi-cloud-upload fs-1 text-muted"></i>
+                        <p className="mb-1 fw-medium">
+                          Drag & drop files here or click to browse
+                        </p>
+                        <small className="text-muted">
+                          Supported: any file type (max 100MB per file)
+                        </small>
+                        <input
+                          id="fileInput"
+                          type="file"
+                          className="d-none"
+                          multiple
+                          onChange={(e) => {
+                            const files = Array.from(e.target.files || []);
+                            if (files.length > 0) {
+                              setCwAttachments((prev) => [...prev, ...files]);
+                              addToast(
+                                `${files.length} file(s) added.`,
+                                "success",
+                              );
+                            }
+                            e.target.value = ""; // allow re-selection of same files
+                          }}
+                        />
+                      </div>
+
+                      {/* Selected files list */}
                       {cwAttachments.length > 0 && (
-                        <div className="mt-2">
-                          <small className="text-muted">Selected files:</small>
-                          <ul className="list-unstyled small mb-0">
+                        <div className="mt-3">
+                          <div className="d-flex justify-content-between align-items-center">
+                            <small className="text-muted fw-semibold">
+                              {cwAttachments.length} file(s) selected
+                            </small>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-danger"
+                              onClick={() => setCwAttachments([])}
+                            >
+                              Clear all
+                            </button>
+                          </div>
+                          <ul className="list-unstyled small mt-2">
                             {cwAttachments.map((file, idx) => (
                               <li
                                 key={idx}
-                                className="d-flex align-items-center gap-2"
+                                className="d-flex align-items-center gap-2 py-1 border-bottom"
                               >
                                 <i className="bi bi-file-earmark-text"></i>
-                                <span>{file.name}</span>
-                                <span className="text-muted">
-                                  ({(file.size / 1024).toFixed(1)} KB)
+                                <span className="fw-medium text-truncate flex-grow-1">
+                                  {file.name}
                                 </span>
+                                <span className="text-muted text-nowrap">
+                                  {(file.size / 1024).toFixed(1)} KB
+                                </span>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-link text-danger p-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCwAttachments((prev) =>
+                                      prev.filter((_, i) => i !== idx),
+                                    );
+                                  }}
+                                >
+                                  <i className="bi bi-x-circle"></i>
+                                </button>
                               </li>
                             ))}
                           </ul>
@@ -1944,7 +2086,9 @@ const ClassworkTab = ({
                             setCwAssignToAll(checked);
                             if (checked) {
                               // Select all students
-                              const allIds = (cls.students || []).map((s) => s.id);
+                              const allIds = (cls.students || []).map(
+                                (s) => s.id,
+                              );
                               setCwSelectedStudents(allIds);
                               setStudentSearchTerm("");
                               setShowStudentDropdown(false);
@@ -1954,7 +2098,10 @@ const ClassworkTab = ({
                             }
                           }}
                         />
-                        <label className="form-check-label" htmlFor="assignToAll">
+                        <label
+                          className="form-check-label"
+                          htmlFor="assignToAll"
+                        >
                           Assign to all students
                         </label>
                       </div>
@@ -2015,97 +2162,101 @@ const ClassworkTab = ({
                               autoComplete="off"
                             />
 
-                            {showStudentDropdown && filteredStudents.length > 0 && (
-                              <ul
-                                className="list-group mt-1 shadow-sm"
-                                style={{
-                                  maxHeight: "200px",
-                                  overflowY: "auto",
-                                  position: "relative",
-                                  zIndex: 1050,
-                                }}
-                              >
-                                {filteredStudents.map((student) => {
-                                  const isSelected = cwSelectedStudents.includes(
-                                    student.id,
-                                  );
-                                  const displayName =
-                                    student.first_name + " " + student.last_name ||
-                                    student.full_name ||
-                                    student.username ||
-                                    "Unnamed";
-                                  const displayEmail = student.email || "";
-                                  const avatarUrl = getStudentAvatar(student);
-                                  const initials = displayName
-                                    .split(" ")
-                                    .map((word) => word[0])
-                                    .join("")
-                                    .toUpperCase()
-                                    .slice(0, 2);
-                                  const bgColor = stringToColor(displayName);
+                            {showStudentDropdown &&
+                              filteredStudents.length > 0 && (
+                                <ul
+                                  className="list-group mt-1 shadow-sm"
+                                  style={{
+                                    maxHeight: "200px",
+                                    overflowY: "auto",
+                                    position: "relative",
+                                    zIndex: 1050,
+                                  }}
+                                >
+                                  {filteredStudents.map((student) => {
+                                    const isSelected =
+                                      cwSelectedStudents.includes(student.id);
+                                    const displayName =
+                                      student.first_name +
+                                        " " +
+                                        student.last_name ||
+                                      student.full_name ||
+                                      student.username ||
+                                      "Unnamed";
+                                    const displayEmail = student.email || "";
+                                    const avatarUrl = getStudentAvatar(student);
+                                    const initials = displayName
+                                      .split(" ")
+                                      .map((word) => word[0])
+                                      .join("")
+                                      .toUpperCase()
+                                      .slice(0, 2);
+                                    const bgColor = stringToColor(displayName);
 
-                                  return (
-                                    <li
-                                      key={student.id}
-                                      className={`list-group-item list-group-item-action d-flex align-items-center gap-3 ${
-                                        isSelected ? "active" : ""
-                                      }`}
-                                      style={{ cursor: "pointer" }}
-                                      onClick={() => {
-                                        if (isSelected) {
-                                          removeStudent(student.id);
-                                        } else {
-                                          addStudent(student.id);
-                                        }
-                                        setStudentSearchTerm("");
-                                        setShowStudentDropdown(false);
-                                      }}
-                                    >
-                                      {avatarUrl ? (
-                                        <img
-                                          src={avatarUrl}
-                                          alt={displayName}
-                                          className="rounded-circle"
-                                          style={{
-                                            width: "32px",
-                                            height: "32px",
-                                            objectFit: "cover",
-                                          }}
-                                        />
-                                      ) : (
-                                        <span
-                                          className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
-                                          style={{
-                                            width: "32px",
-                                            height: "32px",
-                                            backgroundColor: bgColor,
-                                            fontSize: "0.75rem",
-                                            flexShrink: 0,
-                                          }}
-                                        >
-                                          {initials}
-                                        </span>
-                                      )}
-                                      <div className="flex-grow-1">
-                                        <div className="fw-semibold">
-                                          {displayName}
-                                        </div>
-                                        <small
-                                          className={
-                                            isSelected ? "text-light" : "text-muted"
+                                    return (
+                                      <li
+                                        key={student.id}
+                                        className={`list-group-item list-group-item-action d-flex align-items-center gap-3 ${
+                                          isSelected ? "active" : ""
+                                        }`}
+                                        style={{ cursor: "pointer" }}
+                                        onClick={() => {
+                                          if (isSelected) {
+                                            removeStudent(student.id);
+                                          } else {
+                                            addStudent(student.id);
                                           }
-                                        >
-                                          {displayEmail}
-                                        </small>
-                                      </div>
-                                      {isSelected && (
-                                        <i className="bi bi-check-circle-fill text-light"></i>
-                                      )}
-                                    </li>
-                                  );
-                                })}
-                              </ul>
-                            )}
+                                          setStudentSearchTerm("");
+                                          setShowStudentDropdown(false);
+                                        }}
+                                      >
+                                        {avatarUrl ? (
+                                          <img
+                                            src={avatarUrl}
+                                            alt={displayName}
+                                            className="rounded-circle"
+                                            style={{
+                                              width: "32px",
+                                              height: "32px",
+                                              objectFit: "cover",
+                                            }}
+                                          />
+                                        ) : (
+                                          <span
+                                            className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
+                                            style={{
+                                              width: "32px",
+                                              height: "32px",
+                                              backgroundColor: bgColor,
+                                              fontSize: "0.75rem",
+                                              flexShrink: 0,
+                                            }}
+                                          >
+                                            {initials}
+                                          </span>
+                                        )}
+                                        <div className="flex-grow-1">
+                                          <div className="fw-semibold">
+                                            {displayName}
+                                          </div>
+                                          <small
+                                            className={
+                                              isSelected
+                                                ? "text-light"
+                                                : "text-muted"
+                                            }
+                                          >
+                                            {displayEmail}
+                                          </small>
+                                        </div>
+                                        {isSelected && (
+                                          <i className="bi bi-check-circle-fill text-light"></i>
+                                        )}
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              )}
 
                             {cwSelectedStudents.length > 0 && (
                               <div className="d-flex flex-wrap gap-2 mt-2">
@@ -2116,7 +2267,9 @@ const ClassworkTab = ({
                                   if (!student) return null;
                                   const displayName =
                                     student.name ||
-                                    student.first_name + " " + student.last_name ||
+                                    student.first_name +
+                                      " " +
+                                      student.last_name ||
                                     student.username ||
                                     "Student";
                                   const displayEmail = student.email || "";
@@ -2213,7 +2366,9 @@ const ClassworkTab = ({
                     disabled={
                       !cwTitle.trim() ||
                       isSubmitting ||
-                      (createType === "assignment" && !cwAssignToAll && cwSelectedStudents.length === 0)
+                      (createType === "assignment" &&
+                        !cwAssignToAll &&
+                        cwSelectedStudents.length === 0)
                     }
                   >
                     {isSubmitting
@@ -2224,6 +2379,127 @@ const ClassworkTab = ({
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Students Modal */}
+      {showPendingModal && (
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
+          tabIndex="-1"
+          onClick={() => setShowPendingModal(false)}
+        >
+          <div
+            className="modal-dialog modal-dialog-centered"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-content border-0 shadow-lg rounded-4">
+              <div className="modal-header border-bottom px-4 pt-4 pb-3">
+                <h5 className="modal-title font-google fw-bold">
+                  Pending Requests
+                </h5>
+                <button
+                  className="btn-close"
+                  onClick={() => setShowPendingModal(false)}
+                ></button>
+              </div>
+
+              <div className="modal-body p-4">
+                {loadingPending ? (
+                  <div className="text-center py-4">
+                    <div className="spinner-border text-primary" role="status">
+                      <span className="visually-hidden">Loading...</span>
+                    </div>
+                    <p className="mt-2 text-muted">
+                      Loading pending requests...
+                    </p>
+                  </div>
+                ) : pendingStudents.length === 0 ? (
+                  <div className="text-center py-4">
+                    <i className="bi bi-inbox fs-1 text-muted"></i>
+                    <p className="mt-2 text-muted">No pending requests.</p>
+                  </div>
+                ) : (
+                  <ul className="list-group list-group-flush">
+                    {pendingStudents.map((student) => {
+                      const fullName =
+                        [student.first_name, student.last_name]
+                          .filter(Boolean)
+                          .join(" ") ||
+                        student.name ||
+                        student.username ||
+                        "Unnamed";
+                      const avatarUrl = student.avatar || null;
+                      const initials = fullName
+                        .split(" ")
+                        .map((w) => w[0])
+                        .join("")
+                        .toUpperCase()
+                        .slice(0, 2);
+                      const bgColor = stringToColor(fullName);
+
+                      return (
+                        <li
+                          key={student.id}
+                          className="list-group-item d-flex justify-content-between align-items-center py-3"
+                        >
+                          <div className="d-flex align-items-center gap-3">
+                            {avatarUrl ? (
+                              <img
+                                src={avatarUrl}
+                                alt={fullName}
+                                className="rounded-circle"
+                                style={{
+                                  width: "40px",
+                                  height: "40px",
+                                  objectFit: "cover",
+                                }}
+                              />
+                            ) : (
+                              <span
+                                className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
+                                style={{
+                                  width: "40px",
+                                  height: "40px",
+                                  backgroundColor: bgColor,
+                                  fontSize: "0.9rem",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {initials}
+                              </span>
+                            )}
+                            <div>
+                              <div className="fw-semibold">{fullName}</div>
+                              <div className="text-muted small">
+                                {student.email}
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            className="btn btn-sm btn-success"
+                            onClick={() => handleApproveStudent(student.id)}
+                          >
+                            <i className="bi bi-check-lg"></i> Accept
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              <div className="modal-footer border-top px-4 py-3">
+                <button
+                  className="btn btn-light fw-medium px-4"
+                  onClick={() => setShowPendingModal(false)}
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

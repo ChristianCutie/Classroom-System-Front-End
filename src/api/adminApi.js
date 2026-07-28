@@ -53,7 +53,7 @@ export const getBlockedUsers = async () => {
 // Approve user
 export const approveUser = async (userId) => {
   try {
-    const response = await apiClient.put(`/admin/users/${userId}/approve`);
+    const response = await apiClient.post(`/admin/users/${userId}/approve`);
     return response.data;
   } catch (error) {
     throw error.response?.data || error;
@@ -63,7 +63,7 @@ export const approveUser = async (userId) => {
 // Reject user
 export const rejectUser = async (userId, reason = null) => {
   try {
-    const response = await apiClient.put(`/admin/users/${userId}/reject`, {
+    const response = await apiClient.post(`/admin/users/${userId}/reject`, {
       reason,
     });
     return response.data;
@@ -75,7 +75,7 @@ export const rejectUser = async (userId, reason = null) => {
 // Block user
 export const blockUser = async (userId, reason = null) => {
   try {
-    const response = await apiClient.put(`/admin/users/${userId}/block`, {
+    const response = await apiClient.post(`/admin/users/${userId}/block`, {
       reason,
     });
     return response.data;
@@ -87,7 +87,7 @@ export const blockUser = async (userId, reason = null) => {
 // Unblock user
 export const unblockUser = async (userId) => {
   try {
-    const response = await apiClient.put(`/admin/users/${userId}/unblock`);
+    const response = await apiClient.post(`/admin/users/${userId}/unblock`);
     return response.data;
   } catch (error) {
     throw error.response?.data || error;

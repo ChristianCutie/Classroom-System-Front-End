@@ -140,6 +140,7 @@ export const classAPI = {
   refreshClass: (classId) => apiClient.get(`/classes/${classId}`),
   removeStudent: (classId, studentId) => 
     apiClient.post(`/remove/classes/${classId}/${studentId}`),
+  pendingClass: (classId) => apiClient.get(`/pending/classes/${classId}`),
 };
 
 export const userAPI = {
