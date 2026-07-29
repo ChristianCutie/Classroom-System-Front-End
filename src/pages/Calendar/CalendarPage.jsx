@@ -1,35 +1,96 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { calendarAPI } from '@/api/client';
 
-const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-const CalendarPage = ({ classes, onSelectClass }) => {
+const CalendarPage = ({ onSelectClass }) => {
   const [selectedClassId, setSelectedClassId] = useState('all');
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
+  const [classes, setClasses] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const activeClasses = classes.filter(c => !c.isArchived);
-  
-  // Collect all coursework with due dates
-  const allEvents = [];
-  activeClasses.forEach(cls => {
-    if (cls.classwork) {
-      cls.classwork.forEach(cw => {
-        if (cw.dueDate) {
-          allEvents.push({
-            id: cw.id,
-            title: cw.title,
-            dueDate: cw.dueDate,
-            className: cls.name,
-            classId: cls.id,
-            color: cls.themeColor || '#1a73e8'
-          });
-        }
-      });
-    }
+  // Helper: get Monday of the week for a given date and offset
+  const getWeekStart = (date, offset = 0) => {
+    const d = new Date(date);
+    d.setDate(d.getDate() + offset * 7);
+    const day = d.getDay(); // 0=Sun
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    d.setDate(diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  const toDateStr = (date) => {
+    const d = new Date(date);
+    return d.toISOString().split('T')[0];
+  };
+
+  // Fetch classes and events
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        // 1. Fetch class list
+        const classesRes = await calendarAPI.getClasses();
+        setClasses(classesRes.data.classes || []);
+
+        // 2. Fetch events (filtered by class if selected)
+        const classId = selectedClassId === 'all' ? null : selectedClassId;
+        const eventsRes = await calendarAPI.getEvents(classId);
+        setEvents(eventsRes.data.events || []);
+      } catch (err) {
+        setError('Failed to load calendar data.');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [selectedClassId]);
+  // Compute week range
+  const today = new Date();
+  const weekStart = getWeekStart(today, currentWeekOffset);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+
+  // Generate day labels for the week
+  const weekDays = daysOfWeek.map((day, idx) => {
+    const date = new Date(weekStart);
+    date.setDate(date.getDate() + idx);
+    return {
+      name: day,
+      date,
+      dateStr: toDateStr(date),
+      isToday: toDateStr(date) === toDateStr(today),
+    };
   });
 
-  const filteredEvents = selectedClassId === 'all'
-    ? allEvents
-    : allEvents.filter(e => e.classId === selectedClassId);
+  // Filter events for each day
+  const getEventsForDay = (dateStr) => {
+    return events.filter(ev => toDateStr(ev.due_date) === dateStr);
+  };
+
+  // Handle class selection change (also updates the filter in API call)
+  const handleClassChange = (e) => {
+    setSelectedClassId(e.target.value);
+  };
+
+  // Navigate weeks
+  const goToToday = () => setCurrentWeekOffset(0);
+  const prevWeek = () => setCurrentWeekOffset(offset => offset - 1);
+  const nextWeek = () => setCurrentWeekOffset(offset => offset + 1);
+
+  if (loading) {
+    return <div className="p-4 text-center">Loading calendar...</div>;
+  }
+
+  if (error) {
+    return <div className="p-4 text-center text-danger">{error}</div>;
+  }
 
   return (
     <div className="container-fluid px-2 px-md-4 py-3">
@@ -41,11 +102,11 @@ const CalendarPage = ({ classes, onSelectClass }) => {
               className="form-select fw-medium text-dark shadow-sm"
               style={{ minWidth: '220px' }}
               value={selectedClassId}
-              onChange={(e) => setSelectedClassId(e.target.value)}
+              onChange={handleClassChange}
             >
               <option value="all">All classes</option>
-              {activeClasses.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+              {classes.map(c => (
+                <option key={c.id} value={c.id}>{c.class_name}</option>
               ))}
             </select>
           </div>
@@ -54,25 +115,23 @@ const CalendarPage = ({ classes, onSelectClass }) => {
         <div className="d-flex align-items-center gap-2">
           <button
             className="btn btn-outline-secondary btn-sm rounded-pill px-3 fw-medium"
-            onClick={() => setCurrentWeekOffset(0)}
+            onClick={goToToday}
           >
             Today
           </button>
           <div className="btn-group shadow-sm">
             <button
               className="btn btn-light border btn-sm"
-              onClick={() => setCurrentWeekOffset(currentWeekOffset - 1)}
+              onClick={prevWeek}
             >
               <i className="bi bi-chevron-left"></i>
             </button>
-            <button
-              className="btn btn-light border btn-sm px-3 fw-medium"
-            >
-              Week of Mar {Math.max(1, 16 + currentWeekOffset * 7)} – Mar {Math.min(31, 22 + currentWeekOffset * 7)}, 2026
+            <button className="btn btn-light border btn-sm px-3 fw-medium">
+              {weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
             </button>
             <button
               className="btn btn-light border btn-sm"
-              onClick={() => setCurrentWeekOffset(currentWeekOffset + 1)}
+              onClick={nextWeek}
             >
               <i className="bi bi-chevron-right"></i>
             </button>
@@ -83,11 +142,18 @@ const CalendarPage = ({ classes, onSelectClass }) => {
       {/* Weekly Grid */}
       <div className="card border shadow-sm rounded-3 overflow-hidden bg-white">
         <div className="row g-0 text-center border-bottom bg-light">
-          {daysOfWeek.map((day, idx) => (
+          {weekDays.map((day, idx) => (
             <div key={idx} className="col border-end py-3">
-              <div className="text-muted small text-uppercase fw-bold">{day}</div>
-              <div className={`fs-5 fw-bold mt-1 ${idx === 3 && currentWeekOffset === 0 ? 'text-white bg-primary rounded-circle mx-auto d-flex align-items-center justify-content-center' : 'text-dark'}`} style={idx === 3 && currentWeekOffset === 0 ? { width: '32px', height: '32px' } : {}}>
-                {15 + idx + currentWeekOffset * 7}
+              <div className="text-muted small text-uppercase fw-bold">{day.name}</div>
+              <div
+                className={`fs-5 fw-bold mt-1 ${
+                  day.isToday
+                    ? 'text-white bg-primary rounded-circle mx-auto d-flex align-items-center justify-content-center'
+                    : 'text-dark'
+                }`}
+                style={day.isToday ? { width: '32px', height: '32px' } : {}}
+              >
+                {day.date.getDate()}
               </div>
             </div>
           ))}
@@ -95,30 +161,32 @@ const CalendarPage = ({ classes, onSelectClass }) => {
 
         {/* Calendar Body columns */}
         <div className="row g-0" style={{ minHeight: '500px' }}>
-          {daysOfWeek.map((_, dayIdx) => {
-            // Distribute events across days for realistic visual simulation
-            const dayEvents = filteredEvents.filter((_, eIdx) => (eIdx % 7) === dayIdx);
-
+          {weekDays.map((day, idx) => {
+            const dayEvents = getEventsForDay(day.dateStr);
             return (
-              <div key={dayIdx} className="col border-end p-2 d-flex flex-column gap-2 bg-white" style={{ minHeight: '500px' }}>
+              <div
+                key={idx}
+                className="col border-end p-2 d-flex flex-column gap-2 bg-white"
+                style={{ minHeight: '500px' }}
+              >
                 {dayEvents.map(event => (
                   <div
                     key={event.id}
                     className="p-2 rounded text-white shadow-sm"
                     style={{
-                      backgroundColor: event.color,
+                      backgroundColor: event.color || '#1a73e8',
                       cursor: 'pointer',
                       fontSize: '0.8rem',
                       transition: 'transform 0.15s'
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
                     onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
-                    onClick={() => onSelectClass(event.classId)}
-                    title={`${event.title} (${event.className})`}
+                    onClick={() => onSelectClass && onSelectClass(event.class_id)}
+                    title={`${event.title} (${event.class_name})`}
                   >
                     <div className="fw-bold text-truncate">{event.title}</div>
                     <div className="text-white text-opacity-75 text-truncate small" style={{ fontSize: '0.72rem' }}>
-                      {event.className}
+                      {event.class_name}
                     </div>
                     <div className="text-white text-opacity-90 small fw-medium mt-1">
                       <i className="bi bi-clock me-1"></i> 11:59 PM
@@ -130,7 +198,6 @@ const CalendarPage = ({ classes, onSelectClass }) => {
           })}
         </div>
       </div>
-
     </div>
   );
 };

@@ -42,10 +42,10 @@ const ClassDetailPage = ({
   };
 
   const handleTabChange = (nextTab) => {
-    setActiveTab(nextTab);
-    setSelectedCoursework(null);
-    setInstructionViewTab("instructions");
-  };
+  setActiveTab(nextTab);
+  setSelectedCoursework(null);
+  setInstructionViewTab("instructions");
+};
 
   const normalizeTopicValue = (value) => {
     if (typeof value === "string") {
@@ -435,9 +435,7 @@ const ClassDetailPage = ({
                 aria-label="Copy class code to clipboard"
                 style={{ fontSize: "inherit" }}
               >
-                <i
-                  className={`bi ${isCopied ? "bi-check2" : "bi-copy"}`}
-                ></i>
+                <i className={`bi ${isCopied ? "bi-check2" : "bi-copy"}`}></i>
               </button>
             </span>
           </div>
@@ -488,6 +486,7 @@ const ClassDetailPage = ({
                 cls={cls}
                 user={user}
                 onRefresh={() => fetchClassDetails(cls.id)}
+                active={activeTab === "people"} 
               />
             )}
             {activeTab === "grades" && (

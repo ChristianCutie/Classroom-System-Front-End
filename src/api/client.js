@@ -143,6 +143,16 @@ export const classAPI = {
   pendingClass: (classId) => apiClient.get(`/pending/classes/${classId}`),
 };
 
+export const calendarAPI = {
+  // Get calendar events (assignments) – optional class_id filter
+  getEvents: (classId = null) => {
+    const params = classId ? { class_id: classId } : {};
+    return apiClient.get('/calendar', { params });
+  },
+  // Get list of classes for the dropdown (role-aware)
+  getClasses: () => apiClient.get('/calendar/classes'),
+};
+
 export const userAPI = {
   toggleRole: (userId, roleId, roleName) =>
     apiClient.post(`/update/users/${userId}`, {

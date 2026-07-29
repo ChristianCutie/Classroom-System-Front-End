@@ -3,11 +3,13 @@ import Avatar from "../../components/Common/Avatar.jsx";
 import { useToast } from "@/context/ToastContext.jsx";
 import { classAPI } from "@/api/client";
 
-const PeopleTab = ({ cls, user, onRefresh }) => {
+const PeopleTab = ({ cls, user, onRefresh, active = true }) => {
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const { addToast } = useToast();
+
+   if (!active) return null;
 
   const students = cls.students || [];
   const allSelected =
@@ -95,7 +97,13 @@ const PeopleTab = ({ cls, user, onRefresh }) => {
     Boolean(user?.is_teacher || user?.isTeacher);
 
   return (
-    <div className="max-w-4xl mx-auto" style={{ maxWidth: "850px" }}>
+     <div
+      className="max-w-4xl mx-auto"
+      style={{
+        maxWidth: "850px",
+        display: active ? "block" : "none" 
+      }}
+    >
       {/* Teachers Section */}
       <div className="mb-5">
         <div className="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
